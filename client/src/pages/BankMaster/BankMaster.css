@@ -1,0 +1,74 @@
+.bank-master-container {
+  padding: 20px;
+}
+
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-title {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.header-breadcrumbs {
+  font-size: 14px;
+  color: #888;
+}
+
+.control-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.new-button {
+  background-color: #f39c12;
+  color: white;
+}
+
+.table-container {
+  margin-top: 20px;
+}
+
+.bank-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.bank-table th,
+.bank-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.bank-table th {
+  background-color: #f2f2f2;
+}
+
+.bank-table tbody tr:hover {
+  background-color: #f5f5f5;
+  cursor: pointer;
+}
+
+.pagination {
+  margin-top: 20px;
+}
+
+.pagination button {
+  margin: 0 5px;
+  padding: 5px 10px;
+  border: 1px solid #ddd;
+  background-color: #f2f2f2;
+  cursor: pointer;
+}
+
+.pagination button.active {
+  background-color: #f39c12;
+  color: white;
+}

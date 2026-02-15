@@ -1,0 +1,37 @@
+.report-table-card {
+  margin-top: 16px;
+}
+
+.report-table-card .ant-table-thead > tr > th {
+  background-color: #f0f2f5;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+
+.report-table-card .ant-table-tbody > tr:hover > td {
+  background-color: #e6f7ff;
+}
+
+.report-table-card .ant-table {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.report-table-card .ant-card-body {
+  padding: 0;
+}
+
+.report-table-card .ant-table-pagination {
+  margin: 16px !important;
+}
+
+.report-table-card .ant-table-cell {
+  padding: 12px 16px !important;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 768px) {
+  .report-table-card .ant-table-cell {
+    padding: 8px !important;
+  }
+} 

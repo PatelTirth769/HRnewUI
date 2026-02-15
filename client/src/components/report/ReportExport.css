@@ -1,0 +1,48 @@
+.selected-column-item {
+  padding: 8px 12px;
+  margin: 4px 0;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: move;
+}
+
+.selected-column-item:hover {
+  background-color: #e6f7ff;
+}
+
+.draggable-tree-node {
+  padding: 8px 12px;
+  margin: 4px 0;
+  background-color: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: move;
+  transition: all 0.3s;
+}
+
+.draggable-tree-node:hover {
+  background-color: #f5f5f5;
+  border-color: #40a9ff;
+}
+
+.ant-card-head-title {
+  font-weight: 500;
+  font-size: 16px;
+}
+
+.ant-tree {
+  padding: 12px;
+}
+
+.ant-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ant-modal-footer button {
+  min-width: 80px;
+} 

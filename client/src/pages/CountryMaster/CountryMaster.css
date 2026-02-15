@@ -1,0 +1,125 @@
+.country-master-container {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
+
+.header-container {
+  margin-bottom: 20px;
+}
+
+.header-title {
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.header-breadcrumbs {
+  font-size: 12px;
+  color: #666;
+}
+
+.controls-container {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.control-button {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f0f0f0;
+  cursor: pointer;
+  margin-right: 10px;
+}
+
+.control-button.bulk-upload, .control-button.history {
+  background-color: #ff8c00;
+  color: white;
+  border: none;
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+}
+
+.search-container label {
+  margin-right: 5px;
+}
+
+.search-dropdown, .search-input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-right: 10px;
+}
+
+.control-button.search {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+}
+
+.control-button.excel-export {
+  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAPhJREFUOE/dks0rRFEUx+f/N48Jk5A4eA8bWbxlY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2VjY2V-');
+  background-size: contain;
+  width: 16px;
+  height: 16px;
+  border: none;
+}
+
+.currency-info {
+  margin-bottom: 20px;
+}
+
+.currency-info span {
+  margin-right: 20px;
+}
+
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.country-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.country-table th, .country-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.country-table th {
+  background-color: #f2f2f2;
+}
+
+.pagination-container {
+  margin-top: 20px;
+}
+
+.pagination-button {
+  padding: 8px 12px;
+  margin: 0 5px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pagination-button:hover {
+  background-color: #f0f0f0;
+}
+
+.footer-info {
+  margin-top: 20px;
+  font-size: 12px;
+  color: #666;
+}
+
+.footer-info span {
+  margin-right: 20px;
+}

@@ -1,0 +1,31 @@
+body {
+  background-color: #f8f9fa;
+}
+
+.state-master-container {
+  padding: 20px;
+}
+
+.breadcrumb {
+  background-color: transparent;
+  padding: 0;
+  margin-bottom: 1rem;
+}
+
+.btn-new {
+  background-color: #0d6efd;
+  border-color: #0d6efd;
+}
+
+.table-header {
+  background-color: #f8d7da;
+}
+
+.card-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.form-label {
+  font-weight: 500;
+}

@@ -1,0 +1,54 @@
+body {
+  background-color: #f8f9fa;
+}
+
+.city-master-container {
+  padding: 20px;
+}
+
+.breadcrumb {
+  background-color: transparent;
+  padding: 0;
+  margin-bottom: 20px;
+}
+
+.breadcrumb-item a {
+  color: #6c757d;
+  text-decoration: none;
+}
+
+.breadcrumb-item.active {
+  color: #212529;
+}
+
+.btn-new {
+  background-color: #fd7e14;
+  color: white;
+  border: none;
+}
+
+.btn-bulk-upload {
+  background-color: #fd7e14;
+  color: white;
+  border: none;
+}
+
+.search-container {
+  margin-bottom: 20px;
+}
+
+.btn-search {
+  background-color: #fd7e14;
+  color: white;
+  border: none;
+}
+
+.btn-excel {
+  background-color: #28a745;
+  color: white;
+  border: none;
+}
+
+.table-header {
+  background-color: #ffc107;
+}

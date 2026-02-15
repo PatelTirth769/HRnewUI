@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=AR+One+Sans&family=Comfortaa:wght@300&family=Griffy&family=Indie+Flower&family=Libre+Baskerville:wght@700&family=Pixelify+Sans&family=Poppins:wght@300&display=swap');
+.login-page {
+  background: linear-gradient(to right, #c2fcc2, #b3e6f7);
+  height: 100vh;
+  position: fixed;
+}
+
+.card-glass {
+  backdrop-filter: saturate(180%) blur(10px);
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.register-page .card-glass {
+  max-width: 1000px;
+  margin: 1rem auto;
+}
+
+.register-page h1 {
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
+.register-page .ant-form-item {
+  margin-bottom: 1rem;
+}
+
+.register-page .ant-input,
+.register-page .ant-input-password {
+  border-radius: 4px;
+}
+
+.register-page .ant-btn {
+  height: 40px;
+  font-size: 16px;
+}
+
+.text-griffy {
+  font-family: 'Griffy' !important;
+}
+
+.mt-6 {
+  margin-top: 6rem !important;
+}
+input::placeholder {
+  color: #2ca4e1 !important;
+}
+
+.login-page {
+  background: radial-gradient(1000px 600px at 20% 20%, #e0fff2 0%, #c9f0ff 40%, #bfe6ff 60%, #eef7ff 100%),
+              linear-gradient(120deg, #14b8a6 0%, #6366f1 100%);
+  background-blend-mode: soft-light, normal;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.register-page {
+  background: radial-gradient(1000px 600px at 80% 20%, #e0fff2 0%, #c9f0ff 40%, #bfe6ff 60%, #eef7ff 100%),
+              linear-gradient(120deg, #10b981 0%, #4f46e5 100%);
+  background-blend-mode: soft-light, normal;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.auth-card {
+  width: 420px;
+  max-width: 92vw;
+  padding: 28px 32px;
+}
+
+.auth-title {
+  text-align: center;
+  color: #0f172a;
+}
+
+.auth-btn {
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
+}
+.auth-btn:hover {
+  background-color: #0ea5a5 !important;
+  border-color: #0ea5a5 !important;
+}
+
+.auth-card .ant-input,
+.auth-card .ant-input-password,
+.auth-card .ant-select-selector {
+  border-radius: 8px !important;
+  border-color: #e5e7eb !important;
+}
+.auth-card .ant-input:focus,
+.auth-card .ant-input-password:focus,
+.auth-card .ant-select-focused .ant-select-selector,
+.auth-card .ant-input-focused,
+.auth-card .ant-input-password-focused {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15) !important;
+}
+
+.navbar-custom {
+  padding: 12px 16px;
+}

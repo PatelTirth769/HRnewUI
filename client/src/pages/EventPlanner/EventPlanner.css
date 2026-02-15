@@ -1,0 +1,240 @@
+/* EventPlanner Component Styles */
+
+.event-planner-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.event-planner-header {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.event-planner-header h2 {
+  color: #333;
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.breadcrumb {
+  margin-bottom: 25px;
+  font-size: 14px;
+  color: #666;
+}
+
+.breadcrumb span {
+  color: #007bff;
+  cursor: pointer;
+}
+
+.breadcrumb span:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb span:last-child {
+  color: #333;
+  cursor: default;
+  font-weight: 500;
+}
+
+.breadcrumb span:last-child:hover {
+  text-decoration: none;
+}
+
+.search-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.company-selector {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.company-selector label {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+}
+
+.company-select-dropdown {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: #fff;
+  min-width: 150px;
+}
+
+.new-button {
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.new-button:hover {
+  background-color: #0056b3;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.events-table-container {
+  background-color: #fff;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.events-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.events-table th {
+  background-color: #f8f9fa;
+  color: #495057;
+  font-weight: 600;
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 2px solid #dee2e6;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.events-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid #e9ecef;
+  color: #495057;
+}
+
+.events-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.events-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.status {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status.active {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status.inactive {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.edit-button {
+  padding: 6px 12px;
+  background-color: #ffc107;
+  color: #212529;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.edit-button:hover {
+  background-color: #e0a800;
+  transform: translateY(-1px);
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.pagination-button {
+  padding: 8px 12px;
+  border: 1px solid #dee2e6;
+  background-color: #fff;
+  color: #007bff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s ease-in-out;
+}
+
+.pagination-button:hover {
+  background-color: #f8f9fa;
+  border-color: #adb5bd;
+}
+
+.pagination-button:disabled {
+  color: #6c757d;
+  cursor: not-allowed;
+  background-color: #f8f9fa;
+}
+
+.pagination-button.active {
+  background-color: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .search-section {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+  
+  .company-selector {
+    justify-content: space-between;
+  }
+  
+  .new-button {
+    width: 100%;
+  }
+  
+  .events-table {
+    font-size: 12px;
+  }
+  
+  .events-table th,
+  .events-table td {
+    padding: 8px 10px;
+  }
+  
+  .pagination {
+    flex-wrap: wrap;
+  }
+}
