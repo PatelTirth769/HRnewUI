@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import logo from '../../assets/images/logo.png';
 
 const Header = () => {
   const navigate = useNavigate();
@@ -11,12 +12,12 @@ const Header = () => {
   const [hoveredPayroll, setHoveredPayroll] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('ui-theme') || 'corporate');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
-  const themes = ['corporate','minimal','warm'];
+  const themes = ['corporate', 'minimal', 'warm'];
   const themeColors = { corporate: '#1F3C88', minimal: '#5A4FCF', warm: '#008080' };
 
   useEffect(() => {
     const t = theme === 'corporate' ? '' : theme;
-    document.documentElement.setAttribute('data-theme', theme==='corporate' ? '' : theme);
+    document.documentElement.setAttribute('data-theme', theme === 'corporate' ? '' : theme);
     localStorage.setItem('ui-theme', theme);
   }, [theme]);
 
@@ -135,29 +136,30 @@ const Header = () => {
   ];
 
   return (
-    <header className="bg-white px-4 py-3 flex justify-between items-center relative">
-      <Link to="/home" className="no-underline text-xl font-semibold text-gray-800 hover:text-blue-600 transition-colors">
+    <header className="bg-white px-4 py-2 flex justify-between items-center relative shadow-sm">
+      <Link to="/home" className="no-underline text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors flex items-center gap-2">
+        <img src={logo} alt="Logo" className="h-8 w-auto" />
         Dash Board
       </Link>
-      <div className="flex items-center space-x-6 text-gray-700">
+      <div className="flex items-center space-x-4 text-sm text-gray-700">
         {/* Master Menu with Hover */}
         <div className="relative">
-          <div 
-            className="cursor-pointer hover:text-blue-600" 
+          <div
+            className="cursor-pointer hover:text-blue-600"
             onMouseEnter={() => setHoveredMenu('Master')}
             onMouseLeave={() => setHoveredMenu(null)}
           >
             Master ▼
           </div>
           {hoveredMenu === 'Master' && (
-            <div 
+            <div
               className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
               onMouseEnter={() => setHoveredMenu('Master')}
               onMouseLeave={() => setHoveredMenu(null)}
             >
               {Object.entries(menuItems.Master).map(([itemName, subItems]) => (
                 <div key={itemName} className="relative group">
-                  <div 
+                  <div
                     className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
                     onClick={() => {
                       if (itemName === 'Ticker Message') {
@@ -183,8 +185,8 @@ const Header = () => {
                   {subItems && (
                     <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-20 border border-gray-200 hidden group-hover:block">
                       {subItems.map((subItem, subIndex) => (
-                        <div 
-                          key={subIndex} 
+                        <div
+                          key={subIndex}
                           className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
                           onClick={() => {
                             if (subItem === 'Company') {
@@ -253,15 +255,15 @@ const Header = () => {
 
         {/* ELC & Letters Menu */}
         <div className="relative">
-          <div 
-            className="cursor-pointer hover:text-blue-600" 
+          <div
+            className="cursor-pointer hover:text-blue-600"
             onMouseEnter={() => setHoveredELC(true)}
             onMouseLeave={() => setHoveredELC(false)}
           >
             ELC & Letters ▼
           </div>
           {hoveredELC && (
-            <div 
+            <div
               className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
               onMouseEnter={() => setHoveredELC(true)}
               onMouseLeave={() => setHoveredELC(false)}
@@ -289,22 +291,22 @@ const Header = () => {
 
         {/* TA & LV Menu */}
         <div className="relative">
-          <div 
-            className="cursor-pointer hover:text-blue-600" 
+          <div
+            className="cursor-pointer hover:text-blue-600"
             onMouseEnter={() => setHoveredTALV(true)}
             onMouseLeave={() => setHoveredTALV(false)}
           >
             TA & LV ▼
           </div>
           {hoveredTALV && (
-            <div 
+            <div
               className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
               onMouseEnter={() => setHoveredTALV(true)}
               onMouseLeave={() => setHoveredTALV(false)}
             >
               {Object.entries(menuItems['TA & LV']).map(([itemName, subItems]) => (
                 <div key={itemName} className="relative group">
-                  <div 
+                  <div
                     className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
                     onClick={() => {
                       if (itemName === 'Attendance Dashboard') {
@@ -338,8 +340,8 @@ const Header = () => {
                   {subItems && (
                     <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-20 border border-gray-200 hidden group-hover:block">
                       {subItems.map((subItem, subIndex) => (
-                        <div 
-                          key={subIndex} 
+                        <div
+                          key={subIndex}
                           className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
                           onClick={() => {
                             if (itemName === 'Capture Attendance') {
@@ -371,7 +373,7 @@ const Header = () => {
           )}
         </div>
 
-                {/* Payroll Menu */}
+        {/* Payroll Menu */}
         <div className="relative">
           <div
             className="cursor-pointer hover:text-blue-600"
@@ -409,17 +411,17 @@ const Header = () => {
           )}
         </div>
 
-      <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>
-      <Link to="/companies" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Companies</Link>
-      <Link to="/settings" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Settings</Link>
-      <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Employee Self Service</Link>
-      <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Reports</Link>
-      <Link to="/about" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">About</Link>
-      <Link to="/contact" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Contact</Link>
+        <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>
+        <Link to="/companies" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Companies</Link>
+        <Link to="/settings" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Settings</Link>
+        <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Employee Self Service</Link>
+        <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Reports</Link>
+        <Link to="/about" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">About</Link>
+        <Link to="/contact" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Contact</Link>
         <div className="relative">
           <button
             className="flex items-center gap-1 border rounded px-2 py-1 shadow-sm"
-            onClick={()=>setThemeMenuOpen(v=>!v)}
+            onClick={() => setThemeMenuOpen(v => !v)}
             aria-label="Theme"
           >
             <span className="w-4 h-4 rounded-full" style={{ backgroundColor: 'var(--primary)' }}></span>
@@ -429,12 +431,12 @@ const Header = () => {
           </button>
           {themeMenuOpen && (
             <div className="absolute right-0 mt-2 bg-white border rounded-md shadow-sm p-2 flex gap-2 z-50">
-              {themes.map(t=> (
+              {themes.map(t => (
                 <button
                   key={t}
-                  className={`w-5 h-5 rounded-full border ${theme===t?'ring-2 ring-gray-300':''}`}
+                  className={`w-5 h-5 rounded-full border ${theme === t ? 'ring-2 ring-gray-300' : ''}`}
                   style={{ backgroundColor: themeColors[t] }}
-                  onClick={()=>{ setTheme(t); setThemeMenuOpen(false); }}
+                  onClick={() => { setTheme(t); setThemeMenuOpen(false); }}
                   aria-label={t}
                 />
               ))}

@@ -1,16 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=AR+One+Sans&family=Comfortaa:wght@300&family=Griffy&family=Indie+Flower&family=Libre+Baskerville:wght@700&family=Pixelify+Sans&family=Poppins:wght@300&display=swap');
-.login-page {
-  background: linear-gradient(to right, #c2fcc2, #b3e6f7);
-  height: 100vh;
-  position: fixed;
-}
+
+/* Removed duplicate login-page style */
 
 .card-glass {
   backdrop-filter: saturate(180%) blur(10px);
   background: rgba(255, 255, 255, 0.65);
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 .register-page .card-glass {
@@ -44,36 +41,33 @@
 .mt-6 {
   margin-top: 6rem !important;
 }
+
 input::placeholder {
   color: #2ca4e1 !important;
 }
 
+/* Consolidated login-page style */
+/* Consolidated login-page style */
 .login-page {
-  background: radial-gradient(1000px 600px at 20% 20%, #e0fff2 0%, #c9f0ff 40%, #bfe6ff 60%, #eef7ff 100%),
-              linear-gradient(120deg, #14b8a6 0%, #6366f1 100%);
-  background-blend-mode: soft-light, normal;
+  background: url('../../assets/images/login_bg.jpeg') no-repeat center center fixed;
+  background-size: 100% 100%;
+  background-color: #f0f9ff;
   min-height: 100vh;
   width: 100%;
   display: flex;
   flex-direction: column;
 }
 
-.register-page {
-  background: radial-gradient(1000px 600px at 80% 20%, #e0fff2 0%, #c9f0ff 40%, #bfe6ff 60%, #eef7ff 100%),
-              linear-gradient(120deg, #10b981 0%, #4f46e5 100%);
-  background-blend-mode: soft-light, normal;
-  min-height: 100vh;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-}
+/* Removed duplicate .login-page block */
 
 .auth-container {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 2rem 1rem;
+  padding-top: 40vh;
+  /* Push card down to avoid covering top text */
 }
 
 .auth-card {
@@ -91,6 +85,7 @@ input::placeholder {
   background-color: #10b981 !important;
   border-color: #10b981 !important;
 }
+
 .auth-btn:hover {
   background-color: #0ea5a5 !important;
   border-color: #0ea5a5 !important;
@@ -102,6 +97,7 @@ input::placeholder {
   border-radius: 8px !important;
   border-color: #e5e7eb !important;
 }
+
 .auth-card .ant-input:focus,
 .auth-card .ant-input-password:focus,
 .auth-card .ant-select-focused .ant-select-selector,
@@ -113,4 +109,12 @@ input::placeholder {
 
 .navbar-custom {
   padding: 12px 16px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  text-align: right;
+  z-index: 10;
 }
+
+/* End of styles */

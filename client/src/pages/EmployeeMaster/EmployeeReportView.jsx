@@ -11,10 +11,10 @@ const EmployeeReportView = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const r = await fetch('http://localhost:3636/api/actions/meta?table=Employee');
+        const r = await fetch(`${Config.baseUrl}/api/actions/meta?table=Employee`);
         const j = await r.json();
         if (j && j.fields) setFields(j.fields);
-      } catch (e) {}
+      } catch (e) { }
     };
     load();
   }, []);

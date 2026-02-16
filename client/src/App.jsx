@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Header from './components/common/Header';
 import Dashboard from './pages/Dashboard';
 import EmployeeSelfService from './pages/ESS/EmployeeSelfService';
@@ -89,7 +89,10 @@ import ShiftMaster from './pages/TALV/ShiftMaster';
 import HRViewLeavesOutdoor from './pages/TALV/HRViewLeavesOutdoor';
 import UploadMonthlyLeaveBalance from './pages/TALV/UploadMonthlyLeaveBalance';
 
+
 function App() {
+  const location = useLocation();
+
   return (
     <div className="App">
       <Header />
@@ -114,9 +117,10 @@ function App() {
               <Route path="/master/departments/:id" element={<DepartmentDetail />} />
               <Route path="/master/departments/:id/edit" element={<DepartmentEdit />} />
               <Route path="/master/designations" element={<DesignationList />} />
+              <Route path="/master/designations/new" element={<DesignationEdit />} />
               <Route path="/master/designations/bombaim" element={<DesignationDetail />} />
               <Route path="/master/designations/:id" element={<DesignationDetail />} />
-              <Route path="/master/designations/edit/:id" element={<DesignationEdit />} />
+              <Route path="/master/designations/:id/edit" element={<DesignationEdit />} />
               <Route path="/master/holiday-master" element={<HolidayList />} />
               <Route path="/master/holiday-master/new" element={<HolidayNew />} />
               <Route path="/master/holiday-master/edit/:id" element={<HolidayEdit />} />

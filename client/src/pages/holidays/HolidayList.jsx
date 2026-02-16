@@ -1,139 +1,160 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import api from '../../services/api';
+import { Spin, notification, Modal } from 'antd';
+import { ExclamationCircleOutlined } from '@ant-design/icons';
 
 const HolidayList = () => {
   const navigate = useNavigate();
+  const [holidayLists, setHolidayLists] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchOn, setSearchOn] = useState('all');
-  const [year, setYear] = useState('2025');
-  const [currentPage, setCurrentPage] = useState(1);
-  const recordsPerPage = 20;
+  const [modal, contextHolder] = Modal.useModal();
 
-  const holidays = [
-    { id: 1, organization: 'BOMBAIM', location: 'Kolkata_Backend', date: '30-Sep-25', day: 'Tuesday', name: 'ASTHAMI', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 2, organization: 'BOMBAIM', location: 'Kolkata Good earth', date: '14-Mar-25', day: 'Friday', name: 'BENGALI HOLI DA...', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 3, organization: 'BOMBAIM', location: 'Kolkata_Frontend', date: '14-Mar-25', day: 'Friday', name: 'BENGALI HOLI DA...', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 4, organization: 'BOMBAIM', location: 'Kolkata_Frontend', date: '02-Oct-25', day: 'Thursday', name: 'DASHMI', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 5, organization: 'BOMBAIM', location: 'Kolkata Good earth', date: '02-Oct-25', day: 'Thursday', name: 'DASHMI', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 6, organization: 'BOMBAIM', location: 'Kolkata_Backend', date: '20-Oct-25', day: 'Monday', name: 'Diwali', insertedOn: '18-Oct-25', insertedBy: 'admin', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 7, organization: 'BOMBAIM', location: 'Mumbai_Frontend', date: '20-Oct-25', day: 'Monday', name: 'Diwali', insertedOn: '18-Oct-25', insertedBy: 'admin', updatedOn: '', updatedBy: '', state: 'Maharashtra' },
-    { id: 8, organization: 'BOMBAIM', location: 'Mumbai_Frontend', date: '21-Oct-25', day: 'Tuesday', name: 'Diwali', insertedOn: '23-Oct-25', insertedBy: 'admin', updatedOn: '', updatedBy: '', state: 'Maharashtra' },
-    { id: 9, organization: 'BOMBAIM', location: 'Kolkata_Backend', date: '02-Oct-25', day: 'Thursday', name: 'Dussehra/Gandhi...', insertedOn: '31-Jul-25', insertedBy: 'admin', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 10, organization: 'BOMBAIM', location: 'Mumbai_Frontend', date: '06-Sep-25', day: 'Saturday', name: 'GANPATI VISARJA...', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'Maharashtra' },
-    { id: 11, organization: 'BOMBAIM', location: 'Mumbai_Frontend', date: '14-Mar-25', day: 'Friday', name: 'HOLI', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'Maharashtra' },
-    { id: 12, organization: 'BOMBAIM', location: 'Kolkata_Backend', date: '14-Mar-25', day: 'Friday', name: 'HOLI', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 13, organization: 'BOMBAIM', location: 'Kolkata_Backend', date: '15-Aug-25', day: 'Friday', name: 'INDEPENDENCE DA...', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 14, organization: 'BOMBAIM', location: 'Kolkata_Backend', date: '01-Oct-25', day: 'Wednesday', name: 'NAVAMI', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 15, organization: 'BOMBAIM', location: 'Kolkata_Frontend', date: '01-Oct-25', day: 'Wednesday', name: 'NAVAMI', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 16, organization: 'BOMBAIM', location: 'Kolkata Good earth', date: '01-Oct-25', day: 'Wednesday', name: 'NAVAMI', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 17, organization: 'BOMBAIM', location: 'Kolkata Good earth', date: '01-Jan-25', day: 'Wednesday', name: 'New year', insertedOn: '01-Aug-25', insertedBy: 'admin', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 18, organization: 'BOMBAIM', location: 'Kolkata_Frontend', date: '01-Jan-25', day: 'Wednesday', name: 'New Year', insertedOn: '01-Aug-25', insertedBy: 'admin', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 19, organization: 'BOMBAIM', location: 'Mumbai_Frontend', date: '01-Jan-25', day: 'Wednesday', name: 'NEW YEAR', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'Maharashtra' },
-    { id: 20, organization: 'BOMBAIM', location: 'Kolkata_Backend', date: '26-Jan-25', day: 'Sunday', name: 'REPUBLIC DAY', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-    { id: 21, organization: 'BOMBAIM', location: 'Kolkata_Backend', date: '26-Jan-25', day: 'Sunday', name: 'REPUBLIC DAY', insertedOn: '31-Jul-25', insertedBy: 'Deepali', updatedOn: '', updatedBy: '', state: 'West Bengal' },
-  ];
-
-  const filteredHolidays = holidays.filter(holiday => {
-    const searchTermLower = searchTerm.toLowerCase();
-    if (searchOn === 'all') {
-      return Object.values(holiday).some(val =>
-        String(val).toLowerCase().includes(searchTermLower)
-      );
-    } else {
-      return String(holiday[searchOn]).toLowerCase().includes(searchTermLower);
+  const fetchHolidayLists = async () => {
+    try {
+      const response = await api.get('/api/resource/Holiday List?fields=["name","from_date","to_date"]&limit_page_length=None');
+      if (response.data && response.data.data) {
+        setHolidayLists(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching holiday lists:", error);
+      notification.error({ message: "Failed to fetch holiday lists" });
+    } finally {
+      setLoading(false);
     }
-  }).filter(holiday => holiday.date.endsWith(year.slice(-2)));
-
-  const totalRecords = filteredHolidays.length;
-  const totalPages = Math.ceil(totalRecords / recordsPerPage);
-
-  const currentRecords = filteredHolidays.slice(
-    (currentPage - 1) * recordsPerPage,
-    currentPage * recordsPerPage
-  );
-
-  const handleRowClick = (holiday) => {
-    navigate(`/master/holiday-master/edit/${holiday.id}`);
   };
 
-  const handleNew = () => {
-    navigate('/master/holiday-master/new');
+  useEffect(() => {
+    fetchHolidayLists();
+  }, []);
+
+  const filteredHolidayLists = holidayLists.filter(list =>
+    list.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleDelete = (e, list) => {
+    e.stopPropagation();
+    modal.confirm({
+      title: 'Are you sure you want to delete this Holiday List?',
+      icon: <ExclamationCircleOutlined />,
+      content: `This will permanently delete the holiday list "${list.name}".`,
+      okText: 'Yes, Delete',
+      okType: 'danger',
+      cancelText: 'No',
+      onOk: async () => {
+        try {
+          const encodedName = encodeURIComponent(list.name);
+          await api.delete(`/api/resource/Holiday List/${encodedName}`);
+          notification.success({ message: "Holiday List deleted successfully" });
+          fetchHolidayLists();
+        } catch (error) {
+          console.error("Error deleting holiday list:", error);
+          notification.error({
+            message: "Failed to delete holiday list",
+            description: error.response?.data?.exception || error.message
+          });
+        }
+      },
+    });
+  };
+
+  const handleEdit = (list) => {
+    navigate(`/master/holiday-master/edit/${encodeURIComponent(list.name)}`);
   };
 
   return (
-    <div className="p-6 bg-gray-100 min-h-screen">
-      <div className="bg-white p-4 rounded-lg shadow-md">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-xl font-bold">HOME {'>'} ORG SET UP {'>'} HOLIDAY MASTER</h1>
-        </div>
+    <div className="min-h-screen bg-gray-50 py-8">
+      {contextHolder}
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="bg-white rounded-lg shadow-lg">
+          {/* Header */}
+          <div className="px-8 py-6 border-b border-gray-200">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-800">Holiday Lists</h1>
+                <p className="text-gray-600 mt-1">Manage holiday calendars for your organization</p>
+              </div>
+              <div className="flex space-x-3">
+                <Link
+                  to="/master/holiday-master/new"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center"
+                >
+                  <span className="mr-2">+</span>
+                  New Holiday List
+                </Link>
+                <Link
+                  to="/"
+                  className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
+                >
+                  ← Back to Home
+                </Link>
+              </div>
+            </div>
+          </div>
 
-        <div className="flex items-center space-x-4 mb-4">
-          <button className="bg-gray-200 px-4 py-2 rounded-md">Past Holidays</button>
-          <button className="bg-green-500 text-white px-4 py-2 rounded-md">Future Holidays</button>
-          <button className="bg-yellow-500 text-white px-4 py-2 rounded-md">Optional Holidays</button>
-        </div>
+          {/* Search */}
+          <div className="px-8 py-6 border-b border-gray-200">
+            <input
+              type="text"
+              placeholder="Search holiday lists..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
 
-        <div className="flex items-center space-x-4 mb-4">
-          <button onClick={handleNew} className="bg-blue-500 text-white px-4 py-2 rounded-md">New</button>
-          <button className="bg-gray-500 text-white px-4 py-2 rounded-md">Bulk Upload</button>
-          <div>
-            <label>Search On</label>
-            <select value={searchOn} onChange={e => setSearchOn(e.target.value)} className="border p-1 rounded-md">
-              <option value="all">All</option>
-              <option value="organization">Organization</option>
-              <option value="location">Location</option>
-              <option value="name">Holiday Name</option>
-              <option value="state">State</option>
-            </select>
+          {/* List */}
+          <div className="px-8 py-6">
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <Spin size="large" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">From Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">To Date</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredHolidayLists.map((list) => (
+                      <tr key={list.name} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleEdit(list)}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{list.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{list.from_date}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{list.to_date}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleEdit(list); }}
+                            className="text-blue-600 hover:text-blue-900 mr-4"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={(e) => handleDelete(e, list)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredHolidayLists.length === 0 && (
+                      <tr>
+                        <td colSpan="4" className="px-6 py-4 text-center text-sm text-gray-500">
+                          No holiday lists found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-          <div>
-            <label>Search Text</label>
-            <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="border p-1 rounded-md" />
-          </div>
-          <div>
-            <label>Year</label>
-            <select value={year} onChange={e => setYear(e.target.value)} className="border p-1 rounded-md">
-              <option>2025</option>
-              <option>2024</option>
-              <option>2023</option>
-            </select>
-          </div>
-          <div className="flex items-center">
-            <label>Page</label>
-            <input type="number" value={currentPage} onChange={e => setCurrentPage(Number(e.target.value))} className="border w-16 p-1 rounded-md mx-2" />
-            <span>out of {totalPages}</span>
-            <button className="bg-green-500 text-white p-1 rounded-md">Q</button>
-          </div>
-        </div>
-        <div className="text-right mb-2">Records Count: {totalRecords}</div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border">
-            <thead className="bg-yellow-200">
-              <tr>
-                {['SR.', 'ORGANIZATION', 'LOCATION', 'HOLIDAY DATE', 'DAY', 'HOLIDAY NAME', 'INSERTED ON', 'INSERTED BY', 'UPDATED ON', 'UPDATED BY', 'STATE'].map(header => (
-                  <th key={header} className="py-2 px-4 border-b">{header}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {currentRecords.map((holiday, index) => (
-                <tr key={holiday.id} onClick={() => handleRowClick(holiday)} className="cursor-pointer hover:bg-gray-100">
-                  <td className="py-2 px-4 border-b text-center">{(currentPage - 1) * recordsPerPage + index + 1}</td>
-                  <td className="py-2 px-4 border-b">{holiday.organization}</td>
-                  <td className="py-2 px-4 border-b">{holiday.location}</td>
-                  <td className="py-2 px-4 border-b">{holiday.date}</td>
-                  <td className="py-2 px-4 border-b">{holiday.day}</td>
-                  <td className="py-2 px-4 border-b">{holiday.name}</td>
-                  <td className="py-2 px-4 border-b">{holiday.insertedOn}</td>
-                  <td className="py-2 px-4 border-b">{holiday.insertedBy}</td>
-                  <td className="py-2 px-4 border-b">{holiday.updatedOn}</td>
-                  <td className="py-2 px-4 border-b">{holiday.updatedBy}</td>
-                  <td className="py-2 px-4 border-b">{holiday.state}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

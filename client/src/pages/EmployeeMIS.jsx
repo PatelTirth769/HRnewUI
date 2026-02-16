@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import SimpleDonut from '../components/charts/SimpleDonut';
 import SimpleBars from '../components/charts/SimpleBars';
 import GroupedMonthlyBars from '../components/charts/GroupedMonthlyBars';
+import API from '../services/api';
 
 const fyOptions = () => {
   const y = new Date().getFullYear();
@@ -30,7 +31,7 @@ const SAMPLE = [
 const randItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const makeEcode = (i) => `E${String(i).padStart(4, '0')}`;
-const monthNames = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+const monthNames = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 const fyMonths = (fyStartYear) => {
   const start = new Date(fyStartYear, 3, 1);
   const months = [];
@@ -103,9 +104,9 @@ const computeMIS = (filters, dataSet) => {
     });
     return map;
   };
-  const genderCounts = countBy('gender', ['Male','Female','Transgender']);
-  const eTypeCounts = countBy('eType', ['STAFF','WORKER']);
-  const statusCounts = countBy('status', ['OnRoll','OffRoll','Left']);
+  const genderCounts = countBy('gender', ['Male', 'Female', 'Transgender']);
+  const eTypeCounts = countBy('eType', ['STAFF', 'WORKER']);
+  const statusCounts = countBy('status', ['OnRoll', 'OffRoll', 'Left']);
   const ageBuckets = [
     { label: '18-25', min: 18, max: 25 },
     { label: '26-30', min: 26, max: 30 },
@@ -166,20 +167,43 @@ const EmployeeMIS = () => {
   const [showMonthlyBars, setShowMonthlyBars] = useState(true);
   const [personalizeVisible, setPersonalizeVisible] = useState(false);
 
+
+
   const apply = async () => {
     try {
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([k, v]) => {
-        if (Array.isArray(v)) params.append(k, v.join(','));
-        else if (v) params.append(k, v);
-      });
-      const res = await fetch(`http://localhost:5000/api/employee/mis?${params.toString()}`);
-      const json = await res.json();
-      if (json && json.totalEmployees !== undefined) {
-        setData(json);
+      // Fetch from ERPNext
+      // We ask for all fields needed for charts + limit_page_length=None to get ALL employees
+      const fields = JSON.stringify(["name", "employee_name", "company", "department", "employment_type", "gender", "status", "date_of_birth", "date_of_joining", "relieving_date", "branch"]);
+      const res = await API.get(`/api/resource/Employee?fields=${fields}&limit_page_length=None`);
+
+      const erpData = res.data.data;
+
+      if (Array.isArray(erpData)) {
+        // Map ERPNext data to the format used by computeMIS
+        const mappedData = erpData.map(e => ({
+          ecode: e.name,
+          name: e.employee_name,
+          company: e.company || 'Unknown',
+          department: e.department || 'Unknown',
+          eType: e.employment_type || 'Unknown', // ERPNext field is employment_type
+          gender: e.gender || 'Unknown',
+          status: e.status || 'Active', // Map ERPNext status
+          workingFor: 'Internal', // Defaulting to Internal as ERPNext might not have this exact field, custom field?
+          location: e.branch || 'Unknown', // Mapping Branch to Location
+          dob: e.date_of_birth,
+          doj: e.date_of_joining,
+          exitDate: e.relieving_date
+        }));
+
+        const computed = computeMIS(filters, mappedData);
+        setData(computed);
         return;
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("Error fetching MIS data:", err);
+    }
+
+    // Fallback to local computation on SAMPLE data if API fails (or for demo)
     const local = computeMIS(filters, dataset);
     setData(local);
   };
@@ -206,48 +230,48 @@ const EmployeeMIS = () => {
       <div className="flex items-center justify-between">
         <div className="text-2xl font-semibold text-gray-900">Employee MIS</div>
         <div className="flex items-center gap-2">
-          <button className="px-3 py-2 bg-blue-600 text-white rounded text-sm" onClick={()=>setPersonalizeVisible(true)}>Personalize</button>
-          <input type="number" min="10" className="border rounded px-2 py-1 w-20 text-sm" value={genCount} onChange={(e)=>setGenCount(Number(e.target.value||0))} />
-          <button className="px-3 py-2 bg-blue-600 text-white rounded text-sm" onClick={()=>{ const arr = makeEmployees(genCount, filters.fyStartYear); setDataset(arr); const d = computeMIS(filters, arr); setData(d); }}>Generate Demo Data</button>
+          <button className="px-3 py-2 bg-blue-600 text-white rounded text-sm" onClick={() => setPersonalizeVisible(true)}>Personalize</button>
+          <input type="number" min="10" className="border rounded px-2 py-1 w-20 text-sm" value={genCount} onChange={(e) => setGenCount(Number(e.target.value || 0))} />
+          <button className="px-3 py-2 bg-blue-600 text-white rounded text-sm" onClick={() => { const arr = makeEmployees(genCount, filters.fyStartYear); setDataset(arr); const d = computeMIS(filters, arr); setData(d); }}>Generate Demo Data</button>
         </div>
       </div>
       <div className="mt-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <div>
           <div className="text-sm">F.Y.</div>
-          <select className="border rounded px-2 py-2 w-full text-sm" value={filters.fyStartYear} onChange={(e)=>setFilters({ ...filters, fyStartYear: Number(e.target.value) })}>
-            {fyOptions().map((y)=>(<option key={y} value={y}>{`${y}-${String(y+1).slice(-2)}`}</option>))}
+          <select className="border rounded px-2 py-2 w-full text-sm" value={filters.fyStartYear} onChange={(e) => setFilters({ ...filters, fyStartYear: Number(e.target.value) })}>
+            {fyOptions().map((y) => (<option key={y} value={y}>{`${y}-${String(y + 1).slice(-2)}`}</option>))}
           </select>
         </div>
         <div>
           <div className="text-sm">Company</div>
-          <select className="border rounded px-2 py-2 w-full text-sm" value={filters.company} onChange={(e)=>setFilters({ ...filters, company: e.target.value })}>
-            {['ALL','BOMBAIM','DCSAMAI','Kolkata_Frontend'].map((v)=>(<option key={v}>{v}</option>))}
+          <select className="border rounded px-2 py-2 w-full text-sm" value={filters.company} onChange={(e) => setFilters({ ...filters, company: e.target.value })}>
+            {['ALL', 'BOMBAIM', 'DCSAMAI', 'Kolkata_Frontend'].map((v) => (<option key={v}>{v}</option>))}
           </select>
         </div>
         <div>
           <div className="text-sm">Department</div>
-          <select className="border rounded px-2 py-2 w-full text-sm" value={filters.department} onChange={(e)=>setFilters({ ...filters, department: e.target.value })}>
-            {['ALL','IT','HR','Sales','Finance'].map((v)=>(<option key={v}>{v}</option>))}
+          <select className="border rounded px-2 py-2 w-full text-sm" value={filters.department} onChange={(e) => setFilters({ ...filters, department: e.target.value })}>
+            {['ALL', 'IT', 'HR', 'Sales', 'Finance'].map((v) => (<option key={v}>{v}</option>))}
           </select>
         </div>
         <div>
           <div className="text-sm">Etype</div>
-          <select className="border rounded px-2 py-2 w-full text-sm" value={filters.eType} onChange={(e)=>setFilters({ ...filters, eType: e.target.value })}>
-            {['ALL','STAFF','WORKER'].map((v)=>(<option key={v}>{v}</option>))}
+          <select className="border rounded px-2 py-2 w-full text-sm" value={filters.eType} onChange={(e) => setFilters({ ...filters, eType: e.target.value })}>
+            {['ALL', 'STAFF', 'WORKER'].map((v) => (<option key={v}>{v}</option>))}
           </select>
         </div>
         <div>
           <div className="text-sm">Working For</div>
-          <select className="border rounded px-2 py-2 w-full text-sm" value={filters.workingFor} onChange={(e)=>setFilters({ ...filters, workingFor: e.target.value })}>
-            {['ALL','Client','Internal'].map((v)=>(<option key={v}>{v}</option>))}
+          <select className="border rounded px-2 py-2 w-full text-sm" value={filters.workingFor} onChange={(e) => setFilters({ ...filters, workingFor: e.target.value })}>
+            {['ALL', 'Client', 'Internal'].map((v) => (<option key={v}>{v}</option>))}
           </select>
         </div>
         <div>
           <div className="text-sm">Working Location</div>
           <div className="border rounded w-full text-sm p-2">
             <div className="flex flex-wrap gap-2">
-              {locationOptions.map((loc)=> (
-                <button key={loc} className={`px-2 py-1 rounded border ${filters.locations.includes(loc)?'bg-blue-600 text-white border-blue-600':'bg-white'}`} onClick={()=>onSelectLocation(loc)}>{loc}</button>
+              {locationOptions.map((loc) => (
+                <button key={loc} className={`px-2 py-1 rounded border ${filters.locations.includes(loc) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white'}`} onClick={() => onSelectLocation(loc)}>{loc}</button>
               ))}
             </div>
           </div>
@@ -256,11 +280,11 @@ const EmployeeMIS = () => {
       <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <div className="text-sm">From</div>
-          <input type="date" className="border rounded px-2 py-2 w-full text-sm" value={filters.fromDate} onChange={(e)=>setFilters({ ...filters, fromDate: e.target.value })} />
+          <input type="date" className="border rounded px-2 py-2 w-full text-sm" value={filters.fromDate} onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })} />
         </div>
         <div>
           <div className="text-sm">To</div>
-          <input type="date" className="border rounded px-2 py-2 w-full text-sm" value={filters.toDate} onChange={(e)=>setFilters({ ...filters, toDate: e.target.value })} />
+          <input type="date" className="border rounded px-2 py-2 w-full text-sm" value={filters.toDate} onChange={(e) => setFilters({ ...filters, toDate: e.target.value })} />
         </div>
         <div className="flex items-end">
           <button className="px-4 py-2 bg-orange-500 text-white rounded text-sm" onClick={apply}>Apply</button>
@@ -274,7 +298,7 @@ const EmployeeMIS = () => {
           {filters.department !== 'ALL' && (<span className="px-2 py-1 rounded bg-blue-100 text-blue-700 border border-blue-200">{filters.department}</span>)}
           {filters.eType !== 'ALL' && (<span className="px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">{filters.eType}</span>)}
           {filters.workingFor !== 'ALL' && (<span className="px-2 py-1 rounded bg-gray-100 text-gray-700 border">{filters.workingFor}</span>)}
-          {filters.locations.map((l)=> (<span key={l} className="px-2 py-1 rounded bg-purple-100 text-purple-700 border border-purple-200">{l}</span>))}
+          {filters.locations.map((l) => (<span key={l} className="px-2 py-1 rounded bg-purple-100 text-purple-700 border border-purple-200">{l}</span>))}
           {filters.fromDate && (<span className="px-2 py-1 rounded bg-gray-100 text-gray-700 border">From {filters.fromDate}</span>)}
           {filters.toDate && (<span className="px-2 py-1 rounded bg-gray-100 text-gray-700 border">To {filters.toDate}</span>)}
         </div>
@@ -285,19 +309,19 @@ const EmployeeMIS = () => {
         {showGenderDonut && (
           <div className="bg-white rounded border p-4">
             <div className="font-semibold mb-3">Gender wise</div>
-            <SimpleDonut data={data.genderCounts} colors={["#60a5fa","#fb7185","#fbbf24"]} totalLabel={data.totalEmployees} />
+            <SimpleDonut data={data.genderCounts} colors={["#60a5fa", "#fb7185", "#fbbf24"]} totalLabel={data.totalEmployees} />
           </div>
         )}
         {showEtypeDonut && (
           <div className="bg-white rounded border p-4">
             <div className="font-semibold mb-3">Etype wise</div>
-            <SimpleDonut data={data.eTypeCounts} colors={["#f59e0b","#10b981"]} totalLabel={data.totalEmployees} />
+            <SimpleDonut data={data.eTypeCounts} colors={["#f59e0b", "#10b981"]} totalLabel={data.totalEmployees} />
           </div>
         )}
         {showStatusDonut && (
           <div className="bg-white rounded border p-4">
             <div className="font-semibold mb-3">Status wise</div>
-            <SimpleDonut data={data.statusCounts} colors={["#22c55e","#f97316","#ef4444"]} totalLabel={data.totalEmployees} />
+            <SimpleDonut data={data.statusCounts} colors={["#22c55e", "#f97316", "#ef4444"]} totalLabel={data.totalEmployees} />
           </div>
         )}
       </div>
@@ -324,14 +348,14 @@ const EmployeeMIS = () => {
           <div className="bg-white rounded-lg w-[520px] p-4">
             <div className="text-lg font-semibold mb-3">Personalize Employee MIS</div>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <label className="flex items-center gap-2"><input type="checkbox" checked={showGenderDonut} onChange={()=>setShowGenderDonut(v=>!v)} /> Gender wise</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={showEtypeDonut} onChange={()=>setShowEtypeDonut(v=>!v)} /> Etype wise</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={showStatusDonut} onChange={()=>setShowStatusDonut(v=>!v)} /> Status wise</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={showAgeBars} onChange={()=>setShowAgeBars(v=>!v)} /> Age wise detail</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={showMonthlyBars} onChange={()=>setShowMonthlyBars(v=>!v)} /> Employee Strength</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={showGenderDonut} onChange={() => setShowGenderDonut(v => !v)} /> Gender wise</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={showEtypeDonut} onChange={() => setShowEtypeDonut(v => !v)} /> Etype wise</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={showStatusDonut} onChange={() => setShowStatusDonut(v => !v)} /> Status wise</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={showAgeBars} onChange={() => setShowAgeBars(v => !v)} /> Age wise detail</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={showMonthlyBars} onChange={() => setShowMonthlyBars(v => !v)} /> Employee Strength</label>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button className="px-3 py-2 rounded border" onClick={()=>setPersonalizeVisible(false)}>Close</button>
+              <button className="px-3 py-2 rounded border" onClick={() => setPersonalizeVisible(false)}>Close</button>
             </div>
           </div>
         </div>

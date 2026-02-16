@@ -10,6 +10,7 @@ import './ReportTable.css';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import Config from '../../utility/Config';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -82,7 +83,7 @@ const DraggableSelectedColumn = ({ id, index, column, moveColumn, onRemove }) =>
     <div
       ref={(node) => drag(drop(node))}
       className="selected-column-item"
-      style={{ 
+      style={{
         opacity: isDragging ? 0.5 : 1,
         cursor: 'move',
         display: 'flex',
@@ -97,8 +98,8 @@ const DraggableSelectedColumn = ({ id, index, column, moveColumn, onRemove }) =>
     >
       <DragOutlined style={{ marginRight: 8, color: '#999' }} />
       <span style={{ flex: 1 }}>{column.title}</span>
-      <Button 
-        type="text" 
+      <Button
+        type="text"
         icon={<CloseOutlined />}
         onClick={() => onRemove(column.key)}
         style={{ color: '#ff4d4f' }}
@@ -176,7 +177,7 @@ const ReportContent = ({ reportOpen, exportData, onClose }) => {
         ExportType: type
       };
 
-      const response = await fetch('http://localhost:5000/actions/reports', {
+      const response = await fetch(`${Config.actionUrl}reports`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,7 +199,7 @@ const ReportContent = ({ reportOpen, exportData, onClose }) => {
       } else if (type === 'Excel') {
         // Generate Excel file using XLSX
         const ws = XLSX.utils.json_to_sheet(data);
-        
+
         // Style headers
         const range = XLSX.utils.decode_range(ws['!ref']);
         const headerStyle = {
@@ -245,7 +246,7 @@ const ReportContent = ({ reportOpen, exportData, onClose }) => {
       } else if (type === 'PDF') {
         // Generate PDF using jsPDF with autotable
         const doc = new jsPDF('l', 'pt', 'a4');
-        
+
         // Add title
         doc.setFontSize(18);
         doc.setTextColor(51, 51, 51);
@@ -312,14 +313,14 @@ const ReportContent = ({ reportOpen, exportData, onClose }) => {
   const handleExcelExport = async () => {
     setExportType('Excel');
     await handleExport('Excel');
-      };
+  };
 
   const handlePdfExport = async () => {
     setExportType('PDF');
     await handleExport('PDF');
   };
 
-  const filteredTreeData = treeData.filter(node => 
+  const filteredTreeData = treeData.filter(node =>
     node.title.toLowerCase().includes(searchText.toLowerCase())
   );
 
@@ -329,14 +330,14 @@ const ReportContent = ({ reportOpen, exportData, onClose }) => {
       title={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>{exportData.title}</span>
-         
+
         </div>
       }
       open={reportOpen}
       onCancel={onClose}
       footer={[
-        <Button 
-          key="show" 
+        <Button
+          key="show"
           type="default"
           onClick={() => {
             handleShow();
@@ -347,8 +348,8 @@ const ReportContent = ({ reportOpen, exportData, onClose }) => {
         >
           Preview
         </Button>,
-        <Button 
-          key="excel" 
+        <Button
+          key="excel"
           type="primary"
           onClick={handleExcelExport}
           disabled={selectedColumns.length === 0}
@@ -357,8 +358,8 @@ const ReportContent = ({ reportOpen, exportData, onClose }) => {
         >
           Export Excel
         </Button>,
-        <Button 
-          key="pdf" 
+        <Button
+          key="pdf"
           type="primary"
           onClick={handlePdfExport}
           disabled={selectedColumns.length === 0}
@@ -371,72 +372,72 @@ const ReportContent = ({ reportOpen, exportData, onClose }) => {
     >
       <Spin spinning={loading}>
         <Space direction="vertical" style={{ width: '100%' }} size="large">
-        <Space>
+          <Space>
             <Search
               placeholder="Search columns..."
               allowClear
               onChange={(e) => setSearchText(e.target.value)}
               style={{ width: 200 }}
-          />
+            />
           </Space>
 
           {/* Columns Selection Section */}
           <Row gutter={16}>
-          <Col span={12}>
-            <Card 
-              title="Available Columns" 
-                style={{ 
-                height: '400px', 
-                overflowY: 'auto',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            <Col span={12}>
+              <Card
+                title="Available Columns"
+                style={{
+                  height: '400px',
+                  overflowY: 'auto',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                 }}
-              bodyStyle={{ padding: '12px' }}
+                bodyStyle={{ padding: '12px' }}
               >
-              {filteredTreeData.map((node) => (
-                <DraggableTreeNode key={node.key} data={node} />
-              ))}
-            </Card>
-          </Col>
-          <Col span={12}>
-            <Card 
-              title="Selected Columns" 
-                style={{ 
-                height: '400px', 
-                overflowY: 'auto',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}
-              bodyStyle={{ padding: '12px' }}
-              >
-              <DroppableArea onDrop={handleDrop}>
-                {selectedColumns.map((col, index) => (
-                  <DraggableSelectedColumn
-                    key={col.key}
-                    id={col.key}
-                    index={index}
-                    column={col}
-                    moveColumn={moveColumn}
-                    onRemove={handleRemoveColumn}
-                  />
+                {filteredTreeData.map((node) => (
+                  <DraggableTreeNode key={node.key} data={node} />
                 ))}
-              </DroppableArea>
-            </Card>
-          </Col>
-        </Row>
+              </Card>
+            </Col>
+            <Col span={12}>
+              <Card
+                title="Selected Columns"
+                style={{
+                  height: '400px',
+                  overflowY: 'auto',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+                bodyStyle={{ padding: '12px' }}
+              >
+                <DroppableArea onDrop={handleDrop}>
+                  {selectedColumns.map((col, index) => (
+                    <DraggableSelectedColumn
+                      key={col.key}
+                      id={col.key}
+                      index={index}
+                      column={col}
+                      moveColumn={moveColumn}
+                      onRemove={handleRemoveColumn}
+                    />
+                  ))}
+                </DroppableArea>
+              </Card>
+            </Col>
+          </Row>
 
           {/* Preview Data Section */}
           {showPreview && previewData && (
             <Card
               title="Preview Data"
               extra={
-                <Button 
-                  type="text" 
-                  icon={<CloseOutlined />} 
+                <Button
+                  type="text"
+                  icon={<CloseOutlined />}
                   onClick={() => setShowPreview(false)}
                 />
               }
               style={{ marginTop: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
-      >
-        <ReportTable data={previewData} />
+            >
+              <ReportTable data={previewData} />
             </Card>
           )}
         </Space>

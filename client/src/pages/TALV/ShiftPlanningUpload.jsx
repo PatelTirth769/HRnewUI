@@ -1,140 +1,212 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Table, Button, Modal, Form, Select, DatePicker, notification, Spin, Space } from 'antd';
+import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined } from '@ant-design/icons';
+import api from '../../services/api';
+import dayjs from 'dayjs';
+
+const { Option } = Select;
 
 export default function ShiftPlanningUpload() {
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [shiftTypes, setShiftTypes] = useState([]);
+  const [editingAssignment, setEditingAssignment] = useState(null);
+  const [form] = Form.useForm();
+  const [modal, contextHolder] = Modal.useModal();
+
+  // Filters (keeping simplistic for now, can be wired up later)
   const [company, setCompany] = useState('BOMBAIM');
-  const [department, setDepartment] = useState('ALL');
-  const [employee, setEmployee] = useState('ALL');
-  const [ecode, setEcode] = useState('');
-  const [entity, setEntity] = useState('ALL');
-  const [entityData, setEntityData] = useState('');
-  const [workingFor, setWorkingFor] = useState('ALL');
-  const [location, setLocation] = useState('ALL');
-  const [fromDate, setFromDate] = useState(new Date().toISOString().slice(0,10));
-  const [toDate, setToDate] = useState(new Date(Date.now()+30*24*3600*1000).toISOString().slice(0,10));
-  const files = [
-    { name:'UploadShiftPlanning (3).csv', log:'01-Nov-2025', from:'01-Nov-2025', to:'30-Nov-2025', insertedOn:'28-Oct-2025 17:57:42', by:'admin' },
-    { name:'KOLK.csv', log:'01-Nov-2025', from:'30-Nov-2025', to:'30-Nov-2025', insertedOn:'28-Oct-2025 17:56:04', by:'admin' },
-    { name:'GE NOV.csv', log:'01-Nov-2025', from:'30-Nov-2025', to:'30-Nov-2025', insertedOn:'28-Oct-2025 17:41:44', by:'admin' },
+
+  useEffect(() => {
+    fetchAssignments();
+    fetchEmployees();
+    fetchShiftTypes();
+  }, []);
+
+  const fetchAssignments = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/api/resource/Shift Assignment?fields=["name","employee","employee_name","shift_type","start_date","end_date","status"]&order_by=start_date desc&limit_page_length=None');
+      if (response.data && response.data.data) {
+        setAssignments(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching assignments:", error);
+      notification.error({ message: "Failed to fetch Shift Assignments" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchEmployees = async () => {
+    try {
+      const response = await api.get('/api/resource/Employee?fields=["name","employee_name"]&filters=[["status","=","Active"]]&limit_page_length=None');
+      if (response.data && response.data.data) {
+        setEmployees(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+    }
+  };
+
+  const fetchShiftTypes = async () => {
+    try {
+      const response = await api.get('/api/resource/Shift Type?fields=["name"]&limit_page_length=None');
+      if (response.data && response.data.data) {
+        setShiftTypes(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching shift types:", error);
+    }
+  };
+
+  const handleEdit = (record) => {
+    setEditingAssignment(record);
+    form.setFieldsValue({
+      employee: record.employee,
+      shift_type: record.shift_type,
+      start_date: dayjs(record.start_date),
+      end_date: record.end_date ? dayjs(record.end_date) : null,
+      status: record.status // Set status
+    });
+    setModalVisible(true);
+  };
+
+  const handleSubmit = async (values) => {
+    try {
+      const payload = {
+        employee: values.employee,
+        shift_type: values.shift_type,
+        start_date: values.start_date.format('YYYY-MM-DD'),
+        end_date: values.end_date ? values.end_date.format('YYYY-MM-DD') : null,
+        status: values.status // Use form status
+      };
+
+      if (editingAssignment) {
+        await api.put(`/api/resource/Shift Assignment/${encodeURIComponent(editingAssignment.name)}`, payload);
+        notification.success({ message: "Shift Assignment updated successfully" });
+      } else {
+        await api.post('/api/resource/Shift Assignment', payload);
+        notification.success({ message: "Shift Assignment created successfully" });
+      }
+
+      setModalVisible(false);
+      form.resetFields();
+      setEditingAssignment(null);
+      fetchAssignments();
+    } catch (error) {
+      console.error("Error saving assignment:", error);
+      notification.error({
+        message: "Failed to save assignment",
+        description: error.response?.data?.exception || error.message
+      });
+    }
+  };
+
+  const handleDelete = (name) => {
+    modal.confirm({
+      title: 'Are you sure you want to delete this assignment?',
+      icon: <ExclamationCircleOutlined />,
+      content: `This action cannot be undone.`,
+      okText: 'Yes, Delete',
+      okType: 'danger',
+      cancelText: 'No',
+      onOk: async () => {
+        try {
+          await api.delete(`/api/resource/Shift Assignment/${encodeURIComponent(name)}`);
+          notification.success({ message: "Assignment deleted successfully" });
+          fetchAssignments();
+        } catch (error) {
+          notification.error({ message: "Failed to delete assignment" });
+        }
+      },
+    });
+  };
+
+  const columns = [
+    { title: 'Employee', dataIndex: 'employee_name', key: 'employee_name', render: (text, record) => `${text} (${record.employee})` },
+    { title: 'Shift Type', dataIndex: 'shift_type', key: 'shift_type' },
+    { title: 'Start Date', dataIndex: 'start_date', key: 'start_date' },
+    { title: 'End Date', dataIndex: 'end_date', key: 'end_date' },
+    { title: 'Status', dataIndex: 'status', key: 'status' },
+    {
+      title: 'Action',
+      key: 'action',
+      render: (_, record) => (
+        <Space>
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+          <Button danger type="text" icon={<DeleteOutlined />} onClick={() => handleDelete(record.name)} />
+        </Space>
+      ),
+    },
   ];
 
   return (
-    <div className="p-4">
-      <nav className="text-xs text-gray-500 mb-3">HOME {'>'} TA & LV {'>'} SHIFT PLANNING UPLOAD</nav>
-      <div className="bg-white rounded-md border p-4">
-        <div className="grid grid-cols-2 gap-6">
-          <div className="space-y-3">
-            <div>
-              <div className="text-sm">Company *</div>
-              <select className="border rounded px-2 py-2 w-full text-sm" value={company} onChange={(e)=>setCompany(e.target.value)}>{['BOMBAIM'].map(v=> <option key={v}>{v}</option>)}</select>
-            </div>
-            <div>
-              <div className="text-sm">Employee</div>
-              <select className="border rounded px-2 py-2 w-full text-sm" value={employee} onChange={(e)=>setEmployee(e.target.value)}>{['ALL'].map(v=> <option key={v}>{v}</option>)}</select>
-            </div>
-            <div>
-              <div className="text-sm">Entity</div>
-              <select className="border rounded px-2 py-2 w-full text-sm" value={entity} onChange={(e)=>setEntity(e.target.value)}>{['ALL'].map(v=> <option key={v}>{v}</option>)}</select>
-            </div>
-            <div>
-              <div className="text-sm">Entity Data</div>
-              <input className="border rounded px-2 py-2 w-full text-sm" value={entityData} onChange={(e)=>setEntityData(e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-3">
-            <div>
-              <div className="text-sm">Department</div>
-              <select className="border rounded px-2 py-2 w-full text-sm" value={department} onChange={(e)=>setDepartment(e.target.value)}>{['ALL'].map(v=> <option key={v}>{v}</option>)}</select>
-            </div>
-            <div>
-              <div className="text-sm">Working For</div>
-              <select className="border rounded px-2 py-2 w-full text-sm" value={workingFor} onChange={(e)=>setWorkingFor(e.target.value)}>{['ALL','Self','Client'].map(v=> <option key={v}>{v}</option>)}</select>
-            </div>
-            <div>
-              <div className="text-sm">Location</div>
-              <select className="border rounded px-2 py-2 w-full text-sm" value={location} onChange={(e)=>setLocation(e.target.value)}>{['ALL','HQ','Branch'].map(v=> <option key={v}>{v}</option>)}</select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="text-sm">From Date</div>
-                <input type="date" className="border rounded px-2 py-2 w-full text-sm" value={fromDate} onChange={(e)=>setFromDate(e.target.value)} />
-              </div>
-              <div>
-                <div className="text-sm">To Date</div>
-                <input type="date" className="border rounded px-2 py-2 w-full text-sm" value={toDate} onChange={(e)=>setToDate(e.target.value)} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="text-sm">Ecode</div>
-                <input className="border rounded px-2 py-2 w-full text-sm" value={ecode} onChange={(e)=>setEcode(e.target.value)} />
-              </div>
-            </div>
-          </div>
+    <div className="p-4 bg-gray-50 min-h-screen">
+      {contextHolder}
+      <nav className="text-xs text-gray-500 mb-3">HOME {'>'} TA & LV {'>'} SHIFT PLANNING</nav>
+
+      <div className="bg-white rounded-md border p-4 mb-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-gray-800">Shift Assignments</h2>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingAssignment(null); form.resetFields(); setModalVisible(true); }}>
+            New Assignment
+          </Button>
         </div>
 
-        <div className="mt-4 border rounded p-4">
-          <div className="text-lg font-semibold text-gray-800 mb-2">Upload Shift Planning</div>
-          <div className="flex items-center gap-2 mb-3">
-            <button className="px-3 py-2 bg-orange-500 text-white rounded">Generate Template For Upload</button>
-            <button className="px-3 py-2 border rounded">Without shift Generate Template Upload</button>
-          </div>
-          <div className="flex items-center gap-2">
-            <input type="file" className="border rounded px-2 py-2 text-sm" />
-            <button className="px-3 py-2 bg-orange-500 text-white rounded">⬆️</button>
-            <button className="text-orange-600">Shift Master View</button>
-          </div>
-        </div>
+        {/* Keep existing summary/filter UI if needed, or simplify */}
+        {/* For now, just the table of real data */}
 
-        <div className="mt-4 border rounded p-4">
-          <div className="text-lg font-semibold text-gray-800 mb-2">Export Shift Plan</div>
-          <div className="flex items-center gap-6 mb-3">
-            <div className="flex items-center gap-2"><input type="checkbox" /> <span>Department</span></div>
-            <div className="flex items-center gap-2"><input type="checkbox" /> <span>Working Location</span></div>
-            <button className="px-3 py-2 bg-orange-600 text-white rounded">Export Existing Shift Plan 🧾</button>
-          </div>
-          <div className="flex gap-2">
-            <button className="px-3 py-2 bg-orange-500 text-white rounded">Upload</button>
-            <button className="px-3 py-2 border rounded">Cancel</button>
-          </div>
-        </div>
-
-        <div className="mt-4 text-xs text-blue-700 space-y-1">
-          <div>Note:</div>
-          <ol className="list-decimal pl-6">
-            <li>Shift plan allows valid entry of leave types. If such entry concern leave will be marked only if approved leave request is found in the system.</li>
-            <li>If shifts not define in the shift planning for current date then the system will consider previous day's shift defined in shift plan.</li>
-            <li>If user plans PH (i.e Holiday) in shift plan then if that day is not defined in Holiday master then even if Shift Plan says PH system will check previous day shift planning.</li>
-          </ol>
-        </div>
-
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="bg-orange-100 border">
-                <th className="px-3 py-2 text-left">UPLOADED FILE</th>
-                <th className="px-3 py-2 text-left">LOG</th>
-                <th className="px-3 py-2 text-left">FROM DATE</th>
-                <th className="px-3 py-2 text-left">TO DATE</th>
-                <th className="px-3 py-2 text-left">INSERTED ON</th>
-                <th className="px-3 py-2 text-left">INSERTED BY</th>
-              </tr>
-            </thead>
-            <tbody>
-              {files.map((f,i)=> (
-                <tr key={i} className="border-b">
-                  <td className="px-3 py-2 text-gray-800">{f.name}</td>
-                  <td className="px-3 py-2 text-gray-800">Log</td>
-                  <td className="px-3 py-2">{f.from}</td>
-                  <td className="px-3 py-2">{f.to}</td>
-                  <td className="px-3 py-2">{f.insertedOn}</td>
-                  <td className="px-3 py-2">{f.by}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="text-xs text-gray-600 mt-2">1 to 4 of 4 entries</div>
-        </div>
+        {loading ? <div className="text-center p-10"><Spin /></div> : (
+          <Table dataSource={assignments} columns={columns} rowKey="name" pagination={{ pageSize: 10 }} />
+        )}
       </div>
+
+      <Modal
+        title={editingAssignment ? "Edit Shift Assignment" : "New Shift Assignment"}
+        open={modalVisible}
+        onCancel={() => setModalVisible(false)}
+        footer={null}
+      >
+        <Form form={form} layout="vertical" onFinish={handleSubmit}>
+          <Form.Item name="employee" label="Employee" rules={[{ required: true }]}>
+            <Select placeholder="Select Employee" showSearch optionFilterProp="children" disabled={!!editingAssignment}>
+              {employees.map(emp => (
+                <Option key={emp.name} value={emp.name}>{emp.employee_name} ({emp.name})</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="shift_type" label="Shift Type" rules={[{ required: true }]}>
+            <Select placeholder="Select Shift Type">
+              {shiftTypes.map(st => (
+                <Option key={st.name} value={st.name}>{st.name}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="status" label="Status" initialValue="Active" rules={[{ required: true }]}>
+            <Select placeholder="Select Status">
+              <Option value="Active">Active</Option>
+              <Option value="Inactive">Inactive</Option>
+            </Select>
+          </Form.Item>
+          <div className="grid grid-cols-2 gap-4">
+            <Form.Item name="start_date" label="Start Date" rules={[{ required: true }]}>
+              <DatePicker className="w-full" />
+            </Form.Item>
+            <Form.Item name="end_date" label="End Date">
+              <DatePicker className="w-full" />
+            </Form.Item>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button onClick={() => setModalVisible(false)}>Cancel</Button>
+            <Button type="primary" htmlType="submit">
+              {editingAssignment ? "Update Assignment" : "Assign Shift"}
+            </Button>
+          </div>
+        </Form>
+      </Modal>
     </div>
   );
 }

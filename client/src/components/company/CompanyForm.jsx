@@ -1,28 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Spin } from 'antd';
 
-const CompanyForm = ({ onSave, onCancel }) => {
+const CompanyForm = ({ onSave, onCancel, initialData, loading }) => {
   const [formData, setFormData] = useState({
-    companyCode: '',
-    companyName: '',
-    address: '',
-    city: '',
-    state: '',
-    country: '',
-    phone: '',
-    email: '',
-    website: '',
-    panNo: '',
-    tanNo: '',
-    gstNo: '',
-    cinNo: '',
-    status: 'Active'
+    company_name: '',
+    abbr: '',
+    default_currency: 'INR',
+    country: 'India',
+    domain: 'Services',
+    is_group: 0,
+    parent_company: ''
   });
 
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        company_name: initialData.company_name || '',
+        abbr: initialData.abbr || '',
+        default_currency: initialData.default_currency || 'INR',
+        country: initialData.country || 'India',
+        domain: initialData.domain || 'Services',
+        is_group: initialData.is_group || 0,
+        parent_company: initialData.parent_company || ''
+      });
+    }
+  }, [initialData]);
+
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? (checked ? 1 : 0) : value
     }));
   };
 
@@ -34,241 +42,153 @@ const CompanyForm = ({ onSave, onCancel }) => {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="bg-white rounded-lg shadow-lg max-w-6xl mx-auto">
-      <div className="p-6 border-b bg-gray-50 rounded-t-lg">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {formData.companyName || 'New Company'}
-            </h1>
-            <p className="text-gray-600 mt-1">
-              {formData.companyCode ? `Code: ${formData.companyCode}` : 'Create new company master'}
-            </p>
+        <div className="p-6 border-b bg-gray-50 rounded-t-lg">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {initialData ? 'Edit Company' : 'New Company'}
+              </h1>
+              <p className="text-gray-600 mt-1">
+                {initialData ? `Editing: ${initialData.company_name}` : 'Create new company master'}
+              </p>
+            </div>
+            <button
+              onClick={onCancel}
+              className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+            >
+              ✕
+            </button>
           </div>
-          <button
-            onClick={onCancel}
-            className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
-          >
-            ✕
-          </button>
+        </div>
+
+        <div className="p-6">
+
+          <form onSubmit={handleSave} className="space-y-6">
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Company Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="company_name"
+                  value={formData.company_name}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Abbreviation <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="abbr"
+                  value={formData.abbr}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Default Currency <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="default_currency"
+                  value={formData.default_currency}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Country <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="country"
+                  value={formData.country}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Domain <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="domain"
+                  value={formData.domain}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="Services">Services</option>
+                  <option value="Manufacturing">Manufacturing</option>
+                  <option value="Retail">Retail</option>
+                  <option value="Distribution">Distribution</option>
+                  <option value="Non Profit">Non Profit</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Parent Company
+                </label>
+                <input
+                  type="text"
+                  name="parent_company"
+                  value={formData.parent_company}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="Leave empty if root"
+                />
+              </div>
+
+              <div className="col-span-2 flex items-center">
+                <input
+                  type="checkbox"
+                  name="is_group"
+                  checked={formData.is_group === 1}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 block text-sm text-gray-900">
+                  Is Group Company
+                </label>
+              </div>
+
+            </div>
+
+            <div className="flex justify-end space-x-4 pt-6 border-t">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className={`px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 flex items-center ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+              >
+                {loading && <Spin size="small" className="mr-2" />}
+                Save Company
+              </button>
+            </div>
+          </form>
         </div>
       </div>
-      
-      <div className="p-6">
-
-      <form onSubmit={handleSave} className="space-y-6">
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Company Code <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="companyCode"
-              value={formData.companyCode}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Company Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="companyName"
-              value={formData.companyName}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-              required
-            />
-          </div>
-
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Address <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              name="address"
-              value={formData.address}
-              onChange={handleInputChange}
-              rows="3"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              City <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="city"
-              value={formData.city}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              State <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="state"
-              value={formData.state}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Country <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="country"
-              value={formData.country}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Phone <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="tel"
-              name="phone"
-              value={formData.phone}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Website
-            </label>
-            <input
-              type="url"
-              name="website"
-              value={formData.website}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              PAN No.
-            </label>
-            <input
-              type="text"
-              name="panNo"
-              value={formData.panNo}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              TAN No.
-            </label>
-            <input
-              type="text"
-              name="tanNo"
-              value={formData.tanNo}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              GST No.
-            </label>
-            <input
-              type="text"
-              name="gstNo"
-              value={formData.gstNo}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              CIN No.
-            </label>
-            <input
-              type="text"
-              name="cinNo"
-              value={formData.cinNo}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Status
-            </label>
-            <select
-              name="status"
-              value={formData.status}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex justify-end space-x-4 pt-6 border-t">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600"
-          >
-            Save Company
-          </button>
-        </div>
-      </form>
     </div>
-  </div>
-</div>
   );
 };
 

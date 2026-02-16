@@ -119,24 +119,13 @@ const Register = () => {
   };
 
   return (
-    <div className="register-page">
+    <div className="login-page">
       {loading && (
         <div className="loading-container">
           <div className="spinner"></div>
         </div>
       )}
-      <div className="navbar-custom">
-        <div onClick={() => navigate('/', { replace: true })}>
-          {/* <img src={logoHR} alt="logo" style={{ width: '220px' }} /> */}
-          <h1>Logo</h1>
-        </div>
-        <Text style={{ fontSize: '1rem', color: '#4D4D4D' }}>
-          Already have an account? &nbsp;
-          <Button type="default" onClick={() => navigate('/')} style={{ borderColor: 'green', color: 'green', padding: '10px 20px' }}>
-            Login
-          </Button>
-        </Text>
-      </div>
+
       <div className="auth-container">
         <div className="login-div card-glass auth-card">
           <Title level={3} style={{ marginBottom: '20px', textAlign: 'center', color: '#000' }}>
@@ -190,9 +179,17 @@ const Register = () => {
               </Button>
             </Form.Item>
           </Form>
+          <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+            <Text style={{ color: '#4D4D4D' }}>
+              Already have an account?{' '}
+              <a onClick={() => navigate('/')} style={{ color: 'green', fontWeight: 'bold', cursor: 'pointer' }}>
+                Login
+              </a>
+            </Text>
+          </div>
         </div>
       </div>
-      
+
     </div>
   );
 };

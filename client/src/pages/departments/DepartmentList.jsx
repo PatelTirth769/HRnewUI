@@ -1,75 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../services/api'; // Import API service
+import { Spin, notification } from 'antd'; // Import Ant Design components
 
 const DepartmentList = () => {
   const navigate = useNavigate();
-  
-  const [departments] = useState([
-    {
-      id: 1,
-      name: 'BOMBAIM',
-      code: 'BOM',
-      description: 'Bombay Regional Office',
-      location: 'Mumbai',
-      employees: 45,
-      status: 'Active',
-      createdDate: '2023-01-15'
-    },
-    {
-      id: 2,
-      name: 'DELHI',
-      code: 'DEL',
-      description: 'Delhi Regional Office',
-      location: 'New Delhi',
-      employees: 38,
-      status: 'Active',
-      createdDate: '2023-02-20'
-    },
-    {
-      id: 3,
-      name: 'CHENNAI',
-      code: 'CHE',
-      description: 'Chennai Regional Office',
-      location: 'Chennai',
-      employees: 32,
-      status: 'Active',
-      createdDate: '2023-03-10'
-    },
-    {
-      id: 4,
-      name: 'KOLKATA',
-      code: 'KOL',
-      description: 'Kolkata Regional Office',
-      location: 'Kolkata',
-      employees: 28,
-      status: 'Inactive',
-      createdDate: '2023-04-05'
-    },
-    {
-      id: 5,
-      name: 'PUNE',
-      code: 'PUN',
-      description: 'Pune Branch Office',
-      location: 'Pune',
-      employees: 22,
-      status: 'Active',
-      createdDate: '2023-05-12'
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchBranches = async () => {
+    try {
+      const response = await api.get('/api/resource/Branch?fields=["*"]&limit_page_length=None');
+      if (response.data && response.data.data) {
+        // Map Branch data to the structure expected by the UI, or adjust UI
+        // For now, we'll use the raw data and adjust the UI rendering
+        setDepartments(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching branches:", error);
+      notification.error({ message: "Failed to fetch branches" });
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    fetchBranches();
+  }, []);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('All');
 
+  // Filter logic
   const filteredDepartments = departments.filter(dept => {
-    const matchesSearch = dept.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         dept.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         dept.location.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'All' || dept.status === filterStatus;
-    return matchesSearch && matchesFilter;
+    const name = dept.name || dept.branch || ''; // Adjust based on actual API field
+    return name.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   const handleDepartmentClick = (department) => {
-    navigate(`/master/departments/${department.id}`, { state: { department } });
+    navigate(`/master/departments/${department.name}`, { state: { department } });
   };
 
   const handleAddNew = () => {
@@ -83,12 +51,12 @@ const DepartmentList = () => {
           {/* Header */}
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex justify-between items-center">
-              <h1 className="text-2xl font-bold text-gray-800">Department Management</h1>
+              <h1 className="text-2xl font-bold text-gray-800">Branch Management</h1> {/* Renamed to Branch */}
               <button
                 onClick={handleAddNew}
                 className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
               >
-                + Add New Department
+                + Add New Branch
               </button>
             </div>
           </div>
@@ -99,72 +67,52 @@ const DepartmentList = () => {
               <div className="flex-1">
                 <input
                   type="text"
-                  placeholder="Search by name, code, or location..."
+                  placeholder="Search by branch name..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-              </div>
-              <div>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">All Status</option>
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
               </div>
             </div>
           </div>
 
           {/* Department Grid */}
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredDepartments.map((department) => (
-                <div
-                  key={department.id}
-                  onClick={() => handleDepartmentClick(department)}
-                  className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300"
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800">{department.name}</h3>
-                      <p className="text-sm text-gray-500">{department.code}</p>
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <Spin size="large" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredDepartments.map((department) => (
+                  <div
+                    key={department.name}
+                    onClick={() => handleDepartmentClick(department)}
+                    className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300"
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-800">{department.name}</h3> {/* Display Name */}
+                      </div>
                     </div>
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      department.status === 'Active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {department.status}
-                    </span>
-                  </div>
-                  
-                  <p className="text-gray-600 text-sm mb-3">{department.description}</p>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Location:</span>
-                      <span className="font-medium">{department.location}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Employees:</span>
-                      <span className="font-medium">{department.employees}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Created:</span>
-                      <span className="font-medium">{department.createdDate}</span>
+
+                    {/* You can add more fields here if available in the API response */}
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        {/* Example generic info */}
+                        <span className="text-gray-500">Modified:</span>
+                        <span className="font-medium">{department.modified}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-            
-            {filteredDepartments.length === 0 && (
+                ))}
+              </div>
+            )}
+
+            {!loading && filteredDepartments.length === 0 && (
               <div className="text-center py-12">
-                <p className="text-gray-500 text-lg">No departments found matching your criteria.</p>
+                <p className="text-gray-500 text-lg">No branches found.</p>
               </div>
             )}
           </div>
