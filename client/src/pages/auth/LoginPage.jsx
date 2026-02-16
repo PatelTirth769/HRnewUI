@@ -70,9 +70,10 @@ const LoginPage = () => {
           // Store basic user info 
           localStorage.setItem('isLogged', 'true');
           localStorage.setItem('user', values.email);
+          localStorage.setItem('userToken', 'session-active'); // Set dummy token for ProtectedRoute
 
-          // Redirect to Employee Master
-          navigate('/employee-master');
+          // Redirect to Home (Main Page)
+          navigate('/home');
         }
       } catch (err) {
         console.error("Login Error:", err);

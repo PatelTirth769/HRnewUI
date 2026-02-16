@@ -1,5 +1,6 @@
 import React from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
+import ProtectedRoute from './components/common/ProtectedRoute';
 import Header from './components/common/Header';
 import Dashboard from './pages/Dashboard';
 import EmployeeSelfService from './pages/ESS/EmployeeSelfService';
@@ -92,113 +93,121 @@ import UploadMonthlyLeaveBalance from './pages/TALV/UploadMonthlyLeaveBalance';
 
 function App() {
   const location = useLocation();
+  const hideHeaderRoutes = ['/login', '/register'];
+  const showHeader = !hideHeaderRoutes.includes(location.pathname);
 
   return (
     <div className="App">
-      <Header />
+      {showHeader && <Header />}
       <main className="main-content min-h-screen bg-gray-50">
         <div className="flex">
           <div className="flex-1">
             <Routes>
-              <Route path="/" element={<Navigate to="/home" replace />} />
-              <Route path="/home" element={<Home />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/employee-self-service/*" element={<EmployeeSelfService />} />
-              <Route path="/employee-mis" element={<EmployeeMIS />} />
-              <Route path="/companies" element={<CompanyMaster />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/contact" element={<Contact />} />
-              <Route path="/city-master" element={<CityMaster />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/master" element={<Navigate to="/master/departments" replace />} />
-              <Route path="/master/departments" element={<DepartmentList />} />
-              <Route path="/master/departments/new" element={<DepartmentForm />} />
-              <Route path="/master/departments/:id" element={<DepartmentDetail />} />
-              <Route path="/master/departments/:id/edit" element={<DepartmentEdit />} />
-              <Route path="/master/designations" element={<DesignationList />} />
-              <Route path="/master/designations/new" element={<DesignationEdit />} />
-              <Route path="/master/designations/bombaim" element={<DesignationDetail />} />
-              <Route path="/master/designations/:id" element={<DesignationDetail />} />
-              <Route path="/master/designations/:id/edit" element={<DesignationEdit />} />
-              <Route path="/master/holiday-master" element={<HolidayList />} />
-              <Route path="/master/holiday-master/new" element={<HolidayNew />} />
-              <Route path="/master/holiday-master/edit/:id" element={<HolidayEdit />} />
-              <Route path="/master/entity-master" element={<EntityMaster />} />
-              <Route path="/master/entity-master/edit/:id" element={<EntityEdit />} />
-              <Route path="/master/qualification-master" element={<QualificationMaster />} />
-              <Route path="/master/qualification-master/new" element={<QualificationNew />} />
-              <Route path="/master/qualification-master/edit/:id" element={<QualificationEdit />} />
-              <Route path="/master/state-master" element={<StateMaster />} />
-              <Route path="/country-master" element={<CountryMaster />} />
-              <Route path="/bank-master" element={<BankMaster />} />
-              <Route path="/add-bank" element={<AddBank />} />
-              <Route path="/edit-bank/:id" element={<AddBank />} />
-              <Route path="/policy-upload" element={<PolicyUpload />} />
-              <Route path="/add-policy" element={<AddPolicy />} />
-              <Route path="/edit-policy/:id" element={<AddPolicy />} />
-              <Route path="/ticker-master" element={<TickerMaster />} />
-              <Route path="/add-ticker" element={<AddTicker />} />
-              <Route path="/edit-ticker/:id" element={<AddTicker />} />
-              <Route path="/event-planner" element={<EventPlanner />} />
-              <Route path="/add-event" element={<AddEvent />} />
-              <Route path="/edit-event/:id" element={<AddEvent />} />
-              <Route path="/employee-master" element={<EmployeeMaster />} />
-              <Route path="/add-employee" element={<AddEmployee />} />
-              <Route path="/edit-employee/:id" element={<AddEmployee />} />
-              <Route path="/employee-master/report-view" element={<EmployeeReportView />} />
-              <Route path="/upload-emp-master-update" element={<UploadEmpMasterUpdate />} />
-              <Route path="/reporting-finance-manager-mapping" element={<ReportingFinanceManagerMapping />} />
-              <Route path="/add-reporting-finance-mapping" element={<AddReportingFinanceMapping />} />
-              <Route path="/edit-reporting-finance-mapping/:id" element={<AddReportingFinanceMapping />} />
-              <Route path="/needs/position" element={<NeedsPage title="Position" />} />
-              <Route path="/needs/vendor" element={<Vendor />} />
-              <Route path="/needs/cv-status" element={<CVStatus />} />
-              <Route path="/needs/miscellaneous" element={<Miscellaneous />} />
-              <Route path="/needs/manpower-budget" element={<ManpowerBudget />} />
-              <Route path="/needs/talent-register" element={<TalentRegister />} />
-              <Route path="/needs/manage-cv" element={<ManageCV />} />
-              <Route path="/needs/search-cv" element={<SearchCV />} />
-              <Route path="/needs/tr-tracker" element={<TRTracker />} />
-              <Route path="/needs/upload-candidate-master" element={<UploadCandidateMaster />} />
-              <Route path="/needs/talent-acquisition" element={<TalentAcquisition />} />
-              <Route path="/needs/talent-acquisition-approval" element={<TalentAcquisitionApproval />} />
-              <Route path="/needs/talent-acquisition-manager-approval" element={<TalentAcquisitionManagerApproval />} />
-              <Route path="/needs/hr-view-talent-acquisitions" element={<HRViewTalentAcquisitions />} />
-              <Route path="/payroll/:country/upload" element={<UploadPayrollMaster />} />
-              <Route path="/payroll/:country/config" element={<PayrollConfig />} />
-              <Route path="/payroll/:country/salary-heads" element={<SalaryHeads />} />
-              <Route path="/payroll/:country/statutory-settings" element={<StatutorySettings />} />
-              <Route path="/payroll/:country/prepare" element={<PreparePayroll />} />
-              <Route path="/payroll/:country/run" element={<RunPayroll />} />
-              <Route path="/payroll/:country/post" element={<PostPayroll />} />
-              <Route path="/payroll/:country/dashboard" element={<PayrollDashboard />} />
-              <Route path="/talv/attendance-dashboard" element={<AttendanceDashboard />} />
-              <Route path="/talv/attendance-policy" element={<AttendancePolicyMaster />} />
-              <Route path="/talv/leave-policy-config" element={<LeavePolicyConfig />} />
-              <Route path="/talv/employee-leave-master" element={<EmployeeLeaveMaster />} />
-              <Route path="/talv/upload-opening-leave-balance" element={<UploadOpeningLeaveBalance />} />
-              <Route path="/talv/mobile-app-linking" element={<MobileAppLinking />} />
-              <Route path="/talv/attendance-control" element={<AttendanceControl />} />
-              <Route path="/talv/shift-planning-upload" element={<ShiftPlanningUpload />} />
-              <Route path="/talv/shift-master" element={<ShiftMaster />} />
-              <Route path="/talv/hr-view-leaves-outdoor" element={<HRViewLeavesOutdoor />} />
-              <Route path="/talv/upload-monthly-leave-balance" element={<UploadMonthlyLeaveBalance />} />
-              <Route path="/talv/capture-attendance/biometric-upload" element={<BiometricUpload />} />
-              <Route path="/talv/capture-attendance/import-attendance" element={<ImportAttendance />} />
-              <Route path="/talv/capture-attendance/import-in-out-time" element={<ImportInOutTime />} />
-              <Route path="/talv/capture-attendance/client-emp-import-attendance" element={<NeedsPage title="Client Emp Import Attendance" />} />
-              <Route path="/talv/attendance-reports/shift-punch-register" element={<ShiftPunchRegister />} />
-              <Route path="/talv/attendance-reports/attendance-register" element={<AttendanceRegister />} />
-              <Route path="/talv/attendance-reports/client-emp-attendance-register" element={<NeedsPage title="Client Emp Attendance Register" />} />
-              <Route path="/talv/attendance-reports/over-time-comp-off" element={<OverTimeCompOff />} />
-              <Route path="/talv/attendance-reports/shift-plan-register" element={<ShiftPlanRegister />} />
-              <Route path="/talv/attendance-reports/shift-deviation-register" element={<ShiftDeviationRegister />} />
-              <Route path="/talv/attendance-reports/absconding-report" element={<AbscondingReport />} />
-              <Route path="/talv/attendance-reports/ot-summary" element={<OTSummary />} />
-              <Route path="/talv/attendance-reports/headcount-occupancy-report" element={<HeadcountOccupancyReport />} />
+              {/* Public Routes */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<Register />} />
+
+              {/* Protected Routes */}
+              <Route element={<ProtectedRoute />}>
+                <Route path="/" element={<Navigate to="/home" replace />} />
+                <Route path="/home" element={<Home />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/employee-self-service/*" element={<EmployeeSelfService />} />
+                <Route path="/employee-mis" element={<EmployeeMIS />} />
+                <Route path="/companies" element={<CompanyMaster />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/city-master" element={<CityMaster />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/reports" element={<Reports />} />
+                <Route path="/master" element={<Navigate to="/master/departments" replace />} />
+                <Route path="/master/departments" element={<DepartmentList />} />
+                <Route path="/master/departments/new" element={<DepartmentForm />} />
+                <Route path="/master/departments/:id" element={<DepartmentDetail />} />
+                <Route path="/master/departments/:id/edit" element={<DepartmentEdit />} />
+                <Route path="/master/designations" element={<DesignationList />} />
+                <Route path="/master/designations/new" element={<DesignationEdit />} />
+                <Route path="/master/designations/bombaim" element={<DesignationDetail />} />
+                <Route path="/master/designations/:id" element={<DesignationDetail />} />
+                <Route path="/master/designations/:id/edit" element={<DesignationEdit />} />
+                <Route path="/master/holiday-master" element={<HolidayList />} />
+                <Route path="/master/holiday-master/new" element={<HolidayNew />} />
+                <Route path="/master/holiday-master/edit/:id" element={<HolidayEdit />} />
+                <Route path="/master/entity-master" element={<EntityMaster />} />
+                <Route path="/master/entity-master/edit/:id" element={<EntityEdit />} />
+                <Route path="/master/qualification-master" element={<QualificationMaster />} />
+                <Route path="/master/qualification-master/new" element={<QualificationNew />} />
+                <Route path="/master/qualification-master/edit/:id" element={<QualificationEdit />} />
+                <Route path="/master/state-master" element={<StateMaster />} />
+                <Route path="/country-master" element={<CountryMaster />} />
+                <Route path="/bank-master" element={<BankMaster />} />
+                <Route path="/add-bank" element={<AddBank />} />
+                <Route path="/edit-bank/:id" element={<AddBank />} />
+                <Route path="/policy-upload" element={<PolicyUpload />} />
+                <Route path="/add-policy" element={<AddPolicy />} />
+                <Route path="/edit-policy/:id" element={<AddPolicy />} />
+                <Route path="/ticker-master" element={<TickerMaster />} />
+                <Route path="/add-ticker" element={<AddTicker />} />
+                <Route path="/edit-ticker/:id" element={<AddTicker />} />
+                <Route path="/event-planner" element={<EventPlanner />} />
+                <Route path="/add-event" element={<AddEvent />} />
+                <Route path="/edit-event/:id" element={<AddEvent />} />
+                <Route path="/employee-master" element={<EmployeeMaster />} />
+                <Route path="/add-employee" element={<AddEmployee />} />
+                <Route path="/edit-employee/:id" element={<AddEmployee />} />
+                <Route path="/employee-master/report-view" element={<EmployeeReportView />} />
+                <Route path="/upload-emp-master-update" element={<UploadEmpMasterUpdate />} />
+                <Route path="/reporting-finance-manager-mapping" element={<ReportingFinanceManagerMapping />} />
+                <Route path="/add-reporting-finance-mapping" element={<AddReportingFinanceMapping />} />
+                <Route path="/edit-reporting-finance-mapping/:id" element={<AddReportingFinanceMapping />} />
+                <Route path="/needs/position" element={<NeedsPage title="Position" />} />
+                <Route path="/needs/vendor" element={<Vendor />} />
+                <Route path="/needs/cv-status" element={<CVStatus />} />
+                <Route path="/needs/miscellaneous" element={<Miscellaneous />} />
+                <Route path="/needs/manpower-budget" element={<ManpowerBudget />} />
+                <Route path="/needs/talent-register" element={<TalentRegister />} />
+                <Route path="/needs/manage-cv" element={<ManageCV />} />
+                <Route path="/needs/search-cv" element={<SearchCV />} />
+                <Route path="/needs/tr-tracker" element={<TRTracker />} />
+                <Route path="/needs/upload-candidate-master" element={<UploadCandidateMaster />} />
+                <Route path="/needs/talent-acquisition" element={<TalentAcquisition />} />
+                <Route path="/needs/talent-acquisition-approval" element={<TalentAcquisitionApproval />} />
+                <Route path="/needs/talent-acquisition-manager-approval" element={<TalentAcquisitionManagerApproval />} />
+                <Route path="/needs/hr-view-talent-acquisitions" element={<HRViewTalentAcquisitions />} />
+                <Route path="/payroll/:country/upload" element={<UploadPayrollMaster />} />
+                <Route path="/payroll/:country/config" element={<PayrollConfig />} />
+                <Route path="/payroll/:country/salary-heads" element={<SalaryHeads />} />
+                <Route path="/payroll/:country/statutory-settings" element={<StatutorySettings />} />
+                <Route path="/payroll/:country/prepare" element={<PreparePayroll />} />
+                <Route path="/payroll/:country/run" element={<RunPayroll />} />
+                <Route path="/payroll/:country/post" element={<PostPayroll />} />
+                <Route path="/payroll/:country/dashboard" element={<PayrollDashboard />} />
+                <Route path="/talv/attendance-dashboard" element={<AttendanceDashboard />} />
+                <Route path="/talv/attendance-policy" element={<AttendancePolicyMaster />} />
+                <Route path="/talv/leave-policy-config" element={<LeavePolicyConfig />} />
+                <Route path="/talv/employee-leave-master" element={<EmployeeLeaveMaster />} />
+                <Route path="/talv/upload-opening-leave-balance" element={<UploadOpeningLeaveBalance />} />
+                <Route path="/talv/mobile-app-linking" element={<MobileAppLinking />} />
+                <Route path="/talv/attendance-control" element={<AttendanceControl />} />
+                <Route path="/talv/shift-planning-upload" element={<ShiftPlanningUpload />} />
+                <Route path="/talv/shift-master" element={<ShiftMaster />} />
+                <Route path="/talv/hr-view-leaves-outdoor" element={<HRViewLeavesOutdoor />} />
+                <Route path="/talv/upload-monthly-leave-balance" element={<UploadMonthlyLeaveBalance />} />
+                <Route path="/talv/capture-attendance/biometric-upload" element={<BiometricUpload />} />
+                <Route path="/talv/capture-attendance/import-attendance" element={<ImportAttendance />} />
+                <Route path="/talv/capture-attendance/import-in-out-time" element={<ImportInOutTime />} />
+                <Route path="/talv/capture-attendance/client-emp-import-attendance" element={<NeedsPage title="Client Emp Import Attendance" />} />
+                <Route path="/talv/attendance-reports/shift-punch-register" element={<ShiftPunchRegister />} />
+                <Route path="/talv/attendance-reports/attendance-register" element={<AttendanceRegister />} />
+                <Route path="/talv/attendance-reports/client-emp-attendance-register" element={<NeedsPage title="Client Emp Attendance Register" />} />
+                <Route path="/talv/attendance-reports/over-time-comp-off" element={<OverTimeCompOff />} />
+                <Route path="/talv/attendance-reports/shift-plan-register" element={<ShiftPlanRegister />} />
+                <Route path="/talv/attendance-reports/shift-deviation-register" element={<ShiftDeviationRegister />} />
+                <Route path="/talv/attendance-reports/absconding-report" element={<AbscondingReport />} />
+                <Route path="/talv/attendance-reports/ot-summary" element={<OTSummary />} />
+                <Route path="/talv/attendance-reports/headcount-occupancy-report" element={<HeadcountOccupancyReport />} />
+              </Route> {/* End of Protected Routes */}
+
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
           </div>

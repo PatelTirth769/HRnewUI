@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/auth';
 
 const Settings = () => {
+  const navigate = useNavigate();
+  const [auth, setAuth] = useAuth();
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState({
     general: {
@@ -67,6 +70,20 @@ const Settings = () => {
     setHasChanges(false);
   };
 
+  const handleLogout = () => {
+    // Clear auth context
+    setAuth(null);
+
+    // Clear local storage
+    localStorage.removeItem('userToken');
+    localStorage.removeItem('apiToken');
+    localStorage.removeItem('isLogged');
+    localStorage.removeItem('user');
+
+    // Redirect to login
+    navigate('/login');
+  };
+
   const tabs = [
     { id: 'general', label: 'General', icon: '⚙️' },
     { id: 'profile', label: 'Profile', icon: '👤' },
@@ -99,16 +116,24 @@ const Settings = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full text-left px-4 py-3 rounded-md mb-2 transition-colors ${
-                      activeTab === tab.id
+                    className={`w-full text-left px-4 py-3 rounded-md mb-2 transition-colors ${activeTab === tab.id
                         ? 'bg-blue-600 text-white'
                         : 'text-gray-700 hover:bg-gray-200'
-                    }`}
+                      }`}
                   >
                     <span className="mr-3">{tab.icon}</span>
                     {tab.label}
                   </button>
                 ))}
+              </div>
+              <div className="p-4 border-t border-gray-200">
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-3 rounded-md text-red-600 hover:bg-red-50 transition-colors flex items-center"
+                >
+                  <span className="mr-3">🚪</span>
+                  Log Out
+                </button>
               </div>
             </div>
 
@@ -265,14 +290,12 @@ const Settings = () => {
                       </div>
                       <button
                         onClick={() => handleSettingChange('security', 'twoFactorAuth', !tempSettings.security.twoFactorAuth)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          tempSettings.security.twoFactorAuth ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${tempSettings.security.twoFactorAuth ? 'bg-blue-600' : 'bg-gray-200'
+                          }`}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            tempSettings.security.twoFactorAuth ? 'translate-x-6' : 'translate-x-1'
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${tempSettings.security.twoFactorAuth ? 'translate-x-6' : 'translate-x-1'
+                            }`}
                         />
                       </button>
                     </div>
@@ -332,14 +355,12 @@ const Settings = () => {
                       </div>
                       <button
                         onClick={() => handleSettingChange('notifications', 'emailNotifications', !tempSettings.notifications.emailNotifications)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          tempSettings.notifications.emailNotifications ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${tempSettings.notifications.emailNotifications ? 'bg-blue-600' : 'bg-gray-200'
+                          }`}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            tempSettings.notifications.emailNotifications ? 'translate-x-6' : 'translate-x-1'
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${tempSettings.notifications.emailNotifications ? 'translate-x-6' : 'translate-x-1'
+                            }`}
                         />
                       </button>
                     </div>
@@ -350,14 +371,12 @@ const Settings = () => {
                       </div>
                       <button
                         onClick={() => handleSettingChange('notifications', 'smsNotifications', !tempSettings.notifications.smsNotifications)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          tempSettings.notifications.smsNotifications ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${tempSettings.notifications.smsNotifications ? 'bg-blue-600' : 'bg-gray-200'
+                          }`}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            tempSettings.notifications.smsNotifications ? 'translate-x-6' : 'translate-x-1'
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${tempSettings.notifications.smsNotifications ? 'translate-x-6' : 'translate-x-1'
+                            }`}
                         />
                       </button>
                     </div>
@@ -368,14 +387,12 @@ const Settings = () => {
                       </div>
                       <button
                         onClick={() => handleSettingChange('notifications', 'pushNotifications', !tempSettings.notifications.pushNotifications)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          tempSettings.notifications.pushNotifications ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${tempSettings.notifications.pushNotifications ? 'bg-blue-600' : 'bg-gray-200'
+                          }`}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            tempSettings.notifications.pushNotifications ? 'translate-x-6' : 'translate-x-1'
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${tempSettings.notifications.pushNotifications ? 'translate-x-6' : 'translate-x-1'
+                            }`}
                         />
                       </button>
                     </div>
@@ -386,14 +403,12 @@ const Settings = () => {
                       </div>
                       <button
                         onClick={() => handleSettingChange('notifications', 'dailyReports', !tempSettings.notifications.dailyReports)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          tempSettings.notifications.dailyReports ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${tempSettings.notifications.dailyReports ? 'bg-blue-600' : 'bg-gray-200'
+                          }`}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            tempSettings.notifications.dailyReports ? 'translate-x-6' : 'translate-x-1'
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${tempSettings.notifications.dailyReports ? 'translate-x-6' : 'translate-x-1'
+                            }`}
                         />
                       </button>
                     </div>
@@ -426,14 +441,12 @@ const Settings = () => {
                       </div>
                       <button
                         onClick={() => handleSettingChange('privacy', 'dataSharing', !tempSettings.privacy.dataSharing)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          tempSettings.privacy.dataSharing ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${tempSettings.privacy.dataSharing ? 'bg-blue-600' : 'bg-gray-200'
+                          }`}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            tempSettings.privacy.dataSharing ? 'translate-x-6' : 'translate-x-1'
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${tempSettings.privacy.dataSharing ? 'translate-x-6' : 'translate-x-1'
+                            }`}
                         />
                       </button>
                     </div>
@@ -444,14 +457,12 @@ const Settings = () => {
                       </div>
                       <button
                         onClick={() => handleSettingChange('privacy', 'analyticsTracking', !tempSettings.privacy.analyticsTracking)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          tempSettings.privacy.analyticsTracking ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${tempSettings.privacy.analyticsTracking ? 'bg-blue-600' : 'bg-gray-200'
+                          }`}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            tempSettings.privacy.analyticsTracking ? 'translate-x-6' : 'translate-x-1'
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${tempSettings.privacy.analyticsTracking ? 'translate-x-6' : 'translate-x-1'
+                            }`}
                         />
                       </button>
                     </div>
@@ -462,14 +473,12 @@ const Settings = () => {
                       </div>
                       <button
                         onClick={() => handleSettingChange('privacy', 'cookieConsent', !tempSettings.privacy.cookieConsent)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          tempSettings.privacy.cookieConsent ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${tempSettings.privacy.cookieConsent ? 'bg-blue-600' : 'bg-gray-200'
+                          }`}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            tempSettings.privacy.cookieConsent ? 'translate-x-6' : 'translate-x-1'
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${tempSettings.privacy.cookieConsent ? 'translate-x-6' : 'translate-x-1'
+                            }`}
                         />
                       </button>
                     </div>
