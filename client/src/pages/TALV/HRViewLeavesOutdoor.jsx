@@ -3,11 +3,12 @@ import api from '../../services/api';
 import dayjs from 'dayjs';
 import { notification, Spin, Modal, Form, Select, Input, DatePicker, Button, Popconfirm, Tooltip, message } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { saveAs } from 'file-saver';
+import * as XLSX from 'xlsx';
 
-const { Option } = Select;
 const { TextArea } = Input;
 
-const tabs = ['Pending To Submit', 'Submitted', 'Approved', 'Rejected', 'Request Cancelled', 'All'];
+
 
 export default function HRViewLeavesOutdoor() {
   const [fromDate, setFromDate] = useState(dayjs().subtract(30, 'days').format('YYYY-MM-DD'));
@@ -17,7 +18,7 @@ export default function HRViewLeavesOutdoor() {
   const [searchText, setSearchText] = useState('');
   const [reportDate, setReportDate] = useState('Application Date');
   const [format, setFormat] = useState('XLSX');
-  const [tab, setTab] = useState('Submitted');
+  const [status, setStatus] = useState('All');
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -32,7 +33,7 @@ export default function HRViewLeavesOutdoor() {
     fetchLeaves();
     fetchEmployees();
     fetchLeaveTypes();
-  }, [fromDate, toDate, tab]);
+  }, [fromDate, toDate, status, reportDate]);
 
   const fetchEmployees = async () => {
     try {
@@ -59,25 +60,25 @@ export default function HRViewLeavesOutdoor() {
   const fetchLeaves = async () => {
     setLoading(true);
     try {
-      let statusFilter = [];
-      if (tab === 'Submitted') statusFilter = ['Open'];
-      else if (tab === 'Approved') statusFilter = ['Approved'];
-      else if (tab === 'Rejected') statusFilter = ['Rejected'];
-      else if (tab === 'Request Cancelled') statusFilter = ['Cancelled'];
+
+      // Determine date field based on Report Date selection
+      let dateField = 'posting_date'; // Default: Application Date
+      if (reportDate === 'Leave Date') dateField = 'from_date';
+      // if (reportDate === 'Approved Date') dateField = 'modified'; // Approximation
 
       let filters = [
-        ['posting_date', '>=', fromDate],
-        ['posting_date', '<=', toDate]
+        [dateField, '>=', fromDate],
+        [dateField, '<=', toDate]
       ];
 
-      if (statusFilter.length > 0) {
-        filters.push(['status', 'in', statusFilter]);
+      if (status !== 'All') {
+        filters.push(['status', '=', status]);
       }
 
       const fields = JSON.stringify(["*"]);
       const filterString = JSON.stringify(filters);
 
-      const response = await api.get(`/api/resource/Leave Application?fields=${fields}&filters=${filterString}&limit_page_length=None&order_by=posting_date desc`);
+      const response = await api.get(`/api/resource/Leave Application?fields=${fields}&filters=${filterString}&limit_page_length=None&order_by=${dateField} desc`);
 
       if (response.data && response.data.data) {
         setLeaves(response.data.data);
@@ -198,6 +199,47 @@ export default function HRViewLeavesOutdoor() {
     }
   };
 
+  // Export Function
+  const handleExport = () => {
+    if (filteredLeaves.length === 0) {
+      message.warning("No records to export.");
+      return;
+    }
+
+    const dataToExport = filteredLeaves.map((leave, index) => ({
+      "Sr. No": index + 1,
+      "Application Date": leave.posting_date,
+      "Employee Code": leave.employee,
+      "Employee Name": leave.employee_name,
+      "Leave Type": leave.leave_type,
+      "From Date": leave.from_date,
+      "To Date": leave.to_date,
+      "Total Days": leave.total_leave_days,
+      "Department": leave.department,
+      "Designation": leave.designation,
+      "Status": leave.status,
+      "Approver": leave.leave_approver
+    }));
+
+    if (format === 'XLSX') {
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Leaves");
+      XLSX.writeFile(workbook, `Leave_Report_${dayjs().format('YYYY-MM-DD')}.xlsx`);
+    } else {
+      // Simple CSV export
+      const headers = Object.keys(dataToExport[0]).join(",");
+      const rows = dataToExport.map(row => Object.values(row).map(val => `"${val || ''}"`).join(",")).join("\n");
+      const csvContent = headers + "\n" + rows;
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      saveAs(blob, `Leave_Report_${dayjs().format('YYYY-MM-DD')}.csv`);
+    }
+  };
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+
   // Filter existing data by Leave Type and Search Text on the client side for speed/simplicity
   const filteredLeaves = leaves.filter(leave => {
     if (leaveType !== 'All' && leave.leave_type !== leaveType) return false;
@@ -210,6 +252,17 @@ export default function HRViewLeavesOutdoor() {
     return true;
   });
 
+  // Pagination Logic
+  const totalRecords = filteredLeaves.length;
+  const totalPages = Math.ceil(totalRecords / pageSize);
+  const paginatedLeaves = filteredLeaves.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
   return (
     <div className="p-4">
       <nav className="text-xs text-gray-500 mb-3">HOME {'>'} TA & LV {'>'} HR VIEW LEAVES & OUTDOOR</nav>
@@ -220,7 +273,7 @@ export default function HRViewLeavesOutdoor() {
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>New Leave Application</Button>
         </div>
 
-        <div className="grid grid-cols-5 gap-3 mb-3">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
           <div>
             <div className="text-sm">From Date</div>
             <input type="date" className="border rounded px-2 py-2 w-full text-sm" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
@@ -241,43 +294,68 @@ export default function HRViewLeavesOutdoor() {
             <select className="border rounded px-2 py-2 w-full text-sm" value={searchOn} onChange={(e) => setSearchOn(e.target.value)}>{['All', 'Employee Name', 'Ecode'].map(v => <option key={v}>{v}</option>)}</select>
           </div>
           <div>
+            <div className="text-sm">Status</div>
+            <select className="border rounded px-2 py-2 w-full text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="All">All</option>
+              <option value="Open">Open</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div>
             <div className="text-sm">Search Text</div>
             <input className="border rounded px-2 py-2 w-full text-sm" value={searchText} onChange={(e) => setSearchText(e.target.value)} />
           </div>
         </div>
 
-        <div className="grid grid-cols-5 gap-3 items-center mb-3">
-          <div className="col-span-3 flex items-center gap-4">
-            <div className="text-sm">Report Date</div>
-            {['Leave Date', 'Application Date', 'Approved Date'].map(d => (
-              <label key={d} className="text-sm flex items-center gap-2"><input type="radio" checked={reportDate === d} onChange={() => setReportDate(d)} /> {d}</label>
-            ))}
-          </div>
+        <div className="flex flex-wrap justify-between items-center bg-gray-50 p-3 rounded mb-3 gap-4">
           <div className="flex items-center gap-4">
-            <div className="text-sm">Report Format:</div>
-            {['XLSX', 'CSV'].map(f => (
-              <label key={f} className="text-sm flex items-center gap-2"><input type="radio" checked={format === f} onChange={() => setFormat(f)} /> {f}</label>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 justify-end">
-            <button className="px-3 py-2 bg-orange-500 text-white rounded" onClick={fetchLeaves}>🔎</button>
-            <button className="px-3 py-2 bg-green-600 text-white rounded">🧾</button>
-            <div className="flex items-center gap-2 ml-4 text-sm">
-              <span>Page</span>
-              <button className="px-2 py-2 border rounded">←</button>
-              <input className="border rounded px-2 py-2 w-16" defaultValue={1} />
-              <span>out of 1</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Report Date:</span>
+              {['Leave Date', 'Application Date'].map(d => (
+                <label key={d} className="text-xs flex items-center gap-1 cursor-pointer"><input type="radio" checked={reportDate === d} onChange={() => setReportDate(d)} /> {d}</label>
+              ))}
+            </div>
+            <div className="h-4 border-l border-gray-300 mx-2"></div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Format:</span>
+              {['XLSX', 'CSV'].map(f => (
+                <label key={f} className="text-xs flex items-center gap-1 cursor-pointer"><input type="radio" checked={format === f} onChange={() => setFormat(f)} /> {f}</label>
+              ))}
             </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2 mb-3">
-          {tabs.map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`px-3 py-2 rounded ${tab === t ? 'bg-orange-200 border text-gray-800' : 'border'}`}>{t}</button>
-          ))}
-          <div className="ml-auto flex items-center gap-4">
-            <span className="text-sm">Records Count: {filteredLeaves.length}</span>
-            <button className="px-3 py-2 bg-orange-500 text-white rounded">Bulk Approve</button>
+          <div className="flex items-center gap-3">
+            <Tooltip title="Search">
+              <button className="flex items-center justify-center w-8 h-8 bg-blue-500 text-white rounded hover:bg-blue-600 transition" onClick={fetchLeaves}>
+                🔎
+              </button>
+            </Tooltip>
+            <Tooltip title="Download Report">
+              <button className="flex items-center justify-center w-8 h-8 bg-green-500 text-white rounded hover:bg-green-600 transition" onClick={handleExport}>
+                🧾
+              </button>
+            </Tooltip>
+
+            <div className="flex items-center gap-2 text-sm bg-white border px-2 py-1 rounded">
+              <button
+                className="hover:bg-gray-100 rounded px-1 disabled:opacity-50"
+                disabled={currentPage === 1}
+                onClick={() => handlePageChange(currentPage - 1)}
+              >←</button>
+              <span>Page {totalPages === 0 ? 0 : currentPage} of {totalPages}</span>
+              <button
+                className="hover:bg-gray-100 rounded px-1 disabled:opacity-50"
+                disabled={currentPage === totalPages || totalPages === 0}
+                onClick={() => handlePageChange(currentPage + 1)}
+              >→</button>
+            </div>
+
+            <div className="h-4 border-l border-gray-300 mx-1"></div>
+
+            <span className="text-xs text-gray-500">Count: {filteredLeaves.length}</span>
+            <Button type="primary" size="small" className="bg-orange-500 border-none hover:bg-orange-600">Bulk Approve</Button>
           </div>
         </div>
 
@@ -302,7 +380,7 @@ export default function HRViewLeavesOutdoor() {
                 </tr>
               </thead>
               <tbody>
-                {filteredLeaves.map((leave, index) => (
+                {paginatedLeaves.map((leave, index) => (
                   <tr key={leave.name} className="border-b hover:bg-gray-50">
                     <td className="px-3 py-2">{index + 1}</td>
                     <td className="px-3 py-2">{dayjs(leave.posting_date).format('DD-MMM-YY')}</td>
@@ -344,7 +422,7 @@ export default function HRViewLeavesOutdoor() {
                     </td>
                   </tr>
                 ))}
-                {filteredLeaves.length === 0 && (
+                {paginatedLeaves.length === 0 && (
                   <tr>
                     <td colSpan="13" className="text-center py-4 text-gray-500">No leave applications found.</td>
                   </tr>

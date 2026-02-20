@@ -3,24 +3,51 @@ import API from '../../services/api';
 import { notification } from 'antd';
 
 export default function AttendanceDashboard() {
-  const [company, setCompany] = useState('BOMBAIM');
+  const [company, setCompany] = useState('ALL');
   const [department, setDepartment] = useState('ALL');
   const [grade, setGrade] = useState('ALL');
   const [workingFor, setWorkingFor] = useState('ALL');
   const [location, setLocation] = useState('ALL');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
 
+  const [companyList, setCompanyList] = useState(['ALL']);
+  const [departmentList, setDepartmentList] = useState(['ALL']);
+  const [gradeList, setGradeList] = useState(['ALL']);
+
   const [checkins, setCheckins] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    fetchDropdowns();
     fetchCheckins();
   }, [date]);
+
+  const fetchDropdowns = async () => {
+    try {
+      const [compRes, deptRes, gradeRes] = await Promise.all([
+        API.get('/api/resource/Company?fields=["name"]&limit_page_length=None'),
+        API.get('/api/resource/Department?fields=["name"]&limit_page_length=None'),
+        API.get('/api/resource/Employee Grade?fields=["name"]&limit_page_length=None')
+      ]);
+
+      if (compRes.data && compRes.data.data) {
+        setCompanyList(['ALL', ...compRes.data.data.map(c => c.name)]);
+      }
+      if (deptRes.data && deptRes.data.data) {
+        setDepartmentList(['ALL', ...deptRes.data.data.map(d => d.name)]);
+      }
+      if (gradeRes.data && gradeRes.data.data) {
+        setGradeList(['ALL', ...gradeRes.data.data.map(g => g.name)]);
+      }
+    } catch (error) {
+      console.error("Error fetching dropdowns:", error);
+    }
+  };
 
   const fetchCheckins = async () => {
     setLoading(true);
     try {
-      // Filter by Date Range (Safer than 'like' for DateTime)
+      // Filter by Date Range
       const fromDate = `${date} 00:00:00`;
       const toDate = `${date} 23:59:59`;
 
@@ -28,6 +55,35 @@ export default function AttendanceDashboard() {
         ["time", ">=", fromDate],
         ["time", "<=", toDate]
       ];
+
+      // Employee Filters
+      const empFilters = [];
+      if (company && company !== 'ALL') empFilters.push(["company", "=", company]);
+      if (department && department !== 'ALL') empFilters.push(["department", "=", department]);
+      if (grade && grade !== 'ALL') empFilters.push(["grade", "=", grade]);
+      // Assuming 'workingFor' maps to 'employment_type' or similar, strict mapping might fail if field doesn't exist. 
+      // Using 'branch' for location if applicable, or 'location' if custom. 
+      // For now, mapping 'Location' to 'branch' is standard in ERPNext.
+      if (location && location !== 'ALL') empFilters.push(["branch", "=", location]);
+
+      // If we have employee filters, fetch matching employees first
+      if (empFilters.length > 0) {
+        try {
+          const empRes = await API.get(`/api/resource/Employee?fields=["name"]&filters=${JSON.stringify(empFilters)}&limit_page_length=None`);
+          if (empRes.data && empRes.data.data && empRes.data.data.length > 0) {
+            const empIds = empRes.data.data.map(e => e.name);
+            filters.push(["employee", "in", empIds]);
+          } else {
+            // No employees match the criteria, so no checkins will match
+            setCheckins([]);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error("Error filtering employees:", err);
+        }
+      }
+
       const filterString = JSON.stringify(filters);
       const fields = JSON.stringify(["name", "employee", "employee_name", "log_type", "time", "device_id"]);
 
@@ -61,15 +117,21 @@ export default function AttendanceDashboard() {
         <div className="grid grid-cols-6 gap-3 mb-3">
           <div>
             <div className="text-sm">Company</div>
-            <select className="border rounded px-2 py-2 w-full text-sm" value={company} onChange={(e) => setCompany(e.target.value)}>{['BOMBAIM', 'DELHI'].map(v => <option key={v}>{v}</option>)}</select>
+            <select className="border rounded px-2 py-2 w-full text-sm" value={company} onChange={(e) => setCompany(e.target.value)}>
+              {companyList.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
           </div>
           <div>
             <div className="text-sm">Department</div>
-            <select className="border rounded px-2 py-2 w-full text-sm" value={department} onChange={(e) => setDepartment(e.target.value)}>{['ALL', 'IT', 'HR', 'Finance'].map(v => <option key={v}>{v}</option>)}</select>
+            <select className="border rounded px-2 py-2 w-full text-sm" value={department} onChange={(e) => setDepartment(e.target.value)}>
+              {departmentList.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
           </div>
           <div>
             <div className="text-sm">Grade</div>
-            <select className="border rounded px-2 py-2 w-full text-sm" value={grade} onChange={(e) => setGrade(e.target.value)}>{['ALL', 'A', 'B', 'C'].map(v => <option key={v}>{v}</option>)}</select>
+            <select className="border rounded px-2 py-2 w-full text-sm" value={grade} onChange={(e) => setGrade(e.target.value)}>
+              {gradeList.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
           </div>
           <div>
             <div className="text-sm">Working For</div>
@@ -80,7 +142,7 @@ export default function AttendanceDashboard() {
             <select className="border rounded px-2 py-2 w-full text-sm" value={location} onChange={(e) => setLocation(e.target.value)}>{['ALL', 'HQ', 'Branch'].map(v => <option key={v}>{v}</option>)}</select>
           </div>
           <div className="flex items-end">
-            <button className="px-4 py-2 bg-orange-500 text-white rounded">APPLY</button>
+            <button className="px-4 py-2 bg-orange-500 text-white rounded" onClick={fetchCheckins}>APPLY</button>
           </div>
         </div>
 

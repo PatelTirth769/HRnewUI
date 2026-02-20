@@ -2,140 +2,153 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import API from '../../services/api';
 import './AddEmployee.css';
+import {
+  Form,
+  Input,
+  Select,
+  DatePicker,
+  Button,
+  Tabs,
+  Row,
+  Col,
+  message,
+  notification,
+  Checkbox,
+  Spin,
+  Card,
+  Typography
+} from 'antd';
+import { CheckCircleFilled } from '@ant-design/icons';
+import dayjs from 'dayjs';
+
+const { Option } = Select;
+const { TabPane } = Tabs;
+const { Title, Text } = Typography;
+const TextArea = Input.TextArea;
 
 const AddEmployee = () => {
   const navigate = useNavigate();
-  const { id } = useParams(); // 'id' will be the ERPNext 'name' (e.g. HR-EMP-00001)
+  const { id } = useParams(); // ERPNext 'name' (e.g. HR-EMP-00001)
   const isEdit = !!id;
+  const [form] = Form.useForm();
+  const [api, contextHolder] = notification.useNotification();
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-  const [formData, setFormData] = useState({
-    // ERPNext fields mapping
-    first_name: '',
-    last_name: '',
-    company: 'Preeshe Consultancy Services',
-    department: '',
-    designation: '',
-    gender: '',
-    date_of_birth: '',
-    date_of_joining: '',
-    status: 'Active',
-    company_email: '',
-    personal_email: '',
-    cell_number: '',
-    current_address: '',
-    permanent_address: '',
-    // Additional fields can be mapped as needed, keeping some UI specific state if strictly necessary
-    marital_status: '',
-    blood_group: '',
-    emergency_phone_number: '',
-    relation: ''
-  });
-
+  // --- Dropdown Options (Static for now, can be fetched if APIs exist) ---
   const departments = ['IT', 'HR', 'Finance', 'Marketing', 'Operations', 'Sales', 'Admin'];
   const designations = ['Software Engineer', 'Senior Software Engineer', 'Team Lead', 'Manager', 'HR Manager', 'Accountant', 'Marketing Executive', 'Sales Executive'];
   const companies = ['Preeshe Consultancy Services', 'BOMBAIM', 'DCSAMAI', 'Kolkata_Frontend'];
   const genders = ['Male', 'Female', 'Other'];
   const maritalStatuses = ['Single', 'Married', 'Divorced', 'Widowed'];
   const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-  // const countries = ['India', 'USA', 'UK', 'Canada', 'Australia'];
+  const salutations = ['Mr', 'Ms', 'Mrs', 'Dr', 'Prof', 'Mx'];
+  const employmentTypes = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Probation'];
+  const statusOptions = ['Active', 'Inactive', 'Suspended', 'Left'];
 
   useEffect(() => {
     if (isEdit) {
       fetchEmployeeDetails();
+    } else {
+      // Set defaults for new employee
+      form.setFieldsValue({
+        company: 'Preeshe Consultancy Services',
+        status: 'Active',
+        employment_type: 'Full-time'
+      });
     }
   }, [isEdit, id]);
 
   const fetchEmployeeDetails = async () => {
     try {
       setLoading(true);
+      // Fetch all fields
       const response = await API.get(`/api/resource/Employee/${id}`);
       const data = response.data.data;
 
-      // Map Response to State
-      setFormData({
-        first_name: data.first_name || '',
-        last_name: data.last_name || '',
-        company: data.company || '',
-        department: data.department || '',
-        designation: data.designation || '',
-        gender: data.gender || '',
-        date_of_birth: data.date_of_birth || '',
-        date_of_joining: data.date_of_joining || '',
-        status: data.status || 'Active',
-        company_email: data.company_email || '',
-        personal_email: data.personal_email || '',
-        cell_number: data.cell_number || '',
-        current_address: data.current_address || '',
-        permanent_address: data.permanent_address || '',
-        marital_status: data.marital_status || '',
-        blood_group: data.blood_group || '',
-        emergency_phone_number: data.emergency_phone_number || '',
-        relation: data.relation || ''
-      });
+      // Prepare data for Ant Design Form
+      // Date fields need dayjs objects
+      const formData = {
+        ...data,
+        date_of_birth: data.date_of_birth ? dayjs(data.date_of_birth) : null,
+        date_of_joining: data.date_of_joining ? dayjs(data.date_of_joining) : null,
+        offer_date: data.offer_date ? dayjs(data.offer_date) : null,
+        confirmation_date: data.confirmation_date ? dayjs(data.confirmation_date) : null,
+        contract_end_date: data.contract_end_date ? dayjs(data.contract_end_date) : null,
+        date_of_retirement: data.date_of_retirement ? dayjs(data.date_of_retirement) : null,
+        resignation_letter_date: data.resignation_letter_date ? dayjs(data.resignation_letter_date) : null,
+        relieving_date: data.relieving_date ? dayjs(data.relieving_date) : null,
+        passport_issue_date: data.passport_issue_date ? dayjs(data.passport_issue_date) : null,
+        passport_expiry_date: data.passport_expiry_date ? dayjs(data.passport_expiry_date) : null,
+        exit_interview_held_on: data.exit_interview_held_on ? dayjs(data.exit_interview_held_on) : null,
+      };
+
+      form.setFieldsValue(formData);
       setLoading(false);
     } catch (err) {
       console.error("Error fetching employee details:", err);
-      setError("Failed to fetch employee details.");
+      message.error("Failed to fetch employee details.");
       setLoading(false);
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+  const showSuccessNotification = () => {
+    api.open({
+      message: 'Saved',
+      description: '',
+      icon: <CheckCircleFilled style={{ color: '#52c41a' }} />,
+      placement: 'bottomRight',
+      className: 'success-notification',
+      style: {
+        backgroundColor: '#f6ffed',
+        border: '1px solid #b7eb8f',
+        borderRadius: '4px',
+      },
+    });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    // Prepare payload
-    // Only send fields that ERPNext expects.
-    // We can just send formData if we matched the keys correctly.
-    const payload = {
-      first_name: formData.first_name,
-      last_name: formData.last_name,
-      company: formData.company,
-      department: formData.department,
-      designation: formData.designation,
-      gender: formData.gender,
-      date_of_birth: formData.date_of_birth,
-      date_of_joining: formData.date_of_joining,
-      status: formData.status,
-      company_email: formData.company_email,
-      personal_email: formData.personal_email,
-      cell_number: formData.cell_number,
-      current_address: formData.current_address,
-      permanent_address: formData.permanent_address,
-      marital_status: formData.marital_status,
-      blood_group: formData.blood_group,
-      emergency_phone_number: formData.emergency_phone_number,
-      relation: formData.relation
-    };
-
+  const onFinish = async (values) => {
+    setSaving(true);
     try {
+      // Convert dayjs dates back to strings (YYYY-MM-DD)
+      const payload = { ...values };
+      const dateFields = [
+        'date_of_birth', 'date_of_joining', 'offer_date', 'confirmation_date',
+        'contract_end_date', 'date_of_retirement', 'resignation_letter_date',
+        'relieving_date', 'passport_issue_date', 'passport_expiry_date',
+        'exit_interview_held_on'
+      ];
+
+      dateFields.forEach(field => {
+        if (payload[field]) {
+          payload[field] = payload[field].format('YYYY-MM-DD');
+        } else {
+          payload[field] = null; // Send null if cleared
+        }
+      });
+
       if (isEdit) {
         await API.put(`/api/resource/Employee/${id}`, payload);
-        alert("Employee updated successfully!");
+        showSuccessNotification();
       } else {
         await API.post('/api/resource/Employee', payload);
-        alert("Employee created successfully!");
+        showSuccessNotification();
+        // Allow user to see notification before redirecting immediately, or redirect now
+        // For 'Add New', maybe stay or redirect. The previous code redirected.
+        // If we redirect immediately, the notification might be lost unless handled globally.
+        // For now, let's delay slightly or just redirect. Notification hooks persist through re-renders but not route changes usually?
+        // Actually, 'contextHolder' is rendered here. If we navigate away, it disappears.
+        // So for 'Add New', we might want to perform the action and maybe use global message or just show it and wait a bit.
+        // Given 'edit' is the main focus, this works perfectly. For 'create', we'll rely on it showing briefly or change UX if needed.
+        setTimeout(() => navigate('/employee-master'), 1000);
       }
-      navigate('/employee-master');
     } catch (err) {
       console.error("Error saving employee:", err);
-      // ERPNext error handling
-      const message = err.response?.data?.exception || err.response?.data?.message || err.message;
-      setError(`Failed to save employee: ${message}`);
+      const msg = err.response?.data?.exception || err.response?.data?.message || err.message;
+      message.error(`Failed to save: ${msg}`);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -143,286 +156,273 @@ const AddEmployee = () => {
     navigate('/employee-master');
   };
 
-  if (loading && isEdit && !formData.first_name) {
-    return <div className="p-4 text-center">Loading employee details...</div>;
+  // --- Rendering Helpers for Form Sections ---
+  // Using a consistent grid layou: Row with gutter, Cols with span
+  const renderInput = (name, label, required = false, type = 'text') => (
+    <Col span={8}>
+      <Form.Item
+        name={name}
+        label={label}
+        rules={[{ required, message: `${label} is required` }]}
+      >
+        {type === 'number' ? <Input type="number" /> : <Input />}
+      </Form.Item>
+    </Col>
+  );
+
+  const renderSelect = (name, label, options, required = false) => (
+    <Col span={8}>
+      <Form.Item
+        name={name}
+        label={label}
+        rules={[{ required, message: `${label} is required` }]}
+      >
+        <Select showSearch optionFilterProp="children">
+          {options.map(opt => (
+            <Option key={opt} value={opt}>{opt}</Option>
+          ))}
+        </Select>
+      </Form.Item>
+    </Col>
+  );
+
+  const renderDate = (name, label, required = false) => (
+    <Col span={8}>
+      <Form.Item
+        name={name}
+        label={label}
+        rules={[{ required, message: `${label} is required` }]}
+      >
+        <DatePicker style={{ width: '100%' }} format="DD-MM-YYYY" />
+      </Form.Item>
+    </Col>
+  );
+
+  const renderTextArea = (name, label, rows = 3) => (
+    <Col span={12}>
+      <Form.Item name={name} label={label}>
+        <TextArea rows={rows} />
+      </Form.Item>
+    </Col>
+  );
+
+
+  // --- Tab Contents ---
+
+  const OverviewTab = () => (
+    <>
+      <Title level={5}>Basic Details</Title>
+      <Row gutter={16}>
+        {renderSelect('salutation', 'Salutation', salutations)}
+        {renderInput('first_name', 'First Name', true)}
+        {renderInput('middle_name', 'Middle Name')}
+        {renderInput('last_name', 'Last Name')}
+        {renderSelect('gender', 'Gender', genders, true)}
+        {renderDate('date_of_birth', 'Date of Birth', true)}
+        {renderDate('date_of_joining', 'Date of Joining', true)}
+        {renderSelect('status', 'Status', statusOptions, true)}
+      </Row>
+
+      <Title level={5} style={{ marginTop: '20px' }}>Company Details</Title>
+      <Row gutter={16}>
+        {renderSelect('company', 'Company', companies, true)}
+        {renderSelect('department', 'Department', departments)}
+        {renderSelect('designation', 'Designation', designations)}
+        {renderInput('branch', 'Branch')}
+        {renderInput('reports_to', 'Reports To (Manager ID)')}
+        {renderInput('grade', 'Grade')}
+        {renderSelect('employment_type', 'Employment Type', employmentTypes)}
+      </Row>
+      <Form.Item name="naming_series" hidden><Input /></Form.Item>
+    </>
+  );
+
+  const JoiningTab = () => (
+    <Row gutter={16}>
+      {renderInput('job_applicant', 'Job Applicant (ID)')}
+      {renderDate('offer_date', 'Offer Date')}
+      {renderDate('confirmation_date', 'Confirmation Date')}
+      {renderDate('contract_end_date', 'Contract End Date')}
+      {renderInput('notice_number_of_days', 'Notice (days)', false, 'number')}
+      {renderDate('date_of_retirement', 'Date of Retirement')}
+    </Row>
+  );
+
+  const AddressTab = () => (
+    <>
+      <Title level={5}>Contact Information</Title>
+      <Row gutter={16}>
+        {renderInput('cell_number', 'Mobile Number')}
+        {renderInput('personal_email', 'Personal Email Type')}
+        {renderInput('company_email', 'Company Email')}
+        {renderInput('prefered_contact_email', 'Preferred Contact Email')}
+      </Row>
+
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item name="unsubscribed" valuePropName="checked">
+            <Checkbox>Unsubscribed</Checkbox>
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Title level={5} style={{ marginTop: '20px' }}>Address</Title>
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item name="current_address" label="Current Address">
+            <TextArea rows={3} />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item name="permanent_address" label="Permanent Address">
+            <TextArea rows={3} />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Title level={5} style={{ marginTop: '20px' }}>Emergency Contact</Title>
+      <Row gutter={16}>
+        {renderInput('emergency_contact_name', 'Emergency Contact Name')}
+        {renderInput('emergency_phone_number', 'Emergency Phone')}
+        {renderInput('relation', 'Relation')}
+      </Row>
+    </>
+  );
+
+  const AttendanceTab = () => (
+    <>
+      <Title level={5}>Attendance & Leave Settings</Title>
+      <Row gutter={16}>
+        {renderInput('attendance_device_id', 'Attendance Device ID (Biometric/RF)')}
+        {renderInput('holiday_list', 'Holiday List')}
+        {renderInput('default_shift', 'Default Shift')}
+      </Row>
+
+      <Title level={5} style={{ marginTop: '20px' }}>Approvers</Title>
+      <Row gutter={16}>
+        {renderInput('leave_approver', 'Leave Approver')}
+        {renderInput('expense_approver', 'Expense Approver')}
+        {renderInput('shift_request_approver', 'Shift Request Approver')}
+      </Row>
+    </>
+  );
+
+  const SalaryTab = () => (
+    <>
+      <Title level={5}>Payroll Settings</Title>
+      <Row gutter={16}>
+        {renderInput('ctc', 'CTC (Cost to Company)', false, 'number')}
+        {renderInput('salary_currency', 'Salary Currency')}
+        {renderInput('salary_mode', 'Salary Mode')}
+        {renderInput('payroll_cost_center', 'Payroll Cost Center')}
+      </Row>
+
+      <Title level={5} style={{ marginTop: '20px' }}>Bank & Tax</Title>
+      <Row gutter={16}>
+        {renderInput('pan_number', 'PAN Number')}
+        {renderInput('provident_fund_account', 'Provident Fund Account')}
+        {renderInput('bank_name', 'Bank Name')}
+        {renderInput('bank_ac_no', 'Bank Account No')}
+        {renderInput('ifsc_code', 'IFSC Code')}
+      </Row>
+    </>
+  );
+
+  const PersonalTab = () => (
+    <>
+      <Title level={5}>Personal Details</Title>
+      <Row gutter={16}>
+        {renderSelect('marital_status', 'Marital Status', maritalStatuses)}
+        {renderSelect('blood_group', 'Blood Group', bloodGroups)}
+        {renderInput('family_background', 'Family Background (Details)')}
+        {renderInput('health_details', 'Health Details')}
+      </Row>
+
+      <Title level={5} style={{ marginTop: '20px' }}>Health Insurance</Title>
+      <Row gutter={16}>
+        {renderInput('health_insurance_provider', 'Health Insurance Provider')}
+      </Row>
+
+      <Title level={5} style={{ marginTop: '20px' }}>Passport Info</Title>
+      <Row gutter={16}>
+        {renderInput('passport_number', 'Passport Number')}
+        {renderDate('passport_issue_date', 'Date of Issue')}
+        {renderDate('passport_expiry_date', 'Date of Expiry')}
+        {renderInput('place_of_issue', 'Place of Issue')}
+      </Row>
+    </>
+  );
+
+  const ExitTab = () => (
+    <>
+      <Row gutter={16}>
+        {renderDate('resignation_letter_date', 'Resignation Letter Date')}
+        {renderDate('exit_interview_held_on', 'Exit Interview Held On')}
+        {renderInput('leave_encashed', 'Leave Encashed')}
+      </Row>
+      <Row gutter={16}>
+        {renderDate('relieving_date', 'Relieving Date')}
+        {renderInput('new_workplace', 'New Workplace')}
+      </Row>
+
+      <Title level={5} style={{ marginTop: '20px' }}>Feedback</Title>
+      <Row gutter={16}>
+        {renderTextArea('reason_for_leaving', 'Reason for Leaving')}
+        {renderTextArea('feedback', 'Feedback')}
+      </Row>
+    </>
+  );
+
+
+  // --- Main Render ---
+
+  if (loading) {
+    return <div className="loading-container"><Spin size="large" tip="Loading Employee Details..." /></div>;
   }
 
   return (
-    <div className="add-employee-container">
-      <div className="add-employee-header">
-        <h2>{isEdit ? 'Edit Employee' : 'Add New Employee'}</h2>
-        <nav className="breadcrumb">
-          <span>Master</span> &gt;
-          <span className="clickable" onClick={() => navigate('/employee-master')}>Employee Master</span> &gt;
-          <span className="active">{isEdit ? 'Edit Employee' : 'Add Employee'}</span>
-        </nav>
+    <div className="add-employee-container-antd">
+      {contextHolder}
+      <div className="header-actions">
+        <Title level={2}>{isEdit ? `Edit Employee: ${id}` : 'Add New Employee'}</Title>
+        <div className="buttons">
+          <Button onClick={handleCancel} style={{ marginRight: 8 }}>Cancel</Button>
+          <Button type="primary" onClick={() => form.submit()} loading={saving}>Save</Button>
+        </div>
       </div>
 
-      <form className="add-employee-form" onSubmit={handleSubmit}>
-        {error && <div className="alert alert-danger" style={{ color: 'red', marginBottom: '15px' }}>{error}</div>}
-
-        <div className="form-sections">
-          {/* Basic Information */}
-          <div className="form-section">
-            <h3>Basic Information</h3>
-            <div className="form-row">
-              <div className="form-group">
-                <label>First Name <span className="required">*</span></label>
-                <input
-                  type="text"
-                  name="first_name"
-                  value={formData.first_name}
-                  onChange={handleInputChange}
-                  className="form-control"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Last Name</label>
-                <input
-                  type="text"
-                  name="last_name"
-                  value={formData.last_name}
-                  onChange={handleInputChange}
-                  className="form-control"
-                />
-              </div>
-              <div className="form-group">
-                <label>Company <span className="required">*</span></label>
-                <select
-                  name="company"
-                  value={formData.company}
-                  onChange={handleInputChange}
-                  className="form-control"
-                  required
-                >
-                  {companies.map(company => (
-                    <option key={company} value={company}>{company}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Department</label>
-                <select
-                  name="department"
-                  value={formData.department}
-                  onChange={handleInputChange}
-                  className="form-control"
-                >
-                  <option value="">Select Department</option>
-                  {departments.map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Designation</label>
-                <select
-                  name="designation"
-                  value={formData.designation}
-                  onChange={handleInputChange}
-                  className="form-control"
-                >
-                  <option value="">Select Designation</option>
-                  {designations.map(desig => (
-                    <option key={desig} value={desig}>{desig}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Company Email</label>
-                <input
-                  type="email"
-                  name="company_email"
-                  value={formData.company_email}
-                  onChange={handleInputChange}
-                  className="form-control"
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Mobile No</label>
-                <input
-                  type="tel"
-                  name="cell_number"
-                  value={formData.cell_number}
-                  onChange={handleInputChange}
-                  className="form-control"
-                />
-              </div>
-              <div className="form-group">
-                <label>Personal Email</label>
-                <input
-                  type="email"
-                  name="personal_email"
-                  value={formData.personal_email}
-                  onChange={handleInputChange}
-                  className="form-control"
-                />
-              </div>
-              <div className="form-group">
-                <label>Status <span className="required">*</span></label>
-                <select
-                  name="status"
-                  value={formData.status}
-                  onChange={handleInputChange}
-                  className="form-control"
-                  required
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                  <option value="Suspended">Suspended</option>
-                  <option value="Left">Left</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Personal Information */}
-          <div className="form-section">
-            <h3>Personal Information</h3>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Date of Birth <span className="required">*</span></label>
-                <input
-                  type="date"
-                  name="date_of_birth"
-                  value={formData.date_of_birth}
-                  onChange={handleInputChange}
-                  className="form-control"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Date of Joining <span className="required">*</span></label>
-                <input
-                  type="date"
-                  name="date_of_joining"
-                  value={formData.date_of_joining}
-                  onChange={handleInputChange}
-                  className="form-control"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Gender <span className="required">*</span></label>
-                <select
-                  name="gender"
-                  value={formData.gender}
-                  onChange={handleInputChange}
-                  className="form-control"
-                  required
-                >
-                  <option value="">Select Gender</option>
-                  {genders.map(gender => (
-                    <option key={gender} value={gender}>{gender}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Marital Status</label>
-                <select
-                  name="marital_status"
-                  value={formData.marital_status}
-                  onChange={handleInputChange}
-                  className="form-control"
-                >
-                  <option value="">Select Status</option>
-                  {maritalStatuses.map(status => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Blood Group</label>
-                <select
-                  name="blood_group"
-                  value={formData.blood_group}
-                  onChange={handleInputChange}
-                  className="form-control"
-                >
-                  <option value="">Select Blood Group</option>
-                  {bloodGroups.map(blood => (
-                    <option key={blood} value={blood}>{blood}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Address Information */}
-          <div className="form-section">
-            <h3>Address Information</h3>
-            <div className="form-row">
-              <div className="form-group full-width">
-                <label>Current Address</label>
-                <textarea
-                  name="current_address"
-                  value={formData.current_address}
-                  onChange={handleInputChange}
-                  className="form-control"
-                  rows="3"
-                />
-              </div>
-              <div className="form-group full-width">
-                <label>Permanent Address</label>
-                <textarea
-                  name="permanent_address"
-                  value={formData.permanent_address}
-                  onChange={handleInputChange}
-                  className="form-control"
-                  rows="3"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Emergency Contact */}
-          <div className="form-section">
-            <h3>Emergency Contact</h3>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Emergency Mobile</label>
-                <input
-                  type="tel"
-                  name="emergency_phone_number"
-                  value={formData.emergency_phone_number}
-                  onChange={handleInputChange}
-                  className="form-control"
-                />
-              </div>
-              <div className="form-group">
-                <label>Relation</label>
-                <input
-                  type="text"
-                  name="relation"
-                  value={formData.relation}
-                  onChange={handleInputChange}
-                  className="form-control"
-                />
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        <div className="form-actions">
-          <button type="button" className="btn btn-secondary" onClick={handleCancel}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Saving...' : (isEdit ? 'Update' : 'Save')}
-          </button>
-        </div>
-      </form>
+      <Card className="employee-form-card">
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={onFinish}
+          initialValues={{ status: 'Active', company: 'Preeshe Consultancy Services' }}
+        >
+          <Tabs defaultActiveKey="1" type="card">
+            <TabPane tab="Overview" key="1">
+              <OverviewTab />
+            </TabPane>
+            <TabPane tab="Joining" key="2">
+              <JoiningTab />
+            </TabPane>
+            <TabPane tab="Address & Contacts" key="3">
+              <AddressTab />
+            </TabPane>
+            <TabPane tab="Attendance & Leaves" key="4">
+              <AttendanceTab />
+            </TabPane>
+            <TabPane tab="Salary" key="5">
+              <SalaryTab />
+            </TabPane>
+            <TabPane tab="Personal" key="6">
+              <PersonalTab />
+            </TabPane>
+            <TabPane tab="Exit" key="7">
+              <ExitTab />
+            </TabPane>
+          </Tabs>
+        </Form>
+      </Card>
     </div>
   );
 };

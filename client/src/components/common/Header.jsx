@@ -10,6 +10,7 @@ const Header = () => {
   const [hoveredELC, setHoveredELC] = useState(false);
   const [hoveredTALV, setHoveredTALV] = useState(false);
   const [hoveredPayroll, setHoveredPayroll] = useState(false);
+  const [hoveredERPPayroll, setHoveredERPPayroll] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('ui-theme') || 'corporate');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const themes = ['corporate', 'minimal', 'warm'];
@@ -20,6 +21,45 @@ const Header = () => {
     document.documentElement.setAttribute('data-theme', theme === 'corporate' ? '' : theme);
     localStorage.setItem('ui-theme', theme);
   }, [theme]);
+
+  const erpPayrollMenus = {
+    'Masters': [
+      { label: 'Salary Component', path: '/erp-payroll/salary-component' },
+      { label: 'Salary Structure', path: '/erp-payroll/salary-structure' },
+      { label: 'Income Tax Slab', path: '/erp-payroll/income-tax-slab' },
+      { label: 'Payroll Period', path: '/erp-payroll/payroll-period' },
+    ],
+    'Payroll': [
+      { label: 'Salary Structure Assignment', path: '/erp-payroll/salary-structure-assignment' },
+      { label: 'Bulk Salary Structure Assignment', path: '/erp-payroll/bulk-salary-structure-assignment' },
+      { label: 'Salary Slip', path: '/erp-payroll/salary-slip' },
+      { label: 'Payroll Entry', path: '/erp-payroll/payroll-entry' },
+      { label: 'Salary Withholding', path: '/erp-payroll/salary-withholding' },
+    ],
+    'Incentives': [
+      { label: 'Additional Salary', path: '/erp-payroll/additional-salary' },
+      { label: 'Employee Incentive', path: '/erp-payroll/employee-incentive' },
+      { label: 'Retention Bonus', path: '/erp-payroll/retention-bonus' },
+    ],
+    'Tax & Benefits': [
+      { label: 'Tax Exemption Declaration', path: '/erp-payroll/tax-exemption-declaration' },
+      { label: 'Tax Exemption Proof', path: '/erp-payroll/tax-exemption-proof' },
+      { label: 'Tax Exemption Categories', path: '/erp-payroll/tax-exemption-categories' },
+      { label: 'Benefit Application', path: '/erp-payroll/benefit-application' },
+      { label: 'Benefit Claim', path: '/erp-payroll/benefit-claim' },
+    ],
+    'Payroll Reports': [
+      { label: 'Salary Register', path: '/erp-payroll/reports/salary-register' },
+      { label: 'Salary Payments by Mode', path: '/erp-payroll/reports/salary-payments-mode' },
+      { label: 'Salary Payments via ECS', path: '/erp-payroll/reports/salary-payments-ecs' },
+      { label: 'Income Tax Computation', path: '/erp-payroll/reports/income-tax-computation' },
+    ],
+    'Deduction Reports': [
+      { label: 'PF Deductions', path: '/erp-payroll/reports/pf-deductions' },
+      { label: 'PT Deductions', path: '/erp-payroll/reports/pt-deductions' },
+      { label: 'Income Tax Deductions', path: '/erp-payroll/reports/income-tax-deductions' },
+    ],
+  };
 
   const menuItems = {
     Master: {
@@ -114,7 +154,10 @@ const Header = () => {
       'Shift Planning Upload': null,
       'Shift Master': null,
       'HR View Leaves & Outdoor': null,
-      'Upload Monthly Leave Balance': null
+
+      'Upload Monthly Leave Balance': null,
+      'Leave Application': null,
+      'Employee Leave Balance': null
     }
   };
 
@@ -174,6 +217,10 @@ const Header = () => {
                         navigate('/employee-master/report-view');
                       } else if (itemName === 'Upload Emp Master Update') {
                         navigate('/upload-emp-master-update');
+                      } else if (itemName === 'Upload ELC Master') {
+                        navigate('/upload-elc-master');
+                      } else if (itemName === 'Emp Master Upload') {
+                        navigate('/emp-master-upload');
                       } else if (itemName === 'Reporting/Finance Manager Mapping') {
                         navigate('/reporting-finance-manager-mapping');
                       }
@@ -331,6 +378,10 @@ const Header = () => {
                         navigate('/talv/hr-view-leaves-outdoor');
                       } else if (itemName === 'Upload Monthly Leave Balance') {
                         navigate('/talv/upload-monthly-leave-balance');
+                      } else if (itemName === 'Leave Application') {
+                        navigate('/talv/leave-application');
+                      } else if (itemName === 'Employee Leave Balance') {
+                        navigate('/talv/employee-leave-balance');
                       }
                     }}
                   >
@@ -402,6 +453,44 @@ const Header = () => {
                         onClick={() => navigate(`/payroll/${c.key}/${m.key}`)}
                       >
                         {m.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ERP Payroll Menu */}
+        <div className="relative">
+          <div
+            className="cursor-pointer hover:text-blue-600"
+            onMouseEnter={() => setHoveredERPPayroll(true)}
+            onMouseLeave={() => setHoveredERPPayroll(false)}
+          >
+            ERP Payroll ▼
+          </div>
+          {hoveredERPPayroll && (
+            <div
+              className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
+              onMouseEnter={() => setHoveredERPPayroll(true)}
+              onMouseLeave={() => setHoveredERPPayroll(false)}
+            >
+              {Object.entries(erpPayrollMenus).map(([groupName, items]) => (
+                <div key={groupName} className="relative group">
+                  <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
+                    {groupName}
+                    <span className="text-xs text-gray-400">▶</span>
+                  </div>
+                  <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-64 z-20 border border-gray-200 hidden group-hover:block">
+                    {items.map((item) => (
+                      <div
+                        key={item.path}
+                        className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
+                        onClick={() => navigate(item.path)}
+                      >
+                        {item.label}
                       </div>
                     ))}
                   </div>

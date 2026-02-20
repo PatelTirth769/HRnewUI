@@ -1,7 +1,7 @@
 const Config = {
   envName: 'main',
-  ledgerUrl: 'http://localhost:3636/api/',
-  authUrl: 'http://localhost:3636/api/',
+  ledgerUrl: 'https://preeshe.hrhovercraft.in/api/',
+  authUrl: 'https://preeshe.hrhovercraft.in/api/',
   // ledgerUrl: 'http://localhost:3636/api/',
   user: 'hr_hovercraft',
   pass: 'Admin@#12345$938@123%',

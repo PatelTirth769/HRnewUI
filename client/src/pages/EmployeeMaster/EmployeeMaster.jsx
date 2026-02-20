@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../services/api';
 import './EmployeeMaster.css';
+import { Select, Input, Row, Col, Space, Button } from 'antd';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 
 const EmployeeMaster = () => {
   const navigate = useNavigate();
@@ -12,6 +14,8 @@ const EmployeeMaster = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchType, setSearchType] = useState('empCode');
+
+  const [companies, setCompanies] = useState([]);
 
   // Fetch employees from ERPNext
   const fetchEmployees = async () => {
@@ -43,8 +47,19 @@ const EmployeeMaster = () => {
     }
   };
 
+  const fetchCompanies = async () => {
+    try {
+      const response = await API.get('/api/resource/Company?fields=["name"]&limit_page_length=None');
+      const companyList = response.data.data.map(c => c.name);
+      setCompanies(companyList);
+    } catch (err) {
+      console.error("Error fetching companies:", err);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
+    fetchCompanies();
   }, []);
 
   const handleDelete = async (id) => {
@@ -60,7 +75,6 @@ const EmployeeMaster = () => {
     }
   };
 
-  const companies = ['BOMBAIM', 'Preeshe Consultancy Services', 'DCSAMAI', 'Kolkata_Frontend'];
   const searchOptions = [
     { value: 'empCode', label: 'Emp Code' },
     { value: 'empName', label: 'Emp Name' },
@@ -95,15 +109,17 @@ const EmployeeMaster = () => {
     if (!searchTerm) return true;
 
     const term = searchTerm.toLowerCase();
+    const getValue = (val) => val ? val.toString().toLowerCase() : '';
+
     switch (searchType) {
       case 'empCode':
-        return employee.empCode.toLowerCase().includes(term);
+        return getValue(employee.empCode).includes(term);
       case 'empName':
-        return employee.empName.toLowerCase().includes(term);
+        return getValue(employee.empName).includes(term);
       case 'department':
-        return employee.department.toLowerCase().includes(term);
+        return getValue(employee.department).includes(term);
       case 'designation':
-        return employee.designation.toLowerCase().includes(term);
+        return getValue(employee.designation).includes(term);
       default:
         return true;
     }
@@ -126,57 +142,54 @@ const EmployeeMaster = () => {
         {error && <div className="alert alert-danger">{error}</div>}
 
         <div className="search-section">
-          <div className="form-row">
-            <div className="form-group">
-              <label>Company:</label>
-              <select
+          <Row gutter={16} align="bottom">
+            <Col span={8}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Company:</label>
+              <Select
                 value={selectedCompany}
-                onChange={(e) => setSelectedCompany(e.target.value)}
-                className="form-control"
-              >
-                <option value="All">All Companies</option>
-                {companies.map(company => (
-                  <option key={company} value={company}>{company}</option>
-                ))}
-              </select>
-            </div>
+                onChange={(value) => setSelectedCompany(value)}
+                style={{ width: '100%' }}
+                options={[
+                  { value: 'All', label: 'All Companies' },
+                  ...companies.map(c => ({ value: c, label: c }))
+                ]}
+              />
+            </Col>
 
-            <div className="form-group">
-              <label>Search On:</label>
-              <select
+            <Col span={8}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Search On:</label>
+              <Select
                 value={searchType}
-                onChange={(e) => setSearchType(e.target.value)}
-                className="form-control"
-              >
-                {searchOptions.map(option => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
+                onChange={(value) => setSearchType(value)}
+                style={{ width: '100%' }}
+                options={searchOptions}
+              />
+            </Col>
 
-            <div className="form-group">
-              <label>&nbsp;</label>
-              <input
-                type="text"
+            <Col span={8}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>&nbsp;</label>
+              <Input
                 placeholder="Enter search term..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="form-control"
+                allowClear
               />
-            </div>
-          </div>
+            </Col>
+          </Row>
         </div>
 
         <div className="action-section">
-          <button className="btn btn-primary" onClick={handleAddNew}>
-            New
-          </button>
-          <button className="btn btn-secondary ml-2" onClick={handleViewReport}>
-            View Report
-          </button>
-          <button className="btn btn-info ml-2" onClick={fetchEmployees} title="Refresh List">
-            Refresh
-          </button>
+          <Space>
+            <button className="btn btn-primary" onClick={handleAddNew}>
+              New
+            </button>
+            <button className="btn btn-secondary" onClick={handleViewReport}>
+              View Report
+            </button>
+            <button className="btn btn-info" onClick={fetchEmployees} title="Refresh List">
+              Refresh
+            </button>
+          </Space>
         </div>
 
         <div className="table-section">
@@ -215,20 +228,19 @@ const EmployeeMaster = () => {
                           </span>
                         </td>
                         <td>
-                          <button
-                            className="btn-edit"
-                            onClick={() => handleEdit(employee.id)}
-                            style={{ marginRight: '5px' }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="btn-delete"
-                            onClick={() => handleDelete(employee.id)}
-                            style={{ backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}
-                          >
-                            Delete
-                          </button>
+                          <Space size="middle">
+                            <Button
+                              type="text"
+                              icon={<EditOutlined />}
+                              onClick={() => handleEdit(employee.id)}
+                            />
+                            <Button
+                              type="text"
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => handleDelete(employee.id)}
+                            />
+                          </Space>
                         </td>
                       </tr>
                     ))

@@ -88,7 +88,42 @@ import AttendanceControl from './pages/TALV/AttendanceControl';
 import ShiftPlanningUpload from './pages/TALV/ShiftPlanningUpload';
 import ShiftMaster from './pages/TALV/ShiftMaster';
 import HRViewLeavesOutdoor from './pages/TALV/HRViewLeavesOutdoor';
+import EmpMasterUpload from './pages/EmpMasterUpload/EmpMasterUpload';
+
 import UploadMonthlyLeaveBalance from './pages/TALV/UploadMonthlyLeaveBalance';
+import EmployeeLeaveBalance from './pages/TALV/EmployeeLeaveBalance';
+import LeaveApplicationList from './pages/TALV/LeaveApplicationList';
+import LeaveApplicationForm from './pages/TALV/LeaveApplicationForm';
+
+// ERP Payroll - Masters
+import ERPSalaryComponent from './pages/ERPPayroll/SalaryComponent';
+import ERPSalaryStructure from './pages/ERPPayroll/SalaryStructure';
+import ERPIncomeTaxSlab from './pages/ERPPayroll/IncomeTaxSlab';
+import ERPPayrollPeriod from './pages/ERPPayroll/PayrollPeriod';
+// ERP Payroll - Payroll
+import ERPSalaryStructureAssignment from './pages/ERPPayroll/SalaryStructureAssignment';
+import ERPBulkSalaryStructureAssignment from './pages/ERPPayroll/BulkSalaryStructureAssignment';
+import ERPSalarySlip from './pages/ERPPayroll/SalarySlip';
+import ERPPayrollEntry from './pages/ERPPayroll/PayrollEntry';
+import ERPSalaryWithholding from './pages/ERPPayroll/SalaryWithholding';
+// ERP Payroll - Incentives
+import ERPAdditionalSalary from './pages/ERPPayroll/AdditionalSalary';
+import ERPEmployeeIncentive from './pages/ERPPayroll/EmployeeIncentive';
+import ERPRetentionBonus from './pages/ERPPayroll/RetentionBonus';
+// ERP Payroll - Tax & Benefits
+import ERPTaxExemptionDeclaration from './pages/ERPPayroll/TaxExemptionDeclaration';
+import ERPTaxExemptionProof from './pages/ERPPayroll/TaxExemptionProof';
+import ERPTaxExemptionCategories from './pages/ERPPayroll/TaxExemptionCategories';
+import ERPBenefitApplication from './pages/ERPPayroll/BenefitApplication';
+import ERPBenefitClaim from './pages/ERPPayroll/BenefitClaim';
+// ERP Payroll - Reports
+import ERPSalaryRegister from './pages/ERPPayroll/Reports/SalaryRegister';
+import ERPSalaryPaymentsMode from './pages/ERPPayroll/Reports/SalaryPaymentsMode';
+import ERPSalaryPaymentsECS from './pages/ERPPayroll/Reports/SalaryPaymentsECS';
+import ERPIncomeTaxComputation from './pages/ERPPayroll/Reports/IncomeTaxComputation';
+import ERPPFDeductions from './pages/ERPPayroll/Reports/PFDeductions';
+import ERPPTDeductions from './pages/ERPPayroll/Reports/PTDeductions';
+import ERPIncomeTaxDeductions from './pages/ERPPayroll/Reports/IncomeTaxDeductions';
 
 
 function App() {
@@ -182,6 +217,35 @@ function App() {
                 <Route path="/payroll/:country/run" element={<RunPayroll />} />
                 <Route path="/payroll/:country/post" element={<PostPayroll />} />
                 <Route path="/payroll/:country/dashboard" element={<PayrollDashboard />} />
+                {/* ERP Payroll Routes - Masters */}
+                <Route path="/erp-payroll/salary-component" element={<ERPSalaryComponent />} />
+                <Route path="/erp-payroll/salary-structure" element={<ERPSalaryStructure />} />
+                <Route path="/erp-payroll/income-tax-slab" element={<ERPIncomeTaxSlab />} />
+                <Route path="/erp-payroll/payroll-period" element={<ERPPayrollPeriod />} />
+                {/* ERP Payroll Routes - Payroll */}
+                <Route path="/erp-payroll/salary-structure-assignment" element={<ERPSalaryStructureAssignment />} />
+                <Route path="/erp-payroll/bulk-salary-structure-assignment" element={<ERPBulkSalaryStructureAssignment />} />
+                <Route path="/erp-payroll/salary-slip" element={<ERPSalarySlip />} />
+                <Route path="/erp-payroll/payroll-entry" element={<ERPPayrollEntry />} />
+                <Route path="/erp-payroll/salary-withholding" element={<ERPSalaryWithholding />} />
+                {/* ERP Payroll Routes - Incentives */}
+                <Route path="/erp-payroll/additional-salary" element={<ERPAdditionalSalary />} />
+                <Route path="/erp-payroll/employee-incentive" element={<ERPEmployeeIncentive />} />
+                <Route path="/erp-payroll/retention-bonus" element={<ERPRetentionBonus />} />
+                {/* ERP Payroll Routes - Tax & Benefits */}
+                <Route path="/erp-payroll/tax-exemption-declaration" element={<ERPTaxExemptionDeclaration />} />
+                <Route path="/erp-payroll/tax-exemption-proof" element={<ERPTaxExemptionProof />} />
+                <Route path="/erp-payroll/tax-exemption-categories" element={<ERPTaxExemptionCategories />} />
+                <Route path="/erp-payroll/benefit-application" element={<ERPBenefitApplication />} />
+                <Route path="/erp-payroll/benefit-claim" element={<ERPBenefitClaim />} />
+                {/* ERP Payroll Routes - Reports */}
+                <Route path="/erp-payroll/reports/salary-register" element={<ERPSalaryRegister />} />
+                <Route path="/erp-payroll/reports/salary-payments-mode" element={<ERPSalaryPaymentsMode />} />
+                <Route path="/erp-payroll/reports/salary-payments-ecs" element={<ERPSalaryPaymentsECS />} />
+                <Route path="/erp-payroll/reports/income-tax-computation" element={<ERPIncomeTaxComputation />} />
+                <Route path="/erp-payroll/reports/pf-deductions" element={<ERPPFDeductions />} />
+                <Route path="/erp-payroll/reports/pt-deductions" element={<ERPPTDeductions />} />
+                <Route path="/erp-payroll/reports/income-tax-deductions" element={<ERPIncomeTaxDeductions />} />
                 <Route path="/talv/attendance-dashboard" element={<AttendanceDashboard />} />
                 <Route path="/talv/attendance-policy" element={<AttendancePolicyMaster />} />
                 <Route path="/talv/leave-policy-config" element={<LeavePolicyConfig />} />
@@ -205,7 +269,15 @@ function App() {
                 <Route path="/talv/attendance-reports/shift-deviation-register" element={<ShiftDeviationRegister />} />
                 <Route path="/talv/attendance-reports/absconding-report" element={<AbscondingReport />} />
                 <Route path="/talv/attendance-reports/ot-summary" element={<OTSummary />} />
+
                 <Route path="/talv/attendance-reports/headcount-occupancy-report" element={<HeadcountOccupancyReport />} />
+                <Route path="/talv/employee-leave-balance" element={<EmployeeLeaveBalance />} />
+                <Route path="/talv/leave-application" element={<LeaveApplicationList />} />
+                <Route path="/talv/leave-application/new" element={<LeaveApplicationForm />} />
+                <Route path="/talv/leave-application/edit/:id" element={<LeaveApplicationForm />} />
+                <Route path="/talv/leave-application/new" element={<LeaveApplicationForm />} />
+                <Route path="/talv/leave-application/edit/:id" element={<LeaveApplicationForm />} />
+                <Route path="/emp-master-upload" element={<EmpMasterUpload />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />
