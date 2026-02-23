@@ -11,6 +11,7 @@ const Header = () => {
   const [hoveredTALV, setHoveredTALV] = useState(false);
   const [hoveredPayroll, setHoveredPayroll] = useState(false);
   const [hoveredERPPayroll, setHoveredERPPayroll] = useState(false);
+  const [hoveredPerformance, setHoveredPerformance] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('ui-theme') || 'corporate');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const themes = ['corporate', 'minimal', 'warm'];
@@ -144,6 +145,22 @@ const Header = () => {
         'OT Summary',
         'Headcount/Occupancy Report'
       ],
+      'Performance': {
+        'Master': [
+          'Appraisal Template',
+          'KRA',
+          'Employee Feedback Criteria'
+        ],
+        'Appraisal': [
+          'Appraisal',
+          'Appraisal Cycle',
+          'Employee Performance Feedback',
+          'Goal'
+        ],
+        'Reports': [
+          'Appraisal Overview'
+        ]
+      },
       'Attendance Dashboard': null,
       'Attendance Policy': null,
       'Leave Policy Config': null,
@@ -154,9 +171,6 @@ const Header = () => {
       'Shift Planning Upload': null,
       'Shift Master': null,
       'HR View Leaves & Outdoor': null,
-
-      'Upload Monthly Leave Balance': null,
-      'Leave Application': null,
       'Employee Leave Balance': null
     }
   };
@@ -356,39 +370,25 @@ const Header = () => {
                   <div
                     className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
                     onClick={() => {
-                      if (itemName === 'Attendance Dashboard') {
-                        navigate('/talv/attendance-dashboard');
-                      } else if (itemName === 'Attendance Policy') {
-                        navigate('/talv/attendance-policy');
-                      } else if (itemName === 'Leave Policy Config') {
-                        navigate('/talv/leave-policy-config');
-                      } else if (itemName === 'Employee Leave Master') {
-                        navigate('/talv/employee-leave-master');
-                      } else if (itemName === 'Upload Opening Leave Balance') {
-                        navigate('/talv/upload-opening-leave-balance');
-                      } else if (itemName === 'Mobile App Linking') {
-                        navigate('/talv/mobile-app-linking');
-                      } else if (itemName === 'Attendance Control') {
-                        navigate('/talv/attendance-control');
-                      } else if (itemName === 'Shift Planning Upload') {
-                        navigate('/talv/shift-planning-upload');
-                      } else if (itemName === 'Shift Master') {
-                        navigate('/talv/shift-master');
-                      } else if (itemName === 'HR View Leaves & Outdoor') {
-                        navigate('/talv/hr-view-leaves-outdoor');
-                      } else if (itemName === 'Upload Monthly Leave Balance') {
-                        navigate('/talv/upload-monthly-leave-balance');
-                      } else if (itemName === 'Leave Application') {
-                        navigate('/talv/leave-application');
-                      } else if (itemName === 'Employee Leave Balance') {
-                        navigate('/talv/employee-leave-balance');
-                      }
+                      if (itemName === 'Attendance Dashboard') navigate('/talv/attendance-dashboard');
+                      else if (itemName === 'Attendance Policy') navigate('/talv/attendance-policy');
+                      else if (itemName === 'Leave Policy Config') navigate('/talv/leave-policy-config');
+                      else if (itemName === 'Employee Leave Master') navigate('/talv/employee-leave-master');
+                      else if (itemName === 'Upload Opening Leave Balance') navigate('/talv/upload-opening-leave-balance');
+                      else if (itemName === 'Mobile App Linking') navigate('/talv/mobile-app-linking');
+                      else if (itemName === 'Attendance Control') navigate('/talv/attendance-control');
+                      else if (itemName === 'Shift Planning Upload') navigate('/talv/shift-planning-upload');
+                      else if (itemName === 'Shift Master') navigate('/talv/shift-master');
+                      else if (itemName === 'HR View Leaves & Outdoor') navigate('/talv/hr-view-leaves-outdoor');
+                      else if (itemName === 'Upload Monthly Leave Balance') navigate('/talv/upload-monthly-leave-balance');
+                      else if (itemName === 'Leave Application') navigate('/talv/leave-application');
+                      else if (itemName === 'Employee Leave Balance') navigate('/talv/employee-leave-balance');
                     }}
                   >
                     {itemName}
                     {subItems && <span className="text-xs text-gray-400">▶</span>}
                   </div>
-                  {subItems && (
+                  {subItems && Array.isArray(subItems) && (
                     <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-20 border border-gray-200 hidden group-hover:block">
                       {subItems.map((subItem, subIndex) => (
                         <div
@@ -414,6 +414,46 @@ const Header = () => {
                           }}
                         >
                           {subItem}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {subItems && !Array.isArray(subItems) && (
+                    <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-20 border border-gray-200 hidden group-hover:block">
+                      {Object.entries(subItems).map(([subKey, nestedItems]) => (
+                        <div key={subKey} className="relative group/nested">
+                          <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
+                            {subKey}
+                            {nestedItems && <span className="text-xs text-gray-400">▶</span>}
+                          </div>
+                          {nestedItems && (
+                            <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 hidden group-hover/nested:block">
+                              {nestedItems.map((nestedItem, nestedIndex) => (
+                                <div
+                                  key={nestedIndex}
+                                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
+                                  onClick={() => {
+                                    if (itemName === 'Performance') {
+                                      if (subKey === 'Master') {
+                                        if (nestedItem === 'Appraisal Template') navigate('/performance/appraisal-template');
+                                        else if (nestedItem === 'KRA') navigate('/performance/kra');
+                                        else if (nestedItem === 'Employee Feedback Criteria') navigate('/performance/employee-feedback-criteria');
+                                      } else if (subKey === 'Appraisal') {
+                                        if (nestedItem === 'Appraisal') navigate('/performance/appraisal');
+                                        else if (nestedItem === 'Appraisal Cycle') navigate('/performance/appraisal-cycle');
+                                        else if (nestedItem === 'Employee Performance Feedback') navigate('/performance/employee-performance-feedback');
+                                        else if (nestedItem === 'Goal') navigate('/performance/goal');
+                                      } else if (subKey === 'Reports') {
+                                        if (nestedItem === 'Appraisal Overview') navigate('/performance/reports/appraisal-overview');
+                                      }
+                                    }
+                                  }}
+                                >
+                                  {nestedItem}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

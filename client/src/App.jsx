@@ -124,7 +124,17 @@ import ERPIncomeTaxComputation from './pages/ERPPayroll/Reports/IncomeTaxComputa
 import ERPPFDeductions from './pages/ERPPayroll/Reports/PFDeductions';
 import ERPPTDeductions from './pages/ERPPayroll/Reports/PTDeductions';
 import ERPIncomeTaxDeductions from './pages/ERPPayroll/Reports/IncomeTaxDeductions';
+import BulkSalaryStructureAssignment from './pages/ERPPayroll/BulkSalaryStructureAssignment';
 
+// Performance Module
+import AppraisalTemplate from './pages/Performance/AppraisalTemplate';
+import KRA from './pages/Performance/KRA';
+import EmployeeFeedbackCriteria from './pages/Performance/EmployeeFeedbackCriteria';
+import Appraisal from './pages/Performance/Appraisal';
+import AppraisalCycle from './pages/Performance/AppraisalCycle';
+import EmployeePerformanceFeedback from './pages/Performance/EmployeePerformanceFeedback';
+import Goal from './pages/Performance/Goal';
+import AppraisalOverview from './pages/Performance/AppraisalOverview';
 
 function App() {
   const location = useLocation();
@@ -278,6 +288,16 @@ function App() {
                 <Route path="/talv/leave-application/new" element={<LeaveApplicationForm />} />
                 <Route path="/talv/leave-application/edit/:id" element={<LeaveApplicationForm />} />
                 <Route path="/emp-master-upload" element={<EmpMasterUpload />} />
+
+                {/* Performance Routes */}
+                <Route path="/performance/appraisal-template" element={<AppraisalTemplate />} />
+                <Route path="/performance/kra" element={<KRA />} />
+                <Route path="/performance/employee-feedback-criteria" element={<EmployeeFeedbackCriteria />} />
+                <Route path="/performance/appraisal" element={<Appraisal />} />
+                <Route path="/performance/appraisal-cycle" element={<AppraisalCycle />} />
+                <Route path="/performance/employee-performance-feedback" element={<EmployeePerformanceFeedback />} />
+                <Route path="/performance/goal" element={<Goal />} />
+                <Route path="/performance/reports/appraisal-overview" element={<AppraisalOverview />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />

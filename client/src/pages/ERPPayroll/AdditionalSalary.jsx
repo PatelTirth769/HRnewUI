@@ -1,75 +1,534 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { notification } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import API from '../../services/api';
 
-export default function AdditionalSalary() {
-    const sampleData = [
-        { name: 'AD-SAL-00001', employee: 'HR-EMP-00001', employee_name: 'Rahul Sharma', salary_component: 'Performance Bonus', amount: 15000, payroll_date: '2026-01-31', type: 'Earning', docstatus: 'Submitted' },
-        { name: 'AD-SAL-00002', employee: 'HR-EMP-00002', employee_name: 'Priya Patel', salary_component: 'Overtime', amount: 8000, payroll_date: '2026-01-31', type: 'Earning', docstatus: 'Draft' },
-        { name: 'AD-SAL-00003', employee: 'HR-EMP-00003', employee_name: 'Amit Kumar', salary_component: 'Loan Deduction', amount: 5000, payroll_date: '2026-01-31', type: 'Deduction', docstatus: 'Submitted' },
-    ];
+// --- Helpers ---
+const getStatusLabel = (doc) => {
+    if (doc.docstatus === 1) return 'Submitted';
+    if (doc.docstatus === 2) return 'Cancelled';
+    return doc.status || 'Draft';
+};
 
-    return (
-        <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-semibold text-gray-800">Additional Salary</h1>
-                <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">+ New Additional Salary</button>
+const getStatusColor = (status) => {
+    switch (status) {
+        case 'Submitted': return 'bg-[#EBF5FF] text-[#2B6CB0] font-medium';
+        case 'Cancelled': return 'bg-[#F3F4F6] text-[#374151] font-medium';
+        case 'Draft': return 'bg-[#FCE8E8] text-[#E02424] font-medium';
+        default: return 'bg-gray-100 text-gray-700 font-medium';
+    }
+};
+
+const formatINR = (val) => {
+    const num = parseFloat(val);
+    if (isNaN(num)) return '₹ 0.00';
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(num);
+};
+
+const InputField = ({ label, value, required = false, onChange, type = "text", disabled = false, colSpan = 1, placeholder = "" }) => (
+    <div className={colSpan === 2 ? 'col-span-2' : ''}>
+        <label className="block text-[13px] text-gray-500 mb-1">{label} {required && <span className="text-red-400">*</span>}</label>
+        <input
+            type={type}
+            placeholder={placeholder}
+            className={`w-full border border-gray-100 rounded px-3 py-1.5 text-sm focus:outline-none ${disabled ? 'bg-gray-50 text-gray-700 pointer-events-none' : 'focus:border-blue-400 bg-white shadow-sm'}`}
+            value={value !== undefined && value !== null ? value : ''}
+            onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+            readOnly={disabled}
+        />
+    </div>
+);
+
+const SelectField = ({ label, value, options, required = false, onChange, disabled = false, colSpan = 1 }) => (
+    <div className={colSpan === 2 ? 'col-span-2' : ''}>
+        <label className="block text-[13px] text-gray-500 mb-1">{label} {required && <span className="text-red-400">*</span>}</label>
+        <select
+            className={`w-full border border-gray-100 rounded px-3 py-1.5 text-sm focus:outline-none ${disabled ? 'bg-gray-50 text-gray-700 pointer-events-none' : 'focus:border-blue-400 bg-white shadow-sm'}`}
+            value={value || ''}
+            onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+            disabled={disabled}
+        >
+            <option value=""></option>
+            {options.map((opt, i) => (
+                <option key={i} value={typeof opt === 'string' ? opt : opt.value}>
+                    {typeof opt === 'string' ? opt : opt.label}
+                </option>
+            ))}
+        </select>
+    </div>
+);
+
+const CheckboxField = ({ label, checked, onChange, disabled = false }) => (
+    <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 mt-6">
+        <input
+            type="checkbox"
+            className="rounded border-gray-300 w-4 h-4"
+            checked={checked || false}
+            onChange={(e) => onChange && onChange(e.target.checked)}
+            disabled={disabled}
+        />
+        {label}
+    </label>
+);
+
+const AdditionalSalary = () => {
+    const [view, setView] = useState('list');
+    const [data, setData] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
+
+    // Master Data
+    const [employees, setEmployees] = useState([]);
+    const [companies, setCompanies] = useState([]);
+    const [salaryComponents, setSalaryComponents] = useState([]);
+    const [mastersLoaded, setMastersLoaded] = useState(false);
+
+    // Form Data
+    const [editingRecord, setEditingRecord] = useState(null);
+    const [saving, setSaving] = useState(false);
+
+    // Filters
+    const [searchId, setSearchId] = useState('');
+    const [filterEmployee, setFilterEmployee] = useState('');
+    const [filterCompany, setFilterCompany] = useState('');
+
+    const defaultForm = {
+        name: '',
+        employee: '',
+        employee_name: '',
+        company: '',
+        salary_component: '',
+        amount: '',
+        payroll_date: '',
+        from_date: '',
+        to_date: '',
+        is_recurring: 0,
+        disabled: 0,
+        deduct_full_tax_on_selected_payroll_date: 0,
+        overwrite_salary_structure_amount: 0,
+        type: '',
+        docstatus: 0,
+        status: 'Draft'
+    };
+    const [formData, setFormData] = useState({ ...defaultForm });
+
+    // --- Data Fetching ---
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            let url = '/api/resource/Additional Salary?fields=["name","employee","employee_name","company","salary_component","amount","payroll_date","docstatus","status"]&limit_page_length=None&order_by=modified desc';
+
+            let filters = [];
+            if (searchId) filters.push(`["name","like","%${searchId}%"]`);
+            if (filterEmployee) filters.push(`["employee","like","%${filterEmployee}%"]`);
+            if (filterCompany) filters.push(`["company","=","${filterCompany}"]`);
+
+            if (filters.length > 0) {
+                url += `&filters=[${filters.join(',')}]`;
+            }
+
+            const res = await API.get(url);
+            if (res.data.data) {
+                setData(res.data.data);
+            }
+        } catch (err) {
+            console.error('Fetch additional salary failed:', err);
+            notification.error({ message: 'Failed to load records' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchMasters = async () => {
+        if (mastersLoaded) return;
+        try {
+            const [emps, comps, compsList] = await Promise.all([
+                API.get('/api/resource/Employee?fields=["name","employee_name","company"]&limit_page_length=None'),
+                API.get('/api/resource/Company?fields=["name"]&limit_page_length=None'),
+                API.get('/api/resource/Salary Component?fields=["name"]&limit_page_length=None')
+            ]);
+            setEmployees(emps.data.data || []);
+            setCompanies((comps.data.data || []).map(c => c.name));
+            setSalaryComponents((compsList.data.data || []).map(c => c.name));
+            setMastersLoaded(true);
+        } catch (err) {
+            console.error('Error fetching masters:', err);
+        }
+    };
+
+    useEffect(() => {
+        if (view === 'list') {
+            fetchData();
+        } else {
+            fetchMasters();
+        }
+    }, [view]);
+
+    // --- Handlers ---
+    const handleNew = () => {
+        setEditingRecord(null);
+        setFormData({ ...defaultForm, company: companies[0] || 'Preeshe Consultancy Services', overwrite_salary_structure_amount: 1 });
+        setView('form');
+    };
+
+    const handleEdit = async (record) => {
+        setLoading(true);
+        try {
+            const res = await API.get(`/api/resource/Additional Salary/${encodeURIComponent(record.name)}`);
+            if (res.data.data) {
+                setEditingRecord(res.data.data);
+                setFormData(res.data.data);
+                setView('form');
+            }
+        } catch (err) {
+            notification.error({ message: 'Failed to load record details' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleEmployeeChange = (empId) => {
+        const emp = employees.find(e => e.name === empId);
+        if (emp) {
+            setFormData(prev => ({
+                ...prev,
+                employee: empId,
+                employee_name: emp.employee_name,
+                company: emp.company || prev.company
+            }));
+        } else {
+            setFormData(prev => ({ ...prev, employee: empId, employee_name: '' }));
+        }
+    };
+
+    const handleSave = async (submit = false) => {
+        if (!formData.company) { notification.warning({ message: 'Company is required' }); return; }
+        if (!formData.employee) { notification.warning({ message: 'Employee is required' }); return; }
+        if (!formData.salary_component) { notification.warning({ message: 'Salary Component is required' }); return; }
+        if (formData.amount === '' || formData.amount === null) { notification.warning({ message: 'Amount is required' }); return; }
+
+        if (formData.is_recurring) {
+            if (!formData.from_date) { notification.warning({ message: 'From Date is required' }); return; }
+            if (!formData.to_date) { notification.warning({ message: 'To Date is required' }); return; }
+        } else {
+            if (!formData.payroll_date) { notification.warning({ message: 'Payroll Date is required' }); return; }
+        }
+
+        setSaving(true);
+        try {
+            const payload = {
+                employee: formData.employee,
+                company: formData.company,
+                salary_component: formData.salary_component,
+                amount: parseFloat(formData.amount),
+                payroll_date: formData.payroll_date,
+                from_date: formData.from_date,
+                to_date: formData.to_date,
+                is_recurring: formData.is_recurring ? 1 : 0,
+                disabled: formData.disabled ? 1 : 0,
+                deduct_full_tax_on_selected_payroll_date: formData.deduct_full_tax_on_selected_payroll_date ? 1 : 0,
+                overwrite_salary_structure_amount: formData.overwrite_salary_structure_amount ? 1 : 0,
+                docstatus: submit ? 1 : formData.docstatus
+            };
+
+            if (editingRecord) {
+                await API.put(`/api/resource/Additional Salary/${encodeURIComponent(editingRecord.name)}`, payload);
+                notification.success({ message: `"${editingRecord.name}" ${submit ? 'submitted' : 'updated'} successfully!` });
+            } else {
+                const res = await API.post('/api/resource/Additional Salary', payload);
+                notification.success({ message: `"${res.data?.data?.name || 'Record'}" created successfully!` });
+            }
+            setView('list');
+            fetchData();
+        } catch (err) {
+            console.error('Save failed:', err);
+            let errMsg = err.response?.data?._server_messages || err.response?.data?.message || err.message;
+            if (typeof errMsg === 'string' && errMsg.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(errMsg);
+                    errMsg = parsed.map(m => { try { return JSON.parse(m).message; } catch { return m; } }).join('\n');
+                } catch { /* */ }
+            }
+            notification.error({ message: 'Save Failed', description: typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg), duration: 6 });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+
+    // --- Views ---
+    const renderList = () => {
+        const hasActiveFilters = searchId || filterEmployee || filterCompany;
+        const clearFilters = () => { setSearchId(''); setFilterEmployee(''); setFilterCompany(''); fetchData(); };
+
+        return (
+            <div className="p-6 max-w-7xl mx-auto">
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-2xl font-semibold text-gray-800">Additional Salary</h1>
+                    <div className="flex gap-2">
+                        <button className="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 rounded-md text-sm hover:bg-gray-50 flex items-center gap-2" onClick={fetchData}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        </button>
+                        <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 flex items-center gap-1.5 shadow-sm" onClick={handleNew}>
+                            <span>+</span> Add Additional Salary
+                        </button>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-t-xl border border-b-0 border-gray-100 p-4 shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="flex-1 max-w-[200px]">
+                            <input
+                                type="text"
+                                placeholder="ID"
+                                className="w-full bg-gray-50 border border-transparent rounded px-3 py-1.5 text-sm focus:bg-white focus:border-blue-400 focus:outline-none transition-colors"
+                                value={searchId}
+                                onChange={e => setSearchId(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && fetchData()}
+                            />
+                        </div>
+                        <div className="flex-1 max-w-[200px]">
+                            <input
+                                type="text"
+                                placeholder="Employee"
+                                className="w-full bg-gray-50 border border-transparent rounded px-3 py-1.5 text-sm focus:bg-white focus:border-blue-400 focus:outline-none transition-colors"
+                                value={filterEmployee}
+                                onChange={e => setFilterEmployee(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && fetchData()}
+                            />
+                        </div>
+                        <div className="flex-1 max-w-[200px]">
+                            <select
+                                className="w-full bg-gray-50 border border-transparent rounded px-3 py-1.5 text-sm focus:bg-white focus:border-blue-400 focus:outline-none transition-colors"
+                                value={filterCompany}
+                                onChange={e => setFilterCompany(e.target.value)}
+                            >
+                                <option value="">Company</option>
+                                {companies.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="flex-1"></div> {/* Spacer */}
+
+                        <div className="flex gap-2 shrink-0">
+                            <button
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium rounded border border-gray-200 transition-colors"
+                                onClick={fetchData}
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                                {hasActiveFilters ? `Filters ${(searchId ? 1 : 0) + (filterEmployee ? 1 : 0) + (filterCompany ? 1 : 0)}` : 'Filter'}
+                            </button>
+                            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium rounded border border-gray-200 transition-colors">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" /></svg>
+                                Last Updated On
+                            </button>
+                            {hasActiveFilters && (
+                                <button className="text-gray-500 hover:text-gray-800 text-sm flex items-center gap-1 shrink-0 ml-2" onClick={clearFilters}>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-b-xl shadow-sm border border-gray-100 overflow-hidden mt-0">
+                    <div className="overflow-x-auto min-h-[400px]">
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                            <thead className="bg-[#F8FAFC] text-gray-500 border-b border-gray-100 text-[13px] sticky top-0 z-10">
+                                <tr>
+                                    <th className="px-4 py-3 font-medium w-6"><input type="checkbox" className="rounded border-gray-300" /></th>
+                                    <th className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-100">Status</th>
+                                    <th className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-100">Employee Name</th>
+                                    <th className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-100">Employee</th>
+                                    <th className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-100">Payroll Date</th>
+                                    <th className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-100">Amount</th>
+                                    <th className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-100">Company</th>
+                                    <th className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-100">Salary Component</th>
+                                    <th className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-100">ID</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {loading ? (
+                                    <tr><td colSpan="9" className="text-center py-8 text-gray-400">Loading...</td></tr>
+                                ) : data.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="9" className="text-center py-12">
+                                            <div className="text-gray-400 mb-2">
+                                                <svg className="w-12 h-12 mx-auto stroke-current" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+                                            </div>
+                                            <p className="text-gray-500 text-base">No Additional Salaries Found</p>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    data.map((row) => {
+                                        const statusColor = getStatusColor(getStatusLabel(row));
+                                        return (
+                                            <tr key={row.name} className="hover:bg-gray-50/80 cursor-pointer transition-colors" onClick={() => handleEdit(row)}>
+                                                <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded border-gray-300" /></td>
+                                                <td className="px-4 py-2.5">
+                                                    <span className={`px-2 py-0.5 rounded text-[11px] uppercase tracking-wide flex w-max items-center justify-center ${statusColor}`}>
+                                                        {getStatusLabel(row)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-2.5 font-medium text-gray-900">{row.employee_name}</td>
+                                                <td className="px-4 py-2.5 text-gray-600">{row.employee}</td>
+                                                <td className="px-4 py-2.5 text-gray-600">{row.payroll_date}</td>
+                                                <td className="px-4 py-2.5 text-gray-900">{formatINR(row.amount)}</td>
+                                                <td className="px-4 py-2.5 text-gray-600">{row.company}</td>
+                                                <td className="px-4 py-2.5 text-gray-600">{row.salary_component}</td>
+                                                <td className="px-4 py-2.5 text-gray-500 text-[13px]">{row.name}</td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
+        );
+    };
 
-            <div className="flex gap-3 mb-4">
-                <select className="border border-gray-300 rounded px-3 py-2 text-sm">
-                    <option value="">Type</option>
-                    <option>Earning</option>
-                    <option>Deduction</option>
-                </select>
-                <select className="border border-gray-300 rounded px-3 py-2 text-sm">
-                    <option value="">Status</option>
-                    <option>Draft</option>
-                    <option>Submitted</option>
-                    <option>Cancelled</option>
-                </select>
-                <select className="border border-gray-300 rounded px-3 py-2 text-sm">
-                    <option value="">Company</option>
-                    <option>Preeshe Technologies</option>
-                </select>
-            </div>
+    const renderForm = () => {
+        const isSubmitted = formData.docstatus === 1;
+        const displayStatus = getStatusLabel(formData);
+        const statusColor = getStatusColor(displayStatus);
 
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b">
-                        <tr>
-                            <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
-                            <th className="text-left px-4 py-3 font-medium text-gray-600">Employee</th>
-                            <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
-                            <th className="text-left px-4 py-3 font-medium text-gray-600">Component</th>
-                            <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
-                            <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
-                            <th className="text-left px-4 py-3 font-medium text-gray-600">Payroll Date</th>
-                            <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {sampleData.map((row, i) => (
-                            <tr key={i} className="border-b hover:bg-gray-50">
-                                <td className="px-4 py-3 text-blue-600 cursor-pointer">{row.name}</td>
-                                <td className="px-4 py-3">{row.employee}</td>
-                                <td className="px-4 py-3">{row.employee_name}</td>
-                                <td className="px-4 py-3">{row.salary_component}</td>
-                                <td className="px-4 py-3">
-                                    <span className={`px-2 py-1 rounded text-xs ${row.type === 'Earning' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                                        {row.type}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-3 text-right">₹{row.amount.toLocaleString('en-IN')}</td>
-                                <td className="px-4 py-3">{row.payroll_date}</td>
-                                <td className="px-4 py-3">
-                                    <span className={`px-2 py-1 rounded text-xs ${row.docstatus === 'Submitted' ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700'}`}>
-                                        {row.docstatus}
-                                    </span>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+        return (
+            <div className="p-6 max-w-7xl mx-auto font-sans">
+                {/* Header */}
+                <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-200">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xl font-bold text-gray-900 tracking-tight">
+                                {editingRecord ? editingRecord.name : 'New Additional Salary'}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[11px] uppercase tracking-wide ${statusColor}`}>
+                                {displayStatus}
+                            </span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            className="p-2 border border-blue-400 bg-white text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
+                            onClick={() => setView('list')}
+                            title="Go Back"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                        </button>
+
+                        {!isSubmitted && (
+                            <button
+                                className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-70 flex items-center gap-2"
+                                onClick={() => handleSave(false)}
+                                disabled={saving}
+                            >
+                                {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span> : 'Save'}
+                            </button>
+                        )}
+                        {editingRecord && formData.docstatus === 0 && (
+                            <button
+                                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-70"
+                                onClick={() => handleSave(true)}
+                                disabled={saving}
+                            >
+                                Submit
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-6 space-y-8">
+                        {/* 2 Column Grid for top section */}
+                        <div className="grid grid-cols-2 gap-x-12 gap-y-6">
+                            <div className="space-y-6">
+                                <InputField label="Series" value={editingRecord ? formData.name : "HR-ADS-.YY.-.MM.-"} disabled={true} />
+                                <div>
+                                    <label className="block text-[13px] text-gray-500 mb-1">Employee <span className="text-red-400">*</span></label>
+                                    <select
+                                        className={`w-full border border-gray-100 rounded px-3 py-1.5 text-sm focus:outline-none ${isSubmitted ? 'bg-gray-50 text-gray-700 pointer-events-none' : 'focus:border-blue-400 bg-white shadow-sm'}`}
+                                        value={formData.employee}
+                                        onChange={(e) => handleEmployeeChange(e.target.value)}
+                                        disabled={isSubmitted}
+                                    >
+                                        <option value=""></option>
+                                        {employees.map((emp) => (
+                                            <option key={emp.name} value={emp.name}>{emp.name}: {emp.employee_name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {editingRecord && <InputField label="Employee Name" value={formData.employee_name} disabled={true} />}
+                            </div>
+
+                            <div className="space-y-6">
+                                <SelectField label="Company" options={companies} required value={formData.company} onChange={(v) => setFormData({ ...formData, company: v })} disabled={isSubmitted} />
+                                <CheckboxField label="Is Recurring" checked={formData.is_recurring === 1} onChange={(v) => setFormData({ ...formData, is_recurring: v ? 1 : 0 })} disabled={isSubmitted} />
+                                {formData.is_recurring === 1 ? (
+                                    <>
+                                        <CheckboxField label="Disabled" checked={formData.disabled === 1} onChange={(v) => setFormData({ ...formData, disabled: v ? 1 : 0 })} disabled={isSubmitted} />
+                                        <InputField label="From Date" type="date" required value={formData.from_date} onChange={(v) => setFormData({ ...formData, from_date: v })} disabled={isSubmitted} />
+                                        <InputField label="To Date" type="date" required value={formData.to_date} onChange={(v) => setFormData({ ...formData, to_date: v })} disabled={isSubmitted} />
+                                    </>
+                                ) : (
+                                    <div>
+                                        <InputField label="Payroll Date" type="date" required value={formData.payroll_date} onChange={(v) => setFormData({ ...formData, payroll_date: v })} disabled={isSubmitted} />
+                                        <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                                            The date on which Salary Component with Amount will contribute for Earnings/Deduction in Salary Slip.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <hr className="border-gray-100" />
+
+                        {/* Salary Detail Section */}
+                        <div>
+                            <h3 className="font-semibold text-gray-800 mb-6 text-sm">Salary</h3>
+                            <div className="grid grid-cols-2 gap-x-12">
+                                <div className="space-y-6">
+                                    <SelectField
+                                        label="Salary Component"
+                                        options={salaryComponents}
+                                        required
+                                        value={formData.salary_component}
+                                        onChange={(v) => setFormData({ ...formData, salary_component: v })}
+                                        disabled={isSubmitted}
+                                    />
+                                    <InputField
+                                        label="Amount"
+                                        type="number"
+                                        required
+                                        value={formData.amount}
+                                        onChange={(v) => setFormData({ ...formData, amount: v })}
+                                        disabled={isSubmitted}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <CheckboxField
+                                        label="Deduct Full Tax on Selected Payroll Date"
+                                        checked={formData.deduct_full_tax_on_selected_payroll_date === 1}
+                                        onChange={(v) => setFormData({ ...formData, deduct_full_tax_on_selected_payroll_date: v ? 1 : 0 })}
+                                        disabled={isSubmitted}
+                                    />
+                                    <CheckboxField
+                                        label="Overwrite Salary Structure Amount"
+                                        checked={formData.overwrite_salary_structure_amount === 1}
+                                        onChange={(v) => setFormData({ ...formData, overwrite_salary_structure_amount: v ? 1 : 0 })}
+                                        disabled={isSubmitted}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
-    );
-}
+        );
+    };
+
+    return view === 'list' ? renderList() : renderForm();
+};
+
+export default AdditionalSalary;
