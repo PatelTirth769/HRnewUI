@@ -12,6 +12,7 @@ const Header = () => {
   const [hoveredPayroll, setHoveredPayroll] = useState(false);
   const [hoveredERPPayroll, setHoveredERPPayroll] = useState(false);
   const [hoveredPerformance, setHoveredPerformance] = useState(false);
+  const [hoveredSubMenu, setHoveredSubMenu] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('ui-theme') || 'corporate');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const themes = ['corporate', 'minimal', 'warm'];
@@ -215,7 +216,10 @@ const Header = () => {
               onMouseLeave={() => setHoveredMenu(null)}
             >
               {Object.entries(menuItems.Master).map(([itemName, subItems]) => (
-                <div key={itemName} className="relative group">
+                <div key={itemName} className="relative"
+                  onMouseEnter={() => setHoveredSubMenu(`master-${itemName}`)}
+                  onMouseLeave={() => setHoveredSubMenu(null)}
+                >
                   <div
                     className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
                     onClick={() => {
@@ -244,7 +248,7 @@ const Header = () => {
                     {subItems && <span className="text-xs text-gray-400">▶</span>}
                   </div>
                   {subItems && (
-                    <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-20 border border-gray-200 hidden group-hover:block">
+                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `master-${itemName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                       {subItems.map((subItem, subIndex) => (
                         <div
                           key={subIndex}
@@ -330,13 +334,16 @@ const Header = () => {
               onMouseLeave={() => setHoveredELC(false)}
             >
               {Object.entries(menuItems['ELC & Letters']).map(([itemName, subItems]) => (
-                <div key={itemName} className="relative group">
+                <div key={itemName} className="relative"
+                  onMouseEnter={() => setHoveredSubMenu(`elc-${itemName}`)}
+                  onMouseLeave={() => setHoveredSubMenu(null)}
+                >
                   <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
                     {itemName}
                     {subItems && <span className="text-xs text-gray-400">▶</span>}
                   </div>
                   {subItems && (
-                    <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-20 border border-gray-200 hidden group-hover:block">
+                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `elc-${itemName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                       {subItems.map((subItem, subIndex) => (
                         <div key={subIndex} className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm">
                           {subItem}
@@ -366,7 +373,10 @@ const Header = () => {
               onMouseLeave={() => setHoveredTALV(false)}
             >
               {Object.entries(menuItems['TA & LV']).map(([itemName, subItems]) => (
-                <div key={itemName} className="relative group">
+                <div key={itemName} className="relative"
+                  onMouseEnter={() => setHoveredSubMenu(`talv-${itemName}`)}
+                  onMouseLeave={() => setHoveredSubMenu(null)}
+                >
                   <div
                     className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
                     onClick={() => {
@@ -389,7 +399,7 @@ const Header = () => {
                     {subItems && <span className="text-xs text-gray-400">▶</span>}
                   </div>
                   {subItems && Array.isArray(subItems) && (
-                    <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-20 border border-gray-200 hidden group-hover:block">
+                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `talv-${itemName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                       {subItems.map((subItem, subIndex) => (
                         <div
                           key={subIndex}
@@ -419,15 +429,18 @@ const Header = () => {
                     </div>
                   )}
                   {subItems && !Array.isArray(subItems) && (
-                    <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-20 border border-gray-200 hidden group-hover:block">
+                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `talv-${itemName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                       {Object.entries(subItems).map(([subKey, nestedItems]) => (
-                        <div key={subKey} className="relative group/nested">
+                        <div key={subKey} className="relative"
+                          onMouseEnter={(e) => { e.stopPropagation(); setHoveredSubMenu(`talv-${itemName}-${subKey}`); }}
+                          onMouseLeave={(e) => { e.stopPropagation(); setHoveredSubMenu(`talv-${itemName}`); }}
+                        >
                           <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
                             {subKey}
                             {nestedItems && <span className="text-xs text-gray-400">▶</span>}
                           </div>
                           {nestedItems && (
-                            <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 hidden group-hover/nested:block">
+                            <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-40 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `talv-${itemName}-${subKey}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                               {nestedItems.map((nestedItem, nestedIndex) => (
                                 <div
                                   key={nestedIndex}
@@ -480,12 +493,15 @@ const Header = () => {
               onMouseLeave={() => setHoveredPayroll(false)}
             >
               {payrollCountries.map((c) => (
-                <div key={c.key} className="relative group">
+                <div key={c.key} className="relative"
+                  onMouseEnter={() => setHoveredSubMenu(`payroll-${c.key}`)}
+                  onMouseLeave={() => setHoveredSubMenu(null)}
+                >
                   <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
                     {c.label}
                     <span className="text-xs text-gray-400">▶</span>
                   </div>
-                  <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-20 border border-gray-200 hidden group-hover:block">
+                  <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `payroll-${c.key}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                     {payrollMenus.map((m) => (
                       <div
                         key={m.key}
@@ -518,12 +534,15 @@ const Header = () => {
               onMouseLeave={() => setHoveredERPPayroll(false)}
             >
               {Object.entries(erpPayrollMenus).map(([groupName, items]) => (
-                <div key={groupName} className="relative group">
+                <div key={groupName} className="relative"
+                  onMouseEnter={() => setHoveredSubMenu(`erp-${groupName}`)}
+                  onMouseLeave={() => setHoveredSubMenu(null)}
+                >
                   <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
                     {groupName}
                     <span className="text-xs text-gray-400">▶</span>
                   </div>
-                  <div className="absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-64 z-20 border border-gray-200 hidden group-hover:block">
+                  <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-64 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `erp-${groupName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                     {items.map((item) => (
                       <div
                         key={item.path}
