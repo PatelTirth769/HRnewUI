@@ -75,7 +75,9 @@ const Header = () => {
         'City Master',
         'State Master',
         'Country Master',
-        'Bank Master'
+        'Bank Master',
+        'HR Settings',
+        'Employee Grade'
       ],
       // Minimal Needs submenu
       'Needs': [
@@ -156,10 +158,12 @@ const Header = () => {
           'Appraisal',
           'Appraisal Cycle',
           'Employee Performance Feedback',
+          'Employee Performance Feedback by HR',
           'Goal'
         ],
         'Reports': [
-          'Appraisal Overview'
+          'Appraisal Overview',
+          'Training Needs Identification'
         ]
       },
       'Attendance Dashboard': null,
@@ -274,6 +278,10 @@ const Header = () => {
                               navigate('/country-master');
                             } else if (subItem === 'Bank Master') {
                               navigate('/bank-master');
+                            } else if (subItem === 'HR Settings') {
+                              navigate('/master/hr-settings');
+                            } else if (subItem === 'Employee Grade') {
+                              navigate('/master/employee-grade');
                             } else if (subItem === 'Ticker Message') {
                               navigate('/ticker-master');
                             } else if (subItem === 'Position') {
@@ -429,7 +437,7 @@ const Header = () => {
                     </div>
                   )}
                   {subItems && !Array.isArray(subItems) && (
-                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `talv-${itemName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu && hoveredSubMenu.startsWith(`talv-${itemName}`) ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                       {Object.entries(subItems).map(([subKey, nestedItems]) => (
                         <div key={subKey} className="relative"
                           onMouseEnter={(e) => { e.stopPropagation(); setHoveredSubMenu(`talv-${itemName}-${subKey}`); }}
@@ -455,9 +463,11 @@ const Header = () => {
                                         if (nestedItem === 'Appraisal') navigate('/performance/appraisal');
                                         else if (nestedItem === 'Appraisal Cycle') navigate('/performance/appraisal-cycle');
                                         else if (nestedItem === 'Employee Performance Feedback') navigate('/performance/employee-performance-feedback');
+                                        else if (nestedItem === 'Employee Performance Feedback by HR') navigate('/performance/employee-performance-feedback-by-hr');
                                         else if (nestedItem === 'Goal') navigate('/performance/goal');
                                       } else if (subKey === 'Reports') {
                                         if (nestedItem === 'Appraisal Overview') navigate('/performance/reports/appraisal-overview');
+                                        else if (nestedItem === 'Training Needs Identification') navigate('/performance/reports/training-needs-identification');
                                       }
                                     }
                                   }}

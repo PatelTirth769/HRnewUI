@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { notification } from 'antd';
 import API from '../../services/api';
 
 export default function SalaryStructure() {
+    const navigate = useNavigate();
     const [view, setView] = useState('list');
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -156,6 +158,30 @@ export default function SalaryStructure() {
                 employee_grade: gradeRes?.data?.message || 0,
             });
         } catch { setConnections({ salary_structure_assignment: 0, salary_slip: 0, employee_grade: 0 }); }
+    };
+
+    // ─── CONNECTION LINKS ─────────────────────────────────────────
+    const handleConnectionClick = (type) => {
+        if (!editingRecord) return;
+        if (type === 'assignment') {
+            navigate('/erp-payroll/salary-structure-assignment', { state: { filterStructure: editingRecord.name } });
+        } else if (type === 'slip') {
+            navigate('/erp-payroll/salary-slip', { state: { filterStructure: editingRecord.name } });
+        } else if (type === 'grade') {
+            navigate('/master/employee-grade', { state: { filterStructure: editingRecord.name } });
+        }
+    };
+
+    const handleNewConnectionClick = (e, type) => {
+        e.stopPropagation();
+        if (!editingRecord) return;
+        if (type === 'assignment') {
+            navigate('/erp-payroll/salary-structure-assignment', { state: { openForm: true, newRecordWithStructure: editingRecord.name } });
+        } else if (type === 'slip') {
+            navigate('/erp-payroll/salary-slip', { state: { openForm: true, newRecordWithStructure: editingRecord.name } });
+        } else if (type === 'grade') {
+            navigate('/master/employee-grade', { state: { openForm: true, newRecordWithStructure: editingRecord.name } });
+        }
     };
 
     // ─── SAVE ─────────────────────────────────────────────────────
@@ -434,22 +460,40 @@ export default function SalaryStructure() {
                                         {connectionsOpen && (
                                             <div className="flex flex-wrap gap-3">
                                                 {connections.salary_structure_assignment > 0 && (
-                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-sm text-gray-700 border border-gray-200">
+                                                    <span
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-sm text-gray-700 border border-gray-200 cursor-pointer hover:bg-gray-200 transition-colors"
+                                                        onClick={() => handleConnectionClick('assignment')}
+                                                    >
                                                         <span className="font-medium">{connections.salary_structure_assignment}</span>
                                                         Salary Structure Assignment
-                                                        <span className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600">+</span>
+                                                        <span
+                                                            className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600"
+                                                            onClick={(e) => handleNewConnectionClick(e, 'assignment')}
+                                                        >+</span>
                                                     </span>
                                                 )}
-                                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-sm text-gray-700 border border-gray-200">
+                                                <span
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-sm text-gray-700 border border-gray-200 cursor-pointer hover:bg-gray-200 transition-colors"
+                                                    onClick={() => handleConnectionClick('grade')}
+                                                >
                                                     {connections.employee_grade > 0 && <span className="font-medium">{connections.employee_grade}</span>}
                                                     Employee Grade
-                                                    <span className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600">+</span>
+                                                    <span
+                                                        className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600"
+                                                        onClick={(e) => handleNewConnectionClick(e, 'grade')}
+                                                    >+</span>
                                                 </span>
                                                 {connections.salary_slip > 0 && (
-                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-sm text-gray-700 border border-gray-200">
+                                                    <span
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-sm text-gray-700 border border-gray-200 cursor-pointer hover:bg-gray-200 transition-colors"
+                                                        onClick={() => handleConnectionClick('slip')}
+                                                    >
                                                         <span className="font-medium">{connections.salary_slip}</span>
                                                         Salary Slip
-                                                        <span className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600">+</span>
+                                                        <span
+                                                            className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600"
+                                                            onClick={(e) => handleNewConnectionClick(e, 'slip')}
+                                                        >+</span>
                                                     </span>
                                                 )}
                                             </div>

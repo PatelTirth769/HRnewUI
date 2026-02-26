@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { notification } from 'antd';
 import API from '../../services/api';
+import SalarySlipPreviewModal from '../../components/common/SalarySlipPreviewModal';
 
 export default function SalaryStructureAssignment() {
+    const location = useLocation();
+    const navigate = useNavigate();
     // ─── STATE ────────────────────────────────────────────────────
     const [view, setView] = useState('list');
     const [data, setData] = useState([]);
@@ -13,6 +17,8 @@ export default function SalaryStructureAssignment() {
     const [filterStatus, setFilterStatus] = useState('');
     const [connectionsOpen, setConnectionsOpen] = useState(true);
     const [connections, setConnections] = useState({ salary_slip: 0 });
+    const [actionsOpen, setActionsOpen] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
 
     // Dropdown masters
     const [employees, setEmployees] = useState([]);
@@ -75,6 +81,24 @@ export default function SalaryStructureAssignment() {
 
     useEffect(() => { fetchData(); fetchMasters(); }, []);
 
+    // ─── EFFECTS FOR INTERNAL LINKS ───────────────────────────────
+    useEffect(() => {
+        if (mastersLoaded && location.state) {
+            if (location.state.filterStructure && !location.state.openForm) {
+                setFilterStructure(location.state.filterStructure);
+            }
+            if (location.state.openForm) {
+                handleNew().then(() => {
+                    if (location.state.newRecordWithStructure) {
+                        handleStructureChange(location.state.newRecordWithStructure);
+                    }
+                });
+                // clear state to prevent re-opening on refresh
+                navigate(location.pathname, { replace: true });
+            }
+        }
+    }, [mastersLoaded, location.state, navigate]);
+
     // ─── FETCH SINGLE ─────────────────────────────────────────────
     const fetchSingle = async (name) => {
         try {
@@ -109,7 +133,8 @@ export default function SalaryStructureAssignment() {
     // ─── FETCH CONNECTIONS ────────────────────────────────────────
     const fetchConnections = async (name) => {
         try {
-            const slipRes = await API.get(`/api/method/frappe.client.get_count?doctype=Salary Slip&filters={"salary_structure_assignment":"${name}"}`).catch(() => ({ data: { message: 0 } }));
+            const filterStr = encodeURIComponent(JSON.stringify({ salary_structure_assignment: name }));
+            const slipRes = await API.get(`/api/method/frappe.client.get_count?doctype=Salary Slip&filters=${filterStr}`).catch(() => ({ data: { message: 0 } }));
             setConnections({ salary_slip: slipRes?.data?.message || 0 });
         } catch { setConnections({ salary_slip: 0 }); }
     };
@@ -125,7 +150,7 @@ export default function SalaryStructureAssignment() {
     // Extra filter states
     const [filterDepartment, setFilterDepartment] = useState('');
     const [filterDesignation, setFilterDesignation] = useState('');
-    const [filterStructure, setFilterStructure] = useState('');
+    const [filterStructure, setFilterStructure] = useState(location.state?.filterStructure && !location.state?.openForm ? location.state.filterStructure : '');
 
     // ─── FILTERS ──────────────────────────────────────────────────
     const filtered = data.filter(d => {
@@ -294,7 +319,33 @@ export default function SalaryStructureAssignment() {
                                 }`}>{getStatusLabel(editingRecord)}</span>
                             : <span className="text-xs px-2 py-0.5 rounded bg-orange-50 text-orange-600">Not Saved</span>}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 relative">
+                        {editingRecord && (
+                            <>
+                                <button
+                                    className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded border hover:bg-gray-200 flex items-center gap-2"
+                                    onClick={() => setActionsOpen(!actionsOpen)}
+                                >
+                                    ACTIONS
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${actionsOpen ? 'rotate-180' : ''}`}>
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+                                {actionsOpen && (
+                                    <div className="absolute top-11 left-0 w-48 bg-white border border-gray-200 shadow-lg rounded-md z-50 py-1">
+                                        <button
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50"
+                                            onClick={() => {
+                                                setShowPreview(true);
+                                                setActionsOpen(false);
+                                            }}
+                                        >
+                                            Preview Salary Slip
+                                        </button>
+                                    </div>
+                                )}
+                            </>
+                        )}
                         <button className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded border hover:bg-gray-200" onClick={() => setView('list')}>Cancel</button>
                         <button className="px-5 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50" onClick={handleSave} disabled={saving}>
                             {saving ? 'Saving...' : 'Save'}
@@ -323,10 +374,27 @@ export default function SalaryStructureAssignment() {
                             </button>
                             {connectionsOpen && (
                                 <div className="flex flex-wrap gap-3">
-                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-sm text-gray-700 border border-gray-200">
-                                        {connections.salary_slip > 0 && <span className="font-medium">{connections.salary_slip}</span>}
+                                    <span
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-sm text-gray-700 border border-gray-200 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                                        onClick={() => {
+                                            window.open(
+                                                `https://preeshe.hrhovercraft.in/app/salary-slip?salary_structure_assignment=${encodeURIComponent(editingRecord.name)}`,
+                                                '_blank'
+                                            );
+                                        }}
+                                    >
+                                        {connections.salary_slip > 0 && <span className="font-medium text-blue-600">{connections.salary_slip}</span>}
                                         Salary Slip
-                                        <span className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600">+</span>
+                                        <span
+                                            className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                window.open(
+                                                    `https://preeshe.hrhovercraft.in/app/salary-slip/new?employee=${encodeURIComponent(formData.employee)}&salary_structure=${encodeURIComponent(formData.salary_structure)}`,
+                                                    '_blank'
+                                                );
+                                            }}
+                                        >+</span>
                                     </span>
                                 </div>
                             )}
@@ -503,6 +571,12 @@ export default function SalaryStructureAssignment() {
                         </div>
                     </div>
                 </div>
+                {/* Salary Slip Preview Modal */}
+                <SalarySlipPreviewModal
+                    isOpen={showPreview}
+                    onClose={() => setShowPreview(false)}
+                    assignmentData={formData}
+                />
             </div>
         );
     }

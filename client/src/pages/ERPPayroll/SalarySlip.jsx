@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import API from '../../services/api'; // Adjust path depending on location
 
 // Helpers
@@ -111,13 +111,14 @@ const SalarySlip = () => {
     const [filterCompany, setFilterCompany] = useState('');
     const [filterDepartment, setFilterDepartment] = useState('');
     const [filterBranch, setFilterBranch] = useState('');
-    const [filterStructure, setFilterStructure] = useState('');
 
     // Parse URL parameters for pre-filled filters
     const location = useLocation();
+    const navigate = useNavigate();
     const queryParams = new URLSearchParams(location.search);
     const [filterPayrollEntry, setFilterPayrollEntry] = useState(queryParams.get('Payroll Entry') || '');
     const [filterSalaryWithholding, setFilterSalaryWithholding] = useState(queryParams.get('Salary Withholding') || '');
+    const [filterStructure, setFilterStructure] = useState(location.state?.filterStructure && !location.state?.openForm ? location.state.filterStructure : '');
 
     // --- FETCH DATA ---
     const fetchData = async () => {
@@ -197,6 +198,23 @@ const SalarySlip = () => {
         fetchData();
         fetchMasters();
     }, []);
+
+    // --- EFFECTS FOR INTERNAL LINKS ---
+    useEffect(() => {
+        if (mastersLoaded && location.state) {
+            if (location.state.filterStructure && !location.state.openForm) {
+                setFilterStructure(location.state.filterStructure);
+            }
+            if (location.state.openForm) {
+                handleNew();
+                if (location.state.newRecordWithStructure) {
+                    setFormData(prev => ({ ...prev, salary_structure: location.state.newRecordWithStructure }));
+                }
+                // clear state to prevent re-opening on refresh
+                navigate(location.pathname, { replace: true, search: location.search });
+            }
+        }
+    }, [mastersLoaded, location.state, navigate]);
 
     const closeRowEdit = () => setActiveRowEdit(null);
     const openRowEdit = (type, index) => setActiveRowEdit({ type, index });

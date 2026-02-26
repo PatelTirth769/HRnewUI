@@ -186,7 +186,7 @@ export default function SalaryRegister() {
     );
 
     return (
-        <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50 relative font-sans p-6 overflow-hidden">
+        <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', padding: '24px', background: '#f9fafb', overflow: 'hidden', fontFamily: 'sans-serif' }}>
             {/* Header */}
             <div className="flex justify-between items-center mb-4">
                 <h1 className="text-2xl font-bold text-gray-900 m-0">Salary Register</h1>
@@ -208,11 +208,11 @@ export default function SalaryRegister() {
                 </div>
             </div>
 
-            {/* Container matching screenshot */}
-            <div className="border border-gray-200 rounded-md flex flex-col bg-white flex-1 shadow-sm overflow-hidden min-h-0">
+            {/* Card container — everything scrolls INSIDE this bordered box */}
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, border: '1px solid #e5e7eb', borderRadius: '6px', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
 
                 {/* Filters Row */}
-                <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 flex-wrap shrink-0">
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 flex-wrap" style={{ flexShrink: 0 }}>
                     <input type="date"
                         className="bg-[#f0f1f3] border-none rounded px-3 py-[3px] text-[13px] text-gray-700 outline-none w-[130px] h-[26px] hover:bg-[#e4e6ea] focus:ring-1 focus:ring-gray-300 transition-colors cursor-pointer"
                         value={fromDate} onChange={(e) => setFromDate(e.target.value)} onBlur={handleGenerate} />
@@ -244,8 +244,8 @@ export default function SalaryRegister() {
                     </select>
                 </div>
 
-                {/* Main Content Area */}
-                <div className="flex-1 w-full bg-white relative overflow-auto">
+                {/* Table area — scroll container; width:0 + min-width:100% is the flex-child containment trick */}
+                <div style={{ flex: 1, minHeight: 0, width: 0, minWidth: '100%', position: 'relative' }}>
                     {loading && (
                         <div className="absolute inset-0 flex justify-center items-center z-10 bg-white/50">
                             <div className="w-6 h-6 border-2 border-[#0e62ed] border-t-transparent rounded-full animate-spin"></div>
@@ -253,21 +253,19 @@ export default function SalaryRegister() {
                     )}
 
                     {data.length > 0 ? (
-                        <div className="w-full h-full p-2">
-                            <Table
-                                columns={columns}
-                                dataSource={data}
-                                pagination={false}
-                                size="small"
-                                scroll={{ x: 'max-content' }}
-                                className="w-full border-none react-erp-table"
-                                rowClassName={(record) => record.isTotal ? 'erp-total-row' : ''}
-                                locale={{ emptyText: ' ' }}
-                            />
-                        </div>
+                        <Table
+                            columns={columns}
+                            dataSource={data}
+                            pagination={false}
+                            size="small"
+                            scroll={{ x: 'max-content' }}
+                            className="react-erp-table"
+                            rowClassName={(record) => record.isTotal ? 'erp-total-row' : ''}
+                            locale={{ emptyText: ' ' }}
+                        />
                     ) : (
                         !loading && (
-                            <div className="absolute inset-0 flex flex-col justify-center items-center text-gray-400 pb-12 bg-white">
+                            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#9ca3af', paddingBottom: '48px' }}>
                                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-3 opacity-90">
                                     <path d="M6 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-2"></path>
                                     <rect x="3" y="9" width="12" height="13" rx="2" ry="2"></rect>
@@ -282,8 +280,8 @@ export default function SalaryRegister() {
                     )}
                 </div>
 
-                {/* Footer fixed to bottom of the card */}
-                <div className="px-3 py-2 border-t border-gray-100 text-[#8D99A6] text-[11px] flex justify-between items-center bg-white rounded-b-md w-full shrink-0">
+                {/* Footer pinned to bottom of card */}
+                <div className="px-3 py-2 border-t border-gray-100 text-[#8D99A6] text-[11px] flex justify-between items-center bg-white" style={{ flexShrink: 0 }}>
                     <span>For comparison, use &gt;5, &lt;10 or =324. For ranges, use 5:10 (for values between 5 &amp; 10).</span>
                     <span>Execution Time: {executionTime} sec</span>
                 </div>
@@ -309,6 +307,19 @@ export default function SalaryRegister() {
                 .erp-total-row > td {
                     font-weight: 600 !important;
                     color: #111827 !important;
+                }
+                /* Force Ant Design table to scroll inside the card */
+                .react-erp-table,
+                .react-erp-table .ant-spin-nested-loading,
+                .react-erp-table .ant-spin-container,
+                .react-erp-table .ant-table,
+                .react-erp-table .ant-table-container {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                }
+                .react-erp-table .ant-table-content {
+                    overflow-x: auto !important;
+                    overflow-y: visible !important;
                 }
             `}} />
         </div>

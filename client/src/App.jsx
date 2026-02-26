@@ -33,6 +33,8 @@ import StateMaster from './pages/StateMaster/StateMaster';
 import CountryMaster from './pages/CountryMaster/CountryMaster';
 import BankMaster from './pages/BankMaster/BankMaster';
 import AddBank from './pages/BankMaster/AddBank';
+import HRSettings from './pages/Master/HRSettings';
+import EmployeeGrade from './pages/Master/EmployeeGrade';
 import TickerMaster from './pages/TickerMaster/TickerMaster';
 import AddTicker from './pages/TickerMaster/AddTicker';
 import EventPlanner from './pages/EventPlanner/EventPlanner';
@@ -133,8 +135,10 @@ import EmployeeFeedbackCriteria from './pages/Performance/EmployeeFeedbackCriter
 import Appraisal from './pages/Performance/Appraisal';
 import AppraisalCycle from './pages/Performance/AppraisalCycle';
 import EmployeePerformanceFeedback from './pages/Performance/EmployeePerformanceFeedback';
+import EmployeePerformanceFeedbackByHR from './pages/Performance/EmployeePerformanceFeedbackByHR';
 import Goal from './pages/Performance/Goal';
 import AppraisalOverview from './pages/Performance/AppraisalOverview';
+import TrainingNeedsIdentification from './pages/Performance/TrainingNeedsIdentification';
 
 function App() {
   const location = useLocation();
@@ -186,6 +190,8 @@ function App() {
                 <Route path="/master/state-master" element={<StateMaster />} />
                 <Route path="/country-master" element={<CountryMaster />} />
                 <Route path="/bank-master" element={<BankMaster />} />
+                <Route path="/master/hr-settings" element={<HRSettings />} />
+                <Route path="/master/employee-grade" element={<EmployeeGrade />} />
                 <Route path="/add-bank" element={<AddBank />} />
                 <Route path="/edit-bank/:id" element={<AddBank />} />
                 <Route path="/policy-upload" element={<PolicyUpload />} />
@@ -293,11 +299,17 @@ function App() {
                 <Route path="/performance/appraisal-template" element={<AppraisalTemplate />} />
                 <Route path="/performance/kra" element={<KRA />} />
                 <Route path="/performance/employee-feedback-criteria" element={<EmployeeFeedbackCriteria />} />
+                {/* Performance - Appraisal */}
                 <Route path="/performance/appraisal" element={<Appraisal />} />
                 <Route path="/performance/appraisal-cycle" element={<AppraisalCycle />} />
                 <Route path="/performance/employee-performance-feedback" element={<EmployeePerformanceFeedback />} />
+                <Route path="/performance/employee-performance-feedback-by-hr" element={<EmployeePerformanceFeedbackByHR />} />
                 <Route path="/performance/goal" element={<Goal />} />
-                <Route path="/performance/reports/appraisal-overview" element={<AppraisalOverview />} />
+
+                {/* Performance - Reports */}
+                <Route path="/performance/appraisal-overview" element={<AppraisalOverview />} />
+                <Route path="/performance/training-needs-identification" element={<TrainingNeedsIdentification />} />
+                <Route path="/performance/reports/appraisal-overview" element={<Navigate to="/performance/appraisal-overview" replace />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />
