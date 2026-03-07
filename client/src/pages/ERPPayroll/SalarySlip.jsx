@@ -104,18 +104,19 @@ const SalarySlip = () => {
     };
     const [formData, setFormData] = useState({ ...defaultForm });
 
+    // Parse URL parameters for pre-filled filters
+    const location = useLocation();
+    const navigate = useNavigate();
+    const queryParams = new URLSearchParams(location.search);
+
     // Filter states
     const [searchId, setSearchId] = useState('');
-    const [filterEmployee, setFilterEmployee] = useState('');
+    const [filterEmployee, setFilterEmployee] = useState(location.state?.filterEmployee && !location.state?.openForm ? location.state.filterEmployee : '');
     const [filterEmployeeName, setFilterEmployeeName] = useState('');
     const [filterCompany, setFilterCompany] = useState('');
     const [filterDepartment, setFilterDepartment] = useState('');
     const [filterBranch, setFilterBranch] = useState('');
 
-    // Parse URL parameters for pre-filled filters
-    const location = useLocation();
-    const navigate = useNavigate();
-    const queryParams = new URLSearchParams(location.search);
     const [filterPayrollEntry, setFilterPayrollEntry] = useState(queryParams.get('Payroll Entry') || '');
     const [filterSalaryWithholding, setFilterSalaryWithholding] = useState(queryParams.get('Salary Withholding') || '');
     const [filterStructure, setFilterStructure] = useState(location.state?.filterStructure && !location.state?.openForm ? location.state.filterStructure : '');
@@ -136,6 +137,7 @@ const SalarySlip = () => {
             if (filterBranch) filters.push(`["branch","=","${filterBranch}"]`);
             if (filterPayrollEntry) filters.push(`["payroll_entry","=","${filterPayrollEntry}"]`);
             if (filterSalaryWithholding) filters.push(`["salary_withholding","=","${filterSalaryWithholding}"]`);
+            if (filterStructure) filters.push(`["salary_structure","=","${filterStructure}"]`);
 
             if (filters.length > 0) {
                 url += `&filters=[${filters.join(',')}]`;
@@ -207,8 +209,23 @@ const SalarySlip = () => {
             }
             if (location.state.openForm) {
                 handleNew();
-                if (location.state.newRecordWithStructure) {
-                    setFormData(prev => ({ ...prev, salary_structure: location.state.newRecordWithStructure }));
+                if (location.state.newRecordWithStructure || location.state.newRecordWithEmployee) {
+                    setFormData(prev => {
+                        const nextState = { ...prev };
+                        if (location.state.newRecordWithStructure) {
+                            nextState.salary_structure = location.state.newRecordWithStructure;
+                        }
+                        if (location.state.newRecordWithEmployee) {
+                            const empName = location.state.newRecordWithEmployee;
+                            const emp = employees.find(e => e.name === empName);
+                            nextState.employee = empName;
+                            if (emp) {
+                                nextState.employee_name = emp.employee_name || '';
+                                if (emp.company) nextState.company = emp.company;
+                            }
+                        }
+                        return nextState;
+                    });
                 }
                 // clear state to prevent re-opening on refresh
                 navigate(location.pathname, { replace: true, search: location.search });

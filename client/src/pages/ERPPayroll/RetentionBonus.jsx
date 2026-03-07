@@ -96,7 +96,7 @@ const RetentionBonus = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            let url = '/api/resource/Retention Bonus?fields=["name","employee","employee_name","company","salary_component","bonus_amount","bonus_payment_date","docstatus","status"]&limit_page_length=None&order_by=modified desc';
+            let url = '/api/resource/Retention Bonus?fields=["name","employee","employee_name","company","salary_component","bonus_amount","bonus_payment_date","docstatus"]&limit_page_length=None&order_by=modified desc';
 
             let filters = [];
             if (searchId) filters.push(`["name","like","%${searchId}%"]`);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
+import { useLocation } from 'react-router-dom';
 import API from '../../services/api';
 
 const RESOURCE = 'Employee Performance Feedback';
@@ -39,6 +40,9 @@ export default function EmployeePerformanceFeedback() {
     const [filterStatus, setFilterStatus] = useState('');
     const [formTab, setFormTab] = useState('employee_details');
 
+    const location = useLocation();
+    const [filterCycle, setFilterCycle] = useState(location.state?.filterCycle ? location.state.filterCycle : '');
+
     // Master data
     const [employees, setEmployees] = useState([]);
     const [appraisals, setAppraisals] = useState([]);
@@ -77,7 +81,7 @@ export default function EmployeePerformanceFeedback() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await API.get(`${API_BASE}?fields=["name","employee","employee_name","reviewer","reviewer_name","total_score","docstatus","modified","company"]&limit_page_length=None&order_by=modified desc`);
+            const res = await API.get(`${API_BASE}?fields=["name","employee","employee_name","reviewer","reviewer_name","total_score","docstatus","modified","company","appraisal_cycle"]&limit_page_length=None&order_by=modified desc`);
             setData(res.data?.data || []);
         } catch (err) {
             console.error('Fetch failed:', err);
@@ -122,6 +126,7 @@ export default function EmployeePerformanceFeedback() {
         if (filterStatus === 'Draft' && d.docstatus !== 0) return false;
         if (filterStatus === 'Submitted' && d.docstatus !== 1) return false;
         if (filterStatus === 'Cancelled' && d.docstatus !== 2) return false;
+        if (filterCycle && d.appraisal_cycle !== filterCycle) return false;
         return true;
     });
 
@@ -553,7 +558,13 @@ export default function EmployeePerformanceFeedback() {
                     <option value="Submitted">Submitted</option>
                     <option value="Cancelled">Cancelled</option>
                 </select>
-                {(searchId || filterStatus) && (<button className="text-red-500 hover:text-red-700 text-sm" onClick={() => { setSearchId(''); setFilterStatus(''); }}>✕ Clear</button>)}
+                {filterCycle && (
+                    <div className="bg-blue-50 text-blue-700 border border-blue-200 rounded px-3 py-2 text-sm flex items-center gap-2">
+                        <span>Cycle: <strong>{filterCycle}</strong></span>
+                        <button className="text-blue-500 hover:text-blue-800" onClick={() => setFilterCycle('')}>✕</button>
+                    </div>
+                )}
+                {(searchId || filterStatus || filterCycle) && (<button className="text-red-500 hover:text-red-700 text-sm" onClick={() => { setSearchId(''); setFilterStatus(''); setFilterCycle(''); }}>✕ Clear</button>)}
                 <div className="ml-auto text-xs text-gray-400">{filtered.length} of {data.length}</div>
             </div>
 

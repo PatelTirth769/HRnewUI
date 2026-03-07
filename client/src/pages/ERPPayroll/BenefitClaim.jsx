@@ -96,7 +96,7 @@ const BenefitClaim = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            let url = '/api/resource/Employee Benefit Claim?fields=["name","employee","employee_name","earning_component","claimed_amount","claim_date","company","docstatus","status"]&limit_page_length=None&order_by=modified desc';
+            let url = '/api/resource/Employee Benefit Claim?fields=["name","employee","employee_name","earning_component","claimed_amount","claim_date","company","docstatus"]&limit_page_length=None&order_by=modified desc';
 
             let filters = [];
             if (searchId) filters.push(`["name","like","%${searchId}%"]`);

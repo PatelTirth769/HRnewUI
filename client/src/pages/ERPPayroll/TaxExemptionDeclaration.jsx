@@ -97,7 +97,7 @@ const TaxExemptionDeclaration = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            let url = '/api/resource/Employee Tax Exemption Declaration?fields=["name","employee","employee_name","company","payroll_period","total_declared_amount","total_exemption_amount","docstatus","status"]&limit_page_length=None&order_by=modified desc';
+            let url = '/api/resource/Employee Tax Exemption Declaration?fields=["name","employee","employee_name","company","payroll_period","total_declared_amount","total_exemption_amount","docstatus"]&limit_page_length=None&order_by=modified desc';
 
             let filters = [];
             if (searchId) filters.push(`["name","like","%${searchId}%"]`);

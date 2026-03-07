@@ -62,6 +62,19 @@ const LoginPage = () => {
         });
 
         if (response.data.message === 'Logged In') {
+          // Fetch actual ERPNext roles for this user
+          let isHRAdmin = false;
+          try {
+            const rolesRes = await API.get('/api/method/frappe.auth.get_roles');
+            const roles = rolesRes.data?.message || [];
+            // User is HR Admin if they have any of these roles
+            const adminRoles = ['HR Manager', 'HR User', 'System Manager', 'Administrator'];
+            isHRAdmin = roles.some(r => adminRoles.includes(r));
+          } catch (roleErr) {
+            console.error('Could not fetch roles, defaulting to employee view:', roleErr);
+            isHRAdmin = false;
+          }
+
           notification.success({
             message: 'Login Successful',
             description: `Welcome back, ${response.data.full_name}`,
@@ -71,6 +84,8 @@ const LoginPage = () => {
           localStorage.setItem('isLogged', 'true');
           localStorage.setItem('user', values.email);
           localStorage.setItem('userToken', 'session-active'); // Set dummy token for ProtectedRoute
+          localStorage.setItem('userRole', values.role); // Store form role
+          localStorage.setItem('userIsHRAdmin', isHRAdmin ? 'true' : 'false'); // Store actual ERPNext admin status
 
           // Redirect to Home (Main Page)
           navigate('/home');

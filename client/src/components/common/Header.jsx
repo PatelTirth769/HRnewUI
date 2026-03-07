@@ -12,6 +12,7 @@ const Header = () => {
   const [hoveredPayroll, setHoveredPayroll] = useState(false);
   const [hoveredERPPayroll, setHoveredERPPayroll] = useState(false);
   const [hoveredPerformance, setHoveredPerformance] = useState(false);
+  const [hoveredHR, setHoveredHR] = useState(false);
   const [hoveredSubMenu, setHoveredSubMenu] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('ui-theme') || 'corporate');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
@@ -148,24 +149,7 @@ const Header = () => {
         'OT Summary',
         'Headcount/Occupancy Report'
       ],
-      'Performance': {
-        'Master': [
-          'Appraisal Template',
-          'KRA',
-          'Employee Feedback Criteria'
-        ],
-        'Appraisal': [
-          'Appraisal',
-          'Appraisal Cycle',
-          'Employee Performance Feedback',
-          'Employee Performance Feedback by HR',
-          'Goal'
-        ],
-        'Reports': [
-          'Appraisal Overview',
-          'Training Needs Identification'
-        ]
-      },
+
       'Attendance Dashboard': null,
       'Attendance Policy': null,
       'Leave Policy Config': null,
@@ -198,7 +182,7 @@ const Header = () => {
   ];
 
   return (
-    <header className="bg-white px-4 py-2 flex justify-between items-center relative shadow-sm">
+    <header className="bg-white px-4 py-2 flex justify-between items-center relative shadow-sm" >
       <Link to="/home" className="no-underline text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors flex items-center gap-2">
         <img src={logo} alt="Logo" className="h-8 w-auto" />
         Dash Board
@@ -398,8 +382,6 @@ const Header = () => {
                       else if (itemName === 'Shift Planning Upload') navigate('/talv/shift-planning-upload');
                       else if (itemName === 'Shift Master') navigate('/talv/shift-master');
                       else if (itemName === 'HR View Leaves & Outdoor') navigate('/talv/hr-view-leaves-outdoor');
-                      else if (itemName === 'Upload Monthly Leave Balance') navigate('/talv/upload-monthly-leave-balance');
-                      else if (itemName === 'Leave Application') navigate('/talv/leave-application');
                       else if (itemName === 'Employee Leave Balance') navigate('/talv/employee-leave-balance');
                     }}
                   >
@@ -453,24 +435,6 @@ const Header = () => {
                                 <div
                                   key={nestedIndex}
                                   className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
-                                  onClick={() => {
-                                    if (itemName === 'Performance') {
-                                      if (subKey === 'Master') {
-                                        if (nestedItem === 'Appraisal Template') navigate('/performance/appraisal-template');
-                                        else if (nestedItem === 'KRA') navigate('/performance/kra');
-                                        else if (nestedItem === 'Employee Feedback Criteria') navigate('/performance/employee-feedback-criteria');
-                                      } else if (subKey === 'Appraisal') {
-                                        if (nestedItem === 'Appraisal') navigate('/performance/appraisal');
-                                        else if (nestedItem === 'Appraisal Cycle') navigate('/performance/appraisal-cycle');
-                                        else if (nestedItem === 'Employee Performance Feedback') navigate('/performance/employee-performance-feedback');
-                                        else if (nestedItem === 'Employee Performance Feedback by HR') navigate('/performance/employee-performance-feedback-by-hr');
-                                        else if (nestedItem === 'Goal') navigate('/performance/goal');
-                                      } else if (subKey === 'Reports') {
-                                        if (nestedItem === 'Appraisal Overview') navigate('/performance/reports/appraisal-overview');
-                                        else if (nestedItem === 'Training Needs Identification') navigate('/performance/reports/training-needs-identification');
-                                      }
-                                    }
-                                  }}
                                 >
                                   {nestedItem}
                                 </div>
@@ -569,6 +533,93 @@ const Header = () => {
           )}
         </div>
 
+        {/* HR Menu */}
+        <div className="relative">
+          <div
+            className="cursor-pointer hover:text-blue-600"
+            onMouseEnter={() => setHoveredHR(true)}
+            onMouseLeave={() => setHoveredHR(false)}
+            onClick={() => navigate('/hr')}
+          >
+            HR ▼
+          </div>
+          {hoveredHR && (
+            <div
+              className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
+              onMouseEnter={() => setHoveredHR(true)}
+              onMouseLeave={() => setHoveredHR(false)}
+            >
+              <div
+                className="relative"
+                onMouseEnter={() => setHoveredSubMenu(`Recruitment`)}
+                onMouseLeave={() => setHoveredSubMenu(null)}
+              >
+                <div
+                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
+                  onClick={() => {
+                    navigate('/recruitment');
+                    setHoveredHR(false);
+                    setHoveredSubMenu(null);
+                  }}
+                >
+                  Recruitment
+                </div>
+              </div>
+              {/* Performance Item */}
+              <div
+                className="relative"
+                onMouseEnter={() => setHoveredSubMenu(`Performance`)}
+                onMouseLeave={() => setHoveredSubMenu(null)}
+              >
+                <div
+                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
+                  onClick={() => {
+                    navigate('/performance');
+                    setHoveredHR(false);
+                    setHoveredSubMenu(null);
+                  }}
+                >
+                  Performance
+                </div>
+              </div>
+              {/* Shift and Attendance Item */}
+              <div
+                className="relative"
+                onMouseEnter={() => setHoveredSubMenu(`ShiftAttendance`)}
+                onMouseLeave={() => setHoveredSubMenu(null)}
+              >
+                <div
+                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
+                  onClick={() => {
+                    navigate('/shift-attendance');
+                    setHoveredHR(false);
+                    setHoveredSubMenu(null);
+                  }}
+                >
+                  Shift & Attendance
+                </div>
+              </div>
+              {/* Leave Item */}
+              <div
+                className="relative"
+                onMouseEnter={() => setHoveredSubMenu(`Leave`)}
+                onMouseLeave={() => setHoveredSubMenu(null)}
+              >
+                <div
+                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
+                  onClick={() => {
+                    navigate('/talv/leave');
+                    setHoveredHR(false);
+                    setHoveredSubMenu(null);
+                  }}
+                >
+                  Leave
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>
         <Link to="/companies" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Companies</Link>
         <Link to="/settings" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Settings</Link>
@@ -601,8 +652,8 @@ const Header = () => {
             </div>
           )}
         </div>
-      </div>
-    </header>
+      </div >
+    </header >
   );
 };
 

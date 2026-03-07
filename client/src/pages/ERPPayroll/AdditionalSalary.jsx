@@ -116,7 +116,7 @@ const AdditionalSalary = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            let url = '/api/resource/Additional Salary?fields=["name","employee","employee_name","company","salary_component","amount","payroll_date","docstatus","status"]&limit_page_length=None&order_by=modified desc';
+            let url = '/api/resource/Additional Salary?fields=["name","employee","employee_name","company","salary_component","amount","payroll_date","docstatus"]&limit_page_length=None&order_by=modified desc';
 
             let filters = [];
             if (searchId) filters.push(`["name","like","%${searchId}%"]`);

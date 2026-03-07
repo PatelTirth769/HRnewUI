@@ -93,7 +93,7 @@ const SalaryWithholding = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            let url = '/api/resource/Salary Withholding?fields=["name","employee","employee_name","posting_date","company","docstatus","status","from_date"]&limit_page_length=None&order_by=modified desc';
+            let url = '/api/resource/Salary Withholding?fields=["name","employee","employee_name","posting_date","company","docstatus","from_date"]&limit_page_length=None&order_by=modified desc';
 
             let filters = [];
             if (searchId) filters.push(`["name","like","%${searchId}%"]`);

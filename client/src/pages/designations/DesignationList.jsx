@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import { Spin, notification, Modal } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 
 const DesignationList = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [designations, setDesignations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterTemplate, setFilterTemplate] = useState(location.state?.filterTemplate || '');
   const [modal, contextHolder] = Modal.useModal();
 
   const fetchDesignations = async () => {
@@ -31,7 +33,9 @@ const DesignationList = () => {
 
   const filteredDesignations = designations.filter(designation => {
     const name = designation.name || designation.designation_name || '';
-    return name.toLowerCase().includes(searchTerm.toLowerCase());
+    if (searchTerm && !name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    if (filterTemplate && designation.appraisal_template !== filterTemplate) return false;
+    return true;
   });
 
   const handleViewDetails = (designation) => {
@@ -103,14 +107,23 @@ const DesignationList = () => {
           {/* Filters and Search */}
           <div className="px-8 py-6 border-b border-gray-200">
             <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
+              <div className="flex-1 flex gap-3 items-center">
                 <input
                   type="text"
                   placeholder="Search designations..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {filterTemplate && (
+                  <div className="bg-blue-50 text-blue-700 border border-blue-200 rounded px-3 py-2 text-sm flex items-center gap-2">
+                    <span>Appraisal Template: <strong>{filterTemplate}</strong></span>
+                    <button className="text-blue-500 hover:text-blue-800" onClick={() => setFilterTemplate('')}>✕</button>
+                  </div>
+                )}
+                {(searchTerm || filterTemplate) && (
+                  <button className="text-red-500 hover:text-red-700 text-sm whitespace-nowrap" onClick={() => { setSearchTerm(''); setFilterTemplate(''); }}>✕ Clear Filters</button>
+                )}
               </div>
             </div>
           </div>

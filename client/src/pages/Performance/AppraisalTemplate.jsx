@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import API from '../../services/api';
 
 export default function AppraisalTemplate() {
@@ -10,6 +10,10 @@ export default function AppraisalTemplate() {
     const [saving, setSaving] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
     const [searchId, setSearchId] = useState('');
+
+    const navigate = useNavigate();
+    const [connections, setConnections] = useState({ appraisal: 0, designation: 0 });
+    const [connectionsOpen, setConnectionsOpen] = useState(true);
 
     const [kras, setKras] = useState([]);
     const [appraisalCriteria, setAppraisalCriteria] = useState([]);
@@ -82,8 +86,32 @@ export default function AppraisalTemplate() {
         return true;
     });
 
+    const fetchConnections = async (templateName) => {
+        try {
+            const filterStrAppraisal = encodeURIComponent(JSON.stringify([
+                ["appraisal_template", "=", templateName]
+            ]));
+            const resAppraisal = await API.get(`/api/method/frappe.client.get_count?doctype=Appraisal&filters=${filterStrAppraisal}`).catch(() => ({ data: { message: 0 } }));
+
+            const filterStrDesignation = encodeURIComponent(JSON.stringify([
+                ["appraisal_template", "=", templateName]
+            ]));
+            const resDesignation = await API.get(`/api/method/frappe.client.get_count?doctype=Designation&filters=${filterStrDesignation}`).catch(() => ({ data: { message: 0 } }));
+
+            setConnections({
+                appraisal: resAppraisal?.data?.message || 0,
+                designation: resDesignation?.data?.message || 0
+            });
+        } catch { setConnections({ appraisal: 0, designation: 0 }); }
+    };
+
     const handleNew = () => { setEditingRecord(null); setFormData({ ...defaultForm }); setView('form'); };
-    const handleEdit = async (record) => { setEditingRecord(record); setView('form'); await fetchSingle(record.name); };
+    const handleEdit = async (record) => {
+        setEditingRecord(record);
+        setView('form');
+        await fetchSingle(record.name);
+        fetchConnections(record.name);
+    };
 
     // ─── SAVE ────────────────────────────────────────────────────
     const handleSave = async () => {
@@ -210,6 +238,49 @@ export default function AppraisalTemplate() {
 
                 {/* Form Body */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                    {/* ── Connections (edit mode only) ── */}
+                    {editingRecord && (
+                        <div className="px-6 pt-5 pb-4 border-b border-gray-100">
+                            <button
+                                className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3 hover:text-gray-600 cursor-pointer"
+                                onClick={() => setConnectionsOpen(!connectionsOpen)}>
+                                <span>Connections</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform duration-200 ${connectionsOpen ? '' : '-rotate-90'}`}>
+                                    <polyline points="6 9 12 15 18 9" />
+                                </svg>
+                            </button>
+                            {connectionsOpen && (
+                                <div className="flex flex-wrap gap-3">
+                                    <span
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-sm text-gray-700 border border-gray-200 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                                        onClick={() => {
+                                            navigate('/performance/appraisal', { state: { filterTemplate: formData.template_title || editingRecord.name } });
+                                        }}
+                                    >
+                                        {connections.appraisal > 0 && <span className="font-medium text-blue-600">{connections.appraisal}</span>}
+                                        Appraisal
+                                        <span
+                                            className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate('/performance/appraisal', { state: { openForm: true, newRecordWithTemplate: formData.template_title || editingRecord.name } });
+                                            }}
+                                        >+</span>
+                                    </span>
+                                    <span
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-sm text-gray-700 border border-gray-200 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                                        onClick={() => {
+                                            navigate('/master/designations', { state: { filterTemplate: formData.template_title || editingRecord.name } });
+                                        }}
+                                    >
+                                        {connections.designation > 0 && <span className="font-medium text-blue-600">{connections.designation}</span>}
+                                        Designation
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="p-6 space-y-8">
                         {/* Title & Description Section */}
                         <div className="space-y-6 max-w-3xl">

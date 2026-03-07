@@ -139,6 +139,17 @@ import EmployeePerformanceFeedbackByHR from './pages/Performance/EmployeePerform
 import Goal from './pages/Performance/Goal';
 import AppraisalOverview from './pages/Performance/AppraisalOverview';
 import TrainingNeedsIdentification from './pages/Performance/TrainingNeedsIdentification';
+import StaffingPlan from './pages/Recruitment/StaffingPlan';
+import JobRequisition from './pages/Recruitment/JobRequisition';
+import JobOpening from './pages/Recruitment/JobOpening';
+import JobApplicant from './pages/Recruitment/JobApplicant';
+import JobOffer from './pages/Recruitment/JobOffer';
+import EmployeeReferral from './pages/Recruitment/EmployeeReferral';
+import HRModule from './pages/HR/HRModule';
+import RecruitmentModule from './pages/HR/RecruitmentModule';
+import PerformanceModule from './pages/HR/PerformanceModule';
+import ShiftAttendanceModule from './pages/HR/ShiftAttendanceModule';
+import LeaveModule from './pages/HR/LeaveModule';
 
 function App() {
   const location = useLocation();
@@ -265,12 +276,16 @@ function App() {
                 <Route path="/talv/attendance-dashboard" element={<AttendanceDashboard />} />
                 <Route path="/talv/attendance-policy" element={<AttendancePolicyMaster />} />
                 <Route path="/talv/leave-policy-config" element={<LeavePolicyConfig />} />
+                <Route path="/talv/leave" element={<LeaveModule />} />
                 <Route path="/talv/employee-leave-master" element={<EmployeeLeaveMaster />} />
                 <Route path="/talv/upload-opening-leave-balance" element={<UploadOpeningLeaveBalance />} />
                 <Route path="/talv/mobile-app-linking" element={<MobileAppLinking />} />
                 <Route path="/talv/attendance-control" element={<AttendanceControl />} />
                 <Route path="/talv/shift-planning-upload" element={<ShiftPlanningUpload />} />
                 <Route path="/talv/shift-master" element={<ShiftMaster />} />
+                <Route path="/talv/shift-assignment" element={<NeedsPage title="Shift Assignment" />} />
+                <Route path="/talv/shift-schedule" element={<NeedsPage title="Shift Schedule" />} />
+                <Route path="/talv/shift-schedule-assignment" element={<NeedsPage title="Shift Schedule Assignment" />} />
                 <Route path="/talv/hr-view-leaves-outdoor" element={<HRViewLeavesOutdoor />} />
                 <Route path="/talv/upload-monthly-leave-balance" element={<UploadMonthlyLeaveBalance />} />
                 <Route path="/talv/capture-attendance/biometric-upload" element={<BiometricUpload />} />
@@ -310,6 +325,20 @@ function App() {
                 <Route path="/performance/appraisal-overview" element={<AppraisalOverview />} />
                 <Route path="/performance/training-needs-identification" element={<TrainingNeedsIdentification />} />
                 <Route path="/performance/reports/appraisal-overview" element={<Navigate to="/performance/appraisal-overview" replace />} />
+                <Route path="/performance" element={<PerformanceModule />} />
+
+                {/* Shift & Attendance */}
+                <Route path="/shift-attendance" element={<ShiftAttendanceModule />} />
+
+                {/* Recruitment */}
+                <Route path="/recruitment" element={<RecruitmentModule />} />
+                <Route path="/recruitment/staffing-plan" element={<StaffingPlan />} />
+                <Route path="/recruitment/job-requisition" element={<JobRequisition />} />
+                <Route path="/recruitment/job-opening" element={<JobOpening />} />
+                <Route path="/recruitment/job-applicant" element={<JobApplicant />} />
+                <Route path="/recruitment/job-offer" element={<JobOffer />} />
+                <Route path="/recruitment/employee-referral" element={<EmployeeReferral />} />
+                <Route path="/hr" element={<HRModule />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />

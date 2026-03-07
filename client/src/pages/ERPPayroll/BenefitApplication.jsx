@@ -99,7 +99,7 @@ const BenefitApplication = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            let url = '/api/resource/Employee Benefit Application?fields=["name","employee","employee_name","date","payroll_period","company","max_benefits","docstatus","status"]&limit_page_length=None&order_by=modified desc';
+            let url = '/api/resource/Employee Benefit Application?fields=["name","employee","employee_name","date","payroll_period","company","max_benefits","docstatus"]&limit_page_length=None&order_by=modified desc';
 
             let filters = [];
             if (searchId) filters.push(`["name","like","%${searchId}%"]`);

@@ -131,9 +131,12 @@ export default function SalaryStructureAssignment() {
     };
 
     // ─── FETCH CONNECTIONS ────────────────────────────────────────
-    const fetchConnections = async (name) => {
+    const fetchConnections = async (rec) => {
         try {
-            const filterStr = encodeURIComponent(JSON.stringify({ salary_structure_assignment: name }));
+            const filterStr = encodeURIComponent(JSON.stringify([
+                ["employee", "=", rec.employee],
+                ["salary_structure", "=", rec.salary_structure]
+            ]));
             const slipRes = await API.get(`/api/method/frappe.client.get_count?doctype=Salary Slip&filters=${filterStr}`).catch(() => ({ data: { message: 0 } }));
             setConnections({ salary_slip: slipRes?.data?.message || 0 });
         } catch { setConnections({ salary_slip: 0 }); }
@@ -377,10 +380,7 @@ export default function SalaryStructureAssignment() {
                                     <span
                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-sm text-gray-700 border border-gray-200 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors"
                                         onClick={() => {
-                                            window.open(
-                                                `https://preeshe.hrhovercraft.in/app/salary-slip?salary_structure_assignment=${encodeURIComponent(editingRecord.name)}`,
-                                                '_blank'
-                                            );
+                                            navigate('/erp-payroll/salary-slip', { state: { filterEmployee: formData.employee, filterStructure: formData.salary_structure } });
                                         }}
                                     >
                                         {connections.salary_slip > 0 && <span className="font-medium text-blue-600">{connections.salary_slip}</span>}
@@ -389,10 +389,7 @@ export default function SalaryStructureAssignment() {
                                             className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                window.open(
-                                                    `https://preeshe.hrhovercraft.in/app/salary-slip/new?employee=${encodeURIComponent(formData.employee)}&salary_structure=${encodeURIComponent(formData.salary_structure)}`,
-                                                    '_blank'
-                                                );
+                                                navigate('/erp-payroll/salary-slip', { state: { openForm: true, newRecordWithEmployee: formData.employee, newRecordWithStructure: formData.salary_structure } });
                                             }}
                                         >+</span>
                                     </span>

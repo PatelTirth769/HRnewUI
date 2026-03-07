@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import API from '../../services/api';
 
 const RESOURCE = 'Appraisal Cycle';
 const API_BASE = `/api/resource/${encodeURIComponent(RESOURCE)}`;
 
 export default function AppraisalCycle() {
+    const navigate = useNavigate();
     const [view, setView] = useState('list');
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -323,18 +325,41 @@ export default function AppraisalCycle() {
                         <h4 className="text-sm font-semibold text-gray-700 mb-3">Connections</h4>
                         <div className="flex items-center gap-4 flex-wrap">
                             {connections.appraisals > 0 && (
-                                <span className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-sm text-gray-700 flex items-center gap-1.5">
-                                    <strong>{connections.appraisals}</strong> Appraisal
+                                <span
+                                    className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-sm text-gray-700 flex items-center gap-1.5 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                                    onClick={() => navigate('/performance/appraisal', { state: { filterCycle: formData.cycle_name || editingRecord.name } })}
+                                >
+                                    <strong className="text-blue-600">{connections.appraisals}</strong> Appraisal
+                                    <span
+                                        className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigate('/performance/appraisal', { state: { openForm: true, newRecordWithCycle: formData.cycle_name || editingRecord.name } });
+                                        }}
+                                    >+</span>
                                 </span>
                             )}
                             {connections.feedbacks > 0 && (
-                                <span className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-sm text-gray-700 flex items-center gap-1.5">
-                                    <strong>{connections.feedbacks}</strong> Employee Performance Feedback
+                                <span
+                                    className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-sm text-gray-700 flex items-center gap-1.5 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                                    onClick={() => navigate('/performance/employee-performance-feedback', { state: { filterCycle: formData.cycle_name || editingRecord.name } })}
+                                >
+                                    <strong className="text-blue-600">{connections.feedbacks}</strong> Employee Performance Feedback
                                 </span>
                             )}
                             {connections.goals > 0 && (
-                                <span className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-sm text-gray-700 flex items-center gap-1.5">
-                                    <strong>{connections.goals}</strong> Goal
+                                <span
+                                    className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-sm text-gray-700 flex items-center gap-1.5 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                                    onClick={() => navigate('/performance/goal', { state: { filterCycle: formData.cycle_name || editingRecord.name } })}
+                                >
+                                    <strong className="text-blue-600">{connections.goals}</strong> Goal
+                                    <span
+                                        className="text-gray-400 ml-1 cursor-pointer hover:text-blue-600"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigate('/performance/goal', { state: { openForm: true, newRecordWithCycle: formData.cycle_name || editingRecord.name } });
+                                        }}
+                                    >+</span>
                                 </span>
                             )}
                         </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
+import { useLocation } from 'react-router-dom';
 import API from '../../services/api';
 
 const RESOURCE = 'Goal';
@@ -14,6 +15,9 @@ export default function Goal() {
     const [searchQ, setSearchQ] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
     const [filterEmployee, setFilterEmployee] = useState('');
+
+    const location = useLocation();
+    const [filterCycle, setFilterCycle] = useState(location.state?.filterCycle && !location.state?.openForm ? location.state.filterCycle : '');
 
     // Master data
     const [employees, setEmployees] = useState([]);
@@ -54,7 +58,7 @@ export default function Goal() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await API.get(`${API_BASE}?fields=["name","goal_name","employee","employee_name","status","progress","is_group","company","kra","modified"]&limit_page_length=None&order_by=modified desc`);
+            const res = await API.get(`${API_BASE}?fields=["name","goal_name","employee","employee_name","status","progress","is_group","company","kra","modified","appraisal_cycle"]&limit_page_length=None&order_by=modified desc`);
             setData(res.data?.data || []);
         } catch (err) {
             console.error('Fetch failed:', err);
@@ -66,6 +70,18 @@ export default function Goal() {
         if (view === 'list') fetchData();
         else fetchMasters();
     }, [view]);
+
+    // Handle new record from route state
+    useEffect(() => {
+        if (location.state?.openForm && location.state?.newRecordWithCycle) {
+            setEditingRecord(null);
+            setFormData({
+                ...defaultForm,
+                appraisal_cycle: location.state.newRecordWithCycle
+            });
+            setView('form');
+        }
+    }, [location.state]);
 
     // ─── FETCH SINGLE ────────────────────────────────────────────
     const fetchSingle = async (name) => {
@@ -94,6 +110,7 @@ export default function Goal() {
             !(d.employee_name || '').toLowerCase().includes(searchQ.toLowerCase())) return false;
         if (filterStatus && d.status !== filterStatus) return false;
         if (filterEmployee && d.employee !== filterEmployee) return false;
+        if (filterCycle && d.appraisal_cycle !== filterCycle) return false;
         return true;
     });
 
@@ -381,8 +398,14 @@ export default function Goal() {
                     <option value="">All Status</option>
                     {['Pending', 'In Progress', 'Completed', 'Archived', 'Closed'].map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
-                {(searchQ || filterStatus || filterEmployee) && (
-                    <button className="text-red-500 hover:text-red-700 text-sm" onClick={() => { setSearchQ(''); setFilterStatus(''); setFilterEmployee(''); }}>✕ Clear</button>
+                {filterCycle && (
+                    <div className="bg-blue-50 text-blue-700 border border-blue-200 rounded px-3 py-2 text-sm flex items-center gap-2">
+                        <span>Cycle: <strong>{filterCycle}</strong></span>
+                        <button className="text-blue-500 hover:text-blue-800" onClick={() => setFilterCycle('')}>✕</button>
+                    </div>
+                )}
+                {(searchQ || filterStatus || filterEmployee || filterCycle) && (
+                    <button className="text-red-500 hover:text-red-700 text-sm" onClick={() => { setSearchQ(''); setFilterStatus(''); setFilterEmployee(''); setFilterCycle(''); }}>✕ Clear</button>
                 )}
                 <div className="ml-auto text-xs text-gray-400">{filtered.length} of {data.length}</div>
             </div>

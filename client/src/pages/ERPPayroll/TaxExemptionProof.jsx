@@ -102,7 +102,7 @@ const TaxExemptionProof = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            let url = '/api/resource/Employee Tax Exemption Proof Submission?fields=["name","employee","employee_name","company","payroll_period","total_actual_amount","submission_date","docstatus","status"]&limit_page_length=None&order_by=modified desc';
+            let url = '/api/resource/Employee Tax Exemption Proof Submission?fields=["name","employee","employee_name","company","payroll_period","total_actual_amount","submission_date","docstatus"]&limit_page_length=None&order_by=modified desc';
 
             let filters = [];
             if (searchId) filters.push(`["name","like","%${searchId}%"]`);

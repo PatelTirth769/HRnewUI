@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { notification } from 'antd';
+import { notification, Table, Tooltip } from 'antd';
 import API from '../../services/api';
 
 const REPORT_API = '/api/method/frappe.desk.query_report.run';
@@ -98,7 +98,7 @@ export default function AppraisalOverview() {
 
         const dpr = window.devicePixelRatio || 1;
         const w = canvas.parentElement.clientWidth;
-        const h = 300;
+        const h = 200;
         canvas.width = w * dpr;
         canvas.height = h * dpr;
         canvas.style.width = w + 'px';
@@ -194,142 +194,188 @@ export default function AppraisalOverview() {
         return parseFloat(val).toFixed(3);
     };
 
+    const antdColumns = [
+        {
+            title: 'Sr No',
+            dataIndex: 'sr_no',
+            key: 'sr_no',
+            width: 60,
+            render: (text, record, index) => <span className="text-gray-500 text-[12px]">{index + 1}</span>,
+        },
+        ...columns.map((col, idx) => {
+            const isNum = col.fieldtype === 'Float' || col.fieldtype === 'Int';
+            let colWidth = 160;
+            if (isNum) colWidth = 120;
+            else if (col.fieldname === 'employee_name') colWidth = 200;
+            else if (col.fieldname === 'employee') colWidth = 140;
+            else if (col.fieldname === 'department') colWidth = 200;
+            else if (col.fieldname === 'designation') colWidth = 180;
+            else if (col.fieldname === 'appraisal') colWidth = 200;
+            else if (col.fieldname === 'appraisal_cycle') colWidth = 160;
+
+            return {
+                title: col.label || col.fieldname,
+                dataIndex: col.fieldname,
+                key: col.fieldname,
+                width: colWidth,
+                align: isNum ? 'right' : 'left',
+                ellipsis: true,
+                ...(isNum ? { render: (text) => formatScore(text) } : {}),
+            };
+        })
+    ];
+
     return (
-        <div className="p-6">
+        <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', padding: '24px', background: '#f9fafb', overflow: 'hidden', fontFamily: 'sans-serif' }}>
             {/* Header */}
-            <div className="flex justify-between items-center mb-5">
-                <h1 className="text-xl font-bold text-gray-900">Appraisal Overview</h1>
-                <div className="flex gap-2">
-                    <button className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 transition" onClick={handleExport}>
-                        Export
+            <div className="flex justify-between items-center mb-4">
+                <h1 className="text-2xl font-bold text-gray-900 m-0">Appraisal Overview</h1>
+                <div className="flex items-center space-x-2">
+                    <button className="flex items-center space-x-1 px-3 py-1 bg-white border border-gray-300 shadow-sm text-gray-700 text-sm rounded hover:bg-gray-50 transition-colors cursor-pointer h-8" onClick={handleExport}>
+                        <span>Export</span>
                     </button>
-                    <button className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 transition flex items-center gap-1" onClick={fetchReport} disabled={loading}>
-                        {loading ? '⟳ Loading...' : '⟳ Refresh'}
+                    <button onClick={fetchReport} className="flex items-center justify-center w-8 h-8 bg-white border border-gray-300 shadow-sm text-gray-700 rounded hover:bg-gray-50 transition-colors cursor-pointer" disabled={loading}>
+                        <svg className="w-[13px] h-[13px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                     </button>
                 </div>
             </div>
 
-            {/* Filters Row */}
-            <div className="flex items-center gap-3 mb-5 flex-wrap">
-                <select className="border border-gray-300 rounded px-3 py-2 text-sm bg-white min-w-[200px]"
-                    value={company} onChange={(e) => setCompany(e.target.value)}>
-                    <option value="">Company</option>
-                    {companies.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select className="border border-gray-300 rounded px-3 py-2 text-sm bg-white min-w-[160px]"
-                    value={appraisalCycle} onChange={(e) => setAppraisalCycle(e.target.value)}>
-                    <option value="">Appraisal Cycle</option>
-                    {cycles.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select className="border border-gray-300 rounded px-3 py-2 text-sm bg-white min-w-[160px]"
-                    value={employee} onChange={(e) => setEmployee(e.target.value)}>
-                    <option value="">Employee</option>
-                    {employees.map(e => <option key={e.name} value={e.name}>{e.name}: {e.employee_name}</option>)}
-                </select>
-                <select className="border border-gray-300 rounded px-3 py-2 text-sm bg-white min-w-[140px]"
-                    value={department} onChange={(e) => setDepartment(e.target.value)}>
-                    <option value="">Department</option>
-                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <select className="border border-gray-300 rounded px-3 py-2 text-sm bg-white min-w-[140px]"
-                    value={designation} onChange={(e) => setDesignation(e.target.value)}>
-                    <option value="">Designation</option>
-                    {designations.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-                {(appraisalCycle || employee || department || designation) && (
-                    <button className="text-xs text-blue-600 hover:underline" onClick={() => { setAppraisalCycle(''); setEmployee(''); setDepartment(''); setDesignation(''); }}>Clear Filters</button>
-                )}
-            </div>
+            {/* Card container — everything scrolls INSIDE this bordered box */}
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, border: '1px solid #e5e7eb', borderRadius: '6px', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
 
-            {/* Chart */}
-            {chart && chart.data?.labels?.length > 0 && (
-                <div className="bg-white rounded-lg border border-gray-200 p-4 mb-5">
-                    <canvas ref={canvasRef} />
+                {/* Filters Row */}
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 flex-wrap" style={{ flexShrink: 0 }}>
+                    <select className="bg-[#f0f1f3] border-none rounded px-3 py-[3px] text-[13px] text-gray-700 outline-none w-[200px] h-[26px] hover:bg-[#e4e6ea] transition-colors cursor-pointer appearance-none truncate"
+                        value={company} onChange={(e) => setCompany(e.target.value)}>
+                        <option value="">Company</option>
+                        {companies.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+
+                    <select className="bg-[#f0f1f3] border-none rounded px-3 py-[3px] text-[13px] text-gray-700 outline-none w-[160px] h-[26px] hover:bg-[#e4e6ea] transition-colors cursor-pointer appearance-none truncate"
+                        value={appraisalCycle} onChange={(e) => setAppraisalCycle(e.target.value)}>
+                        <option value="">Appraisal Cycle</option>
+                        {cycles.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+
+                    <input type="text" placeholder="Employee"
+                        className="bg-[#f0f1f3] border-none rounded px-3 py-[3px] text-[13px] text-gray-700 outline-none w-[160px] h-[26px] hover:bg-[#e4e6ea] focus:ring-1 focus:ring-gray-300 transition-colors placeholder-gray-400"
+                        value={employee} onChange={(e) => setEmployee(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchReport()} />
+
+                    <select className="bg-[#f0f1f3] border-none rounded px-3 py-[3px] text-[13px] text-gray-700 outline-none w-[140px] h-[26px] hover:bg-[#e4e6ea] transition-colors cursor-pointer appearance-none truncate"
+                        value={department} onChange={(e) => setDepartment(e.target.value)}>
+                        <option value="">Department</option>
+                        {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+
+                    <select className="bg-[#f0f1f3] border-none rounded px-3 py-[3px] text-[13px] text-gray-700 outline-none w-[140px] h-[26px] hover:bg-[#e4e6ea] transition-colors cursor-pointer appearance-none truncate"
+                        value={designation} onChange={(e) => setDesignation(e.target.value)}>
+                        <option value="">Designation</option>
+                        {designations.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+
+                    {(appraisalCycle || employee || department || designation) && (
+                        <button className="text-xs text-blue-600 hover:underline px-2" onClick={() => { setAppraisalCycle(''); setEmployee(''); setDepartment(''); setDesignation(''); }}>Clear Filters</button>
+                    )}
                 </div>
-            )}
 
-            {/* Data Table */}
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                {loading ? (
-                    <div className="flex items-center justify-center py-12 text-gray-500">
-                        <svg className="animate-spin h-5 w-5 mr-2 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        Loading report...
-                    </div>
-                ) : data.length === 0 ? (
-                    <div className="text-center py-12 text-gray-400">
-                        <p className="text-base mb-2">Nothing to show</p>
-                        <p className="text-sm">Try adjusting your filters</p>
-                    </div>
-                ) : (
-                    <div>
-                        <table className="w-full text-sm table-fixed">
-                            <colgroup>
-                                <col style={{ width: '30px' }} />
-                                {columns.map((col, ci) => {
-                                    const ft = col.fieldtype;
-                                    if (ft === 'Float') return <col key={ci} style={{ width: '80px' }} />;
-                                    if (ft === 'Int') return <col key={ci} style={{ width: '75px' }} />;
-                                    if (col.fieldname === 'employee') return <col key={ci} style={{ width: '100px' }} />;
-                                    if (col.fieldname === 'employee_name') return <col key={ci} />;
-                                    if (col.fieldname === 'appraisal') return <col key={ci} style={{ width: '140px' }} />;
-                                    return <col key={ci} />;
-                                })}
-                            </colgroup>
-                            <thead>
-                                {/* Header row */}
-                                <tr className="bg-gray-50 border-b">
-                                    <th className="px-2 py-2 text-left text-[12px] font-medium text-gray-500"></th>
-                                    {columns.map((col, ci) => {
-                                        const isNum = col.fieldtype === 'Float' || col.fieldtype === 'Int';
-                                        return (
-                                            <th key={ci} className={`px-2 py-2 text-[12px] font-medium text-gray-500 ${isNum ? 'text-right' : 'text-left'} overflow-hidden text-ellipsis whitespace-nowrap`}>
-                                                {col.label || col.fieldname}
-                                            </th>
-                                        );
-                                    })}
-                                </tr>
-                                {/* Filter input row */}
-                                <tr className="bg-white border-b">
-                                    <td className="px-2 py-1"></td>
-                                    {columns.map((col, ci) => (
-                                        <td key={ci} className="px-2 py-1">
-                                            <input type="text" className="w-full border border-gray-200 rounded px-1.5 py-0.5 text-xs bg-gray-50 focus:outline-none focus:border-blue-400" disabled />
-                                        </td>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.map((row, ri) => (
-                                    <tr key={ri} className="border-b hover:bg-blue-50/30">
-                                        <td className="px-2 py-2 text-gray-400 text-[12px]">{ri + 1}</td>
-                                        {columns.map((col, ci) => {
-                                            const val = row[col.fieldname];
-                                            const isFloat = col.fieldtype === 'Float';
-                                            const isInt = col.fieldtype === 'Int';
-                                            return (
-                                                <td key={ci} className={`px-2 py-2 ${isFloat || isInt ? 'text-right' : 'text-left'} overflow-hidden text-ellipsis whitespace-nowrap`} title={val != null ? String(val) : ''}>
-                                                    {isFloat ? formatScore(val) : (val ?? '')}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                {/* Chart — inside the card, below filters */}
+                {chart && chart.data?.labels?.length > 0 && (
+                    <div className="px-4 py-3 border-b border-gray-100 flex justify-center" style={{ flexShrink: 0 }}>
+                        <div style={{ width: '80%' }}>
+                            <canvas ref={canvasRef} />
+                        </div>
                     </div>
                 )}
-            </div>
 
-            {/* Footer */}
-            {!loading && data.length > 0 && (
-                <div className="mt-3 flex justify-between text-xs text-gray-400">
+                {/* Table area — scroll container */}
+                <div style={{ flex: 1, minHeight: 0, width: 0, minWidth: '100%', position: 'relative' }}>
+                    {loading && (
+                        <div className="absolute inset-0 flex justify-center items-center z-10 bg-white/50">
+                            <div className="w-6 h-6 border-2 border-[#0e62ed] border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    )}
+                    {data.length > 0 ? (
+                        <Table
+                            columns={antdColumns}
+                            dataSource={data}
+                            pagination={false}
+                            size="small"
+                            scroll={{ x: 'max-content', y: 'calc(100vh - 200px)' }}
+                            className="react-erp-table"
+                            rowKey={(record, idx) => idx}
+                        />
+                    ) : (
+                        !loading && (
+                            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#9ca3af', paddingBottom: '48px' }}>
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-3 opacity-90">
+                                    <path d="M6 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-2"></path>
+                                    <rect x="3" y="9" width="12" height="13" rx="2" ry="2"></rect>
+                                    <rect x="5" y="12" width="2" height="2"></rect>
+                                    <line x1="9" y1="13" x2="13" y2="13"></line>
+                                    <rect x="5" y="16" width="2" height="2"></rect>
+                                    <line x1="9" y1="17" x2="13" y2="17"></line>
+                                </svg>
+                                <span className="text-[13px] text-gray-500 font-medium">Nothing to show</span>
+                            </div>
+                        )
+                    )}
+                </div>
+
+                {/* Footer pinned to bottom of card */}
+                <div className="px-3 py-2 border-t border-gray-100 text-[#8D99A6] text-[11px] flex justify-between items-center bg-white" style={{ flexShrink: 0 }}>
                     <span>For comparison, use &gt;5, &lt;10 or =324. For ranges, use 5:10 (for values between 5 &amp; 10).</span>
-                    <span>Execution Time: {execTime || '0.000000'} sec</span>
+                    <span>Execution Time: {execTime || '0.000'} sec</span>
                 </div>
-            )}
+            </div>
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                .react-erp-table .ant-table-thead > tr > th {
+                    background-color: #f7f7f7 !important;
+                    color: #525252 !important;
+                    font-weight: 500 !important;
+                    border-bottom: 2px solid #e5e7eb !important;
+                    padding: 8px 12px !important;
+                    white-space: nowrap !important;
+                }
+                .react-erp-table .ant-table-cell {
+                    padding: 6px 12px !important;
+                    border-bottom: 1px solid #f0f0f0;
+                    overflow: hidden !important;
+                    text-overflow: ellipsis !important;
+                    white-space: nowrap !important;
+                    max-width: 0;
+                    font-size: 12px;
+                    color: #374151;
+                }
+                .react-erp-table .ant-table-tbody > tr:hover > td {
+                    background-color: #f9fafb !important;
+                }
+                .react-erp-table .ant-table-cell-fix-left,
+                .react-erp-table td.ant-table-cell-fix-left {
+                    background: #fff !important;
+                    position: sticky !important;
+                    z-index: 2 !important;
+                }
+                .react-erp-table .ant-table-thead th.ant-table-cell-fix-left {
+                    background: #f7f7f7 !important;
+                    position: sticky !important;
+                    z-index: 3 !important;
+                }
+                .react-erp-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left {
+                    background: #f9fafb !important;
+                }
+                .react-erp-table .ant-table-cell-fix-left-last::after {
+                    box-shadow: inset 10px 0 8px -8px rgba(0,0,0,0.1) !important;
+                    position: absolute !important;
+                    top: 0 !important;
+                    right: -1px !important;
+                    bottom: -1px !important;
+                    width: 20px !important;
+                    content: "" !important;
+                    pointer-events: none !important;
+                }
+                `
+            }} />
         </div>
     );
 }
