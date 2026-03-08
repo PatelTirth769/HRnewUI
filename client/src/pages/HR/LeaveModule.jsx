@@ -49,6 +49,12 @@ export default function LeaveModule() {
                 { label: 'Compensatory Leave Request', path: '/talv/compensatory-leave-request' },
             ],
         },
+        {
+            title: 'Reports',
+            items: [
+                { label: 'Employee Leave Balance', path: '/talv/employee-leave-balance' },
+            ],
+        },
     ];
 
     const sections = isAdmin ? adminSections : employeeSections;

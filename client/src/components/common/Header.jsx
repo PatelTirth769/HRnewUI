@@ -621,7 +621,6 @@ const Header = () => {
         </div>
 
         <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>
-        <Link to="/companies" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Companies</Link>
         <Link to="/settings" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Settings</Link>
         <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Employee Self Service</Link>
         <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Reports</Link>

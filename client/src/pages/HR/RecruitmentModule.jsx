@@ -47,6 +47,7 @@ export default function RecruitmentModule() {
             title: 'Jobs',
             items: [
                 { label: 'Job Opening', path: '/recruitment/job-opening' },
+                { label: 'Employee Referral', path: '/recruitment/employee-referral' },
             ],
         },
     ];

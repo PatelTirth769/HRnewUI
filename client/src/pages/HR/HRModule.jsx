@@ -46,7 +46,6 @@ export default function HRModule() {
             title: 'Key Reports',
             items: [
                 { label: 'Employee Leave Balance', path: '/talv/employee-leave-balance' },
-                { label: 'Recruitment Analytics', path: '/recruitment/recruitment-analytics' },
             ],
         },
     ];
@@ -55,6 +54,7 @@ export default function HRModule() {
         {
             title: 'Setup',
             items: [
+                { label: 'Company', path: '/companies' },
                 { label: 'Department', path: '/master/departments' },
                 { label: 'Designation', path: '/master/designations' },
             ],
@@ -74,11 +74,23 @@ export default function HRModule() {
             ],
         },
         {
+            title: 'Settings',
+            items: [
+                { label: 'HR Settings', path: '/master/hr-settings' },
+            ],
+        },
+        {
             title: 'Attendance',
             items: [
                 { label: 'Attendance', path: '/talv/attendance-dashboard' },
                 { label: 'Attendance Request', path: '/talv/attendance-control' },
                 { label: 'Employee Checkin', path: '/talv/attendance-reports/shift-punch-register' },
+            ],
+        },
+        {
+            title: 'Key Reports',
+            items: [
+                { label: 'Employee Leave Balance', path: '/talv/employee-leave-balance' },
             ],
         },
     ];

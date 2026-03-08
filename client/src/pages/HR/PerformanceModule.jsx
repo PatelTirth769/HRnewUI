@@ -36,6 +36,22 @@ export default function PerformanceModule() {
 
     const employeeSections = [
         {
+            title: 'Master',
+            items: [
+                { label: 'Appraisal Template', path: '/performance/appraisal-template' },
+            ],
+        },
+        {
+            title: 'Appraisal',
+            items: [
+                { label: 'Appraisal', path: '/performance/appraisal' },
+                { label: 'Appraisal Cycle', path: '/performance/appraisal-cycle' },
+                { label: 'Employee Performance Feedback', path: '/performance/employee-performance-feedback' },
+                { label: 'Employee Performance Feedback by HR', path: '/performance/employee-performance-feedback-by-hr' },
+                { label: 'Goal', path: '/performance/goal' },
+            ],
+        },
+        {
             title: 'Energy Points',
             items: [
                 { label: 'Energy Point Log', path: '/performance/energy-point-log' },

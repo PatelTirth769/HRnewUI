@@ -34,7 +34,8 @@ export default function ShiftAttendanceModule() {
         {
             title: 'Shifts',
             items: [
-                { label: 'Shift Request', path: '/talv/attendance-dashboard' },
+                { label: 'Shift Type', path: '/talv/shift-master' },
+                { label: 'Shift Assignment', path: '/talv/shift-planning-upload' },
             ],
         },
         {

@@ -65,13 +65,27 @@ const LoginPage = () => {
           // Fetch actual ERPNext roles for this user
           let isHRAdmin = false;
           try {
-            const rolesRes = await API.get('/api/method/frappe.auth.get_roles');
-            const roles = rolesRes.data?.message || [];
+            // Employees often can't query 'Has Role' or 'User' doctypes (gives 403 Forbidden).
+            // A safer check is to see if we can read the Employee doctype itself.
+            // If the user has HR Manager/User role, they can see ALL employees.
+            // If they are just an employee, they can strictly see their own record.
+            // But we can check if they have HR Admin rights by testing if they can read the 'User' list or by a specific API.
+            // A good trick is to call /api/method/frappe.auth.get_logged_user which gives basic info, 
+            // but to get roles, frappe.client.get_value might work if they have permission to read their own User record.
+
+            const userRes = await API.get(`/api/resource/User/${encodeURIComponent(values.email)}`);
+            const userData = userRes.data?.data;
+            const roles = userData?.roles?.map(r => r.role) || [];
+
+            console.log("PARSED ROLES ARRAY:", roles);
+
             // User is HR Admin if they have any of these roles
             const adminRoles = ['HR Manager', 'HR User', 'System Manager', 'Administrator'];
             isHRAdmin = roles.some(r => adminRoles.includes(r));
+            console.log("IS HR ADMIN EVALUATED TO:", isHRAdmin);
           } catch (roleErr) {
-            console.error('Could not fetch roles, defaulting to employee view:', roleErr);
+            console.error('Could not fetch User doctype. They likely only have Employee role permissions:', roleErr);
+            // If it's a 403 Forbidden reading their own User document, they definitely aren't an admin
             isHRAdmin = false;
           }
 
