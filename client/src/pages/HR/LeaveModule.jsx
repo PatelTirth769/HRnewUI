@@ -24,6 +24,7 @@ export default function LeaveModule() {
             title: 'Application',
             items: [
                 { label: 'Leave Application', path: '/talv/leave-application' },
+                { label: 'Compensatory Leave Request', path: '/talv/compensatory-leave-request' },
             ],
         },
         {

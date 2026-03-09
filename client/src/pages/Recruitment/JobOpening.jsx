@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { useUserRole } from '../../hooks/useUserRole';
 
 export default function JobOpening() {
+    const { isAdmin } = useUserRole();
     const [view, setView] = useState('list');
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -266,9 +268,11 @@ export default function JobOpening() {
                     </div>
                     <div className="flex gap-2">
                         <button className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded border hover:bg-gray-200" onClick={() => setView('list')}>Cancel</button>
-                        <button className="px-5 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50" onClick={handleSave} disabled={saving}>
-                            {saving ? 'Saving...' : 'Save'}
-                        </button>
+                        {isAdmin && (
+                            <button className="px-5 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50" onClick={handleSave} disabled={saving}>
+                                {saving ? 'Saving...' : 'Save'}
+                            </button>
+                        )}
                     </div>
                 </div>
                 <nav className="text-xs text-gray-400 mb-4">
@@ -306,7 +310,7 @@ export default function JobOpening() {
                         </div>
                     )}
 
-                    <div className="p-6">
+                    <fieldset disabled={!isAdmin} className="p-6">
                         {/* ── Section 1: Top Fields (2 columns) ── */}
                         <div className="grid grid-cols-2 gap-x-10 gap-y-5 mb-8">
                             {/* Job Title */}
@@ -497,7 +501,7 @@ export default function JobOpening() {
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </fieldset>
                 </div>
             </div>
         );
@@ -515,9 +519,11 @@ export default function JobOpening() {
                     <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200" onClick={fetchData} disabled={loading}>
                         {loading ? '⟳ Loading...' : '⟳ Refresh'}
                     </button>
-                    <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700" onClick={handleNew}>
-                        + Add Job Opening
-                    </button>
+                    {isAdmin && (
+                        <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700" onClick={handleNew}>
+                            + Add Job Opening
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -575,8 +581,14 @@ export default function JobOpening() {
                                         <td className="px-4 py-3">{row.posted_on || row.posting_date || '-'}</td>
                                         <td className="px-4 py-3">{row.location || '-'}</td>
                                         <td className="px-4 py-3 flex text-center">
-                                            <button className="text-blue-600 hover:underline text-xs mr-3" onClick={() => handleEdit(row)}>Edit</button>
-                                            <button className="text-red-600 hover:underline text-xs" onClick={() => handleDelete(row)}>Delete</button>
+                                            {isAdmin ? (
+                                                <>
+                                                    <button className="text-blue-600 hover:underline text-xs mr-3" onClick={() => handleEdit(row)}>Edit</button>
+                                                    <button className="text-red-600 hover:underline text-xs" onClick={() => handleDelete(row)}>Delete</button>
+                                                </>
+                                            ) : (
+                                                <button className="text-blue-600 hover:underline text-xs mr-3" onClick={() => handleEdit(row)}>View</button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

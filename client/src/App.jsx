@@ -35,6 +35,7 @@ import BankMaster from './pages/BankMaster/BankMaster';
 import AddBank from './pages/BankMaster/AddBank';
 import HRSettings from './pages/Master/HRSettings';
 import EmployeeGrade from './pages/Master/EmployeeGrade';
+import Branch from './pages/Master/Branch';
 import TickerMaster from './pages/TickerMaster/TickerMaster';
 import AddTicker from './pages/TickerMaster/AddTicker';
 import EventPlanner from './pages/EventPlanner/EventPlanner';
@@ -96,6 +97,8 @@ import UploadMonthlyLeaveBalance from './pages/TALV/UploadMonthlyLeaveBalance';
 import EmployeeLeaveBalance from './pages/TALV/EmployeeLeaveBalance';
 import LeaveApplicationList from './pages/TALV/LeaveApplicationList';
 import LeaveApplicationForm from './pages/TALV/LeaveApplicationForm';
+import CompensatoryLeaveRequest from './pages/TALV/CompensatoryLeaveRequest';
+import AttendanceRequest from './pages/TALV/AttendanceRequest';
 
 // ERP Payroll - Masters
 import ERPSalaryComponent from './pages/ERPPayroll/SalaryComponent';
@@ -145,6 +148,13 @@ import JobOpening from './pages/Recruitment/JobOpening';
 import JobApplicant from './pages/Recruitment/JobApplicant';
 import JobOffer from './pages/Recruitment/JobOffer';
 import EmployeeReferral from './pages/Recruitment/EmployeeReferral';
+import InterviewType from './pages/Recruitment/InterviewType';
+import InterviewRound from './pages/Recruitment/InterviewRound';
+import Interview from './pages/Recruitment/Interview';
+import InterviewFeedback from './pages/Recruitment/InterviewFeedback';
+import AppointmentLetterTemplate from './pages/Recruitment/AppointmentLetterTemplate';
+import AppointmentLetter from './pages/Recruitment/AppointmentLetter';
+import RecruitmentAnalytics from './pages/Recruitment/RecruitmentAnalytics';
 import HRModule from './pages/HR/HRModule';
 import RecruitmentModule from './pages/HR/RecruitmentModule';
 import PerformanceModule from './pages/HR/PerformanceModule';
@@ -203,6 +213,7 @@ function App() {
                 <Route path="/bank-master" element={<BankMaster />} />
                 <Route path="/master/hr-settings" element={<HRSettings />} />
                 <Route path="/master/employee-grade" element={<EmployeeGrade />} />
+                <Route path="/master/branch" element={<Branch />} />
                 <Route path="/add-bank" element={<AddBank />} />
                 <Route path="/edit-bank/:id" element={<AddBank />} />
                 <Route path="/policy-upload" element={<PolicyUpload />} />
@@ -281,6 +292,7 @@ function App() {
                 <Route path="/talv/upload-opening-leave-balance" element={<UploadOpeningLeaveBalance />} />
                 <Route path="/talv/mobile-app-linking" element={<MobileAppLinking />} />
                 <Route path="/talv/attendance-control" element={<AttendanceControl />} />
+                <Route path="/talv/attendance-request" element={<AttendanceRequest />} />
                 <Route path="/talv/shift-planning-upload" element={<ShiftPlanningUpload />} />
                 <Route path="/talv/shift-master" element={<ShiftMaster />} />
                 <Route path="/talv/shift-assignment" element={<NeedsPage title="Shift Assignment" />} />
@@ -308,6 +320,7 @@ function App() {
                 <Route path="/talv/leave-application/edit/:id" element={<LeaveApplicationForm />} />
                 <Route path="/talv/leave-application/new" element={<LeaveApplicationForm />} />
                 <Route path="/talv/leave-application/edit/:id" element={<LeaveApplicationForm />} />
+                <Route path="/talv/compensatory-leave-request" element={<CompensatoryLeaveRequest />} />
                 <Route path="/emp-master-upload" element={<EmpMasterUpload />} />
 
                 {/* Performance Routes */}
@@ -338,6 +351,13 @@ function App() {
                 <Route path="/recruitment/job-applicant" element={<JobApplicant />} />
                 <Route path="/recruitment/job-offer" element={<JobOffer />} />
                 <Route path="/recruitment/employee-referral" element={<EmployeeReferral />} />
+                <Route path="/recruitment/interview-type" element={<InterviewType />} />
+                <Route path="/recruitment/interview-round" element={<InterviewRound />} />
+                <Route path="/recruitment/interview" element={<Interview />} />
+                <Route path="/recruitment/interview-feedback" element={<InterviewFeedback />} />
+                <Route path="/recruitment/appointment-letter-template" element={<AppointmentLetterTemplate />} />
+                <Route path="/recruitment/appointment-letter" element={<AppointmentLetter />} />
+                <Route path="/recruitment/recruitment-analytics" element={<RecruitmentAnalytics />} />
                 <Route path="/hr" element={<HRModule />} />
               </Route> {/* End of Protected Routes */}
 

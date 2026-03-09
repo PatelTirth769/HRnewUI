@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { useUserRole } from '../../hooks/useUserRole';
 
 const RESOURCE = 'Employee Referral';
 const API_BASE = `/api/resource/${RESOURCE}`;
 
 export default function EmployeeReferral() {
+    const { isAdmin } = useUserRole();
     const [view, setView] = useState('list');
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -253,7 +255,7 @@ export default function EmployeeReferral() {
                         <button className="p-2 border border-blue-400 bg-white text-blue-600 rounded-md hover:bg-blue-50 transition" onClick={() => setView('list')} title="Go Back">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                         </button>
-                        {editingRecord && (
+                        {editingRecord && isAdmin && (
                             <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition shadow-sm" onClick={() => handleDelete(editingRecord)}>Delete</button>
                         )}
                         <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving}>
@@ -285,7 +287,7 @@ export default function EmployeeReferral() {
                             <div>
                                 <label className="block text-[13px] text-gray-500 mb-1">Status <span className="text-red-400">*</span></label>
                                 <select className="w-full border border-gray-200 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400"
-                                    value={formData.status} onChange={e => updateForm('status', e.target.value)}>
+                                    value={formData.status} onChange={e => updateForm('status', e.target.value)} disabled={!isAdmin}>
                                     <option value="Pending">Pending</option>
                                     <option value="Accepted">Accepted</option>
                                     <option value="Rejected">Rejected</option>
@@ -491,7 +493,9 @@ export default function EmployeeReferral() {
                                         <td className="px-4 py-3 text-gray-500">{formatRelativeTime(row.modified)}</td>
                                         <td className="px-4 py-3">
                                             <button className="text-blue-600 hover:underline text-xs mr-3" onClick={() => handleEdit(row)}>Edit</button>
-                                            <button className="text-red-600 hover:underline text-xs" onClick={() => handleDelete(row)}>Delete</button>
+                                            {isAdmin && (
+                                                <button className="text-red-600 hover:underline text-xs" onClick={() => handleDelete(row)}>Delete</button>
+                                            )}
                                         </td>
                                     </tr>
                                 );

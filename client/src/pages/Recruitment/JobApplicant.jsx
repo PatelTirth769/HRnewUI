@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import axios from 'axios';
 
 export default function JobApplicant() {
     const [view, setView] = useState('list');
@@ -11,6 +12,11 @@ export default function JobApplicant() {
     const [searchId, setSearchId] = useState('');
     const [connectionsOpen, setConnectionsOpen] = useState(true);
     const [interviewSummaryOpen, setInterviewSummaryOpen] = useState(true);
+
+    // Resume parsing state
+    const [parsing, setParsing] = useState(false);
+    const [parsedData, setParsedData] = useState(null);
+    const [parsedSectionOpen, setParsedSectionOpen] = useState(true);
 
     // Linked data (fetched when editing)
     const [interviews, setInterviews] = useState([]);
@@ -146,7 +152,81 @@ export default function JobApplicant() {
         setLinkedEmployees([]);
         setLinkedOnboarding([]);
         setLinkedAppointmentLetters([]);
+        setParsedData(null);
         setView('form');
+    };
+
+    // ─── RESUME PARSE ─────────────────────────────────────────────
+    const handleResumeUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type
+        const allowedTypes = ['.pdf', '.doc', '.docx', '.txt'];
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (!allowedTypes.includes(ext)) {
+            notification.error({ message: 'Only PDF, DOC, DOCX and TXT files are allowed' });
+            return;
+        }
+
+        setParsing(true);
+        setParsedData(null);
+        updateForm('resume_attachment', file.name);
+
+        try {
+            const formDataUpload = new FormData();
+            formDataUpload.append('file', file);
+
+            const res = await axios.post('/local-api/resume-parser', formDataUpload, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+
+            if (res.data?.success && res.data?.data) {
+                const parsed = res.data.data;
+                setParsedData(parsed);
+
+                // Auto-fill form fields from parsed data
+                if (parsed.name && !formData.applicant_name) {
+                    updateForm('applicant_name', parsed.name.trim());
+                }
+                if (parsed.email && !formData.email_id) {
+                    updateForm('email_id', parsed.email.trim());
+                }
+                if (parsed.phone && !formData.phone_number) {
+                    updateForm('phone_number', parsed.phone.trim());
+                }
+
+                // Build cover letter from summary/objective
+                const summaryParts = [];
+                if (parsed.summary) summaryParts.push(parsed.summary.trim());
+                if (parsed.objective) summaryParts.push(parsed.objective.trim());
+                if (summaryParts.length > 0 && !formData.cover_letter) {
+                    updateForm('cover_letter', summaryParts.join('\n\n'));
+                }
+
+                // Build notes from skills, education, experience
+                const notesParts = [];
+                if (parsed.skills) notesParts.push('SKILLS:\n' + parsed.skills.trim());
+                if (parsed.education) notesParts.push('EDUCATION:\n' + parsed.education.trim());
+                if (parsed.experience) notesParts.push('EXPERIENCE:\n' + parsed.experience.trim());
+                if (parsed.projects) notesParts.push('PROJECTS:\n' + parsed.projects.trim());
+                if (parsed.certification) notesParts.push('CERTIFICATIONS:\n' + parsed.certification.trim());
+                if (notesParts.length > 0 && !formData.notes) {
+                    updateForm('notes', notesParts.join('\n\n'));
+                }
+
+                notification.success({ message: 'Resume parsed successfully! Fields auto-filled.' });
+            } else {
+                notification.warning({ message: 'Resume uploaded but no data could be extracted' });
+            }
+        } catch (error) {
+            console.error('Resume parse error:', error);
+            notification.error({ message: 'Failed to parse resume. Make sure the parser server is running on port 3636.' });
+        } finally {
+            setParsing(false);
+            // Reset file input
+            e.target.value = '';
+        }
     };
 
     const handleEdit = async (record) => {
@@ -177,10 +257,15 @@ export default function JobApplicant() {
                 cover_letter: formData.cover_letter || null,
                 resume_link: formData.resume_link || null,
                 currency: formData.currency || 'INR',
-                lower_range: parseFloat(formData.lower_range) || 0,
-                upper_range: parseFloat(formData.upper_range) || 0,
-                notes: formData.notes || null
+                notes: formData.notes ? formData.notes.substring(0, 140) : null
             };
+
+            if (formData.lower_range) {
+                payload.lower_range = parseFloat(formData.lower_range);
+            }
+            if (formData.upper_range) {
+                payload.upper_range = parseFloat(formData.upper_range);
+            }
 
             if (editingRecord) {
                 await API.put(`/api/resource/Job Applicant/${encodeURIComponent(editingRecord.name)}`, payload);
@@ -192,8 +277,21 @@ export default function JobApplicant() {
             }
             setView('list');
         } catch (err) {
-            console.error('Save failed:', err);
-            notification.error({ message: `Save failed: ${err.response?.data?.exc || err.message}` });
+            console.error('Save failed:', err.response?.data || err);
+            let errMsg = err.response?.data?._server_messages || err.response?.data?.message || err.response?.data?.exc || err.message;
+            if (typeof errMsg === 'string' && errMsg.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(errMsg);
+                    errMsg = parsed.map(m => {
+                        try { return JSON.parse(m).message; } catch { return m; }
+                    }).join('\n');
+                } catch { /* */ }
+            }
+            notification.error({
+                message: 'Save Failed',
+                description: typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg),
+                duration: 8
+            });
         } finally { setSaving(false); }
     };
 
@@ -508,9 +606,84 @@ export default function JobApplicant() {
                             </div>
                         </div>
 
-                        {/* ── Section 3: Resume ── */}
+                        {/* ── Section 3: Resume Upload & Parse ── */}
                         <div className="border-t border-gray-200 pt-5 mb-6">
                             <h3 className="text-sm font-semibold text-gray-800 mb-4">Resume</h3>
+
+                            {/* Upload & Parse Button */}
+                            <div className="mb-5">
+                                <div className="flex items-center gap-4">
+                                    <label className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer
+                                        ${parsing
+                                            ? 'bg-gray-100 text-gray-400 cursor-wait'
+                                            : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow-sm hover:shadow-md'}`}>
+                                        {parsing ? (
+                                            <>
+                                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Parsing Resume...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                    <polyline points="17 8 12 3 7 8" />
+                                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                                </svg>
+                                                Upload & Parse Resume
+                                            </>
+                                        )}
+                                        <input type="file" className="hidden" accept=".pdf,.doc,.docx,.txt"
+                                            onChange={handleResumeUpload} disabled={parsing} />
+                                    </label>
+
+                                    {formData.resume_attachment && (
+                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-600">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                                <polyline points="14 2 14 8 20 8" />
+                                            </svg>
+                                            <span className="text-sm text-green-700 font-medium">{formData.resume_attachment}</span>
+                                            <button type="button" className="text-red-400 hover:text-red-600 text-xs ml-1"
+                                                onClick={() => { updateForm('resume_attachment', ''); setParsedData(null); }}>✕</button>
+                                        </div>
+                                    )}
+                                </div>
+                                <p className="text-xs text-gray-400 mt-2">Supported formats: PDF, DOC, DOCX, TXT (max 10MB). File will be parsed to auto-fill fields.</p>
+                            </div>
+
+                            {/* Parsed Data Preview */}
+                            {parsedData && Object.keys(parsedData).length > 0 && (
+                                <div className="mb-5">
+                                    <button
+                                        className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3 hover:text-gray-600"
+                                        onClick={() => setParsedSectionOpen(!parsedSectionOpen)}>
+                                        <span>📄 Parsed Resume Data</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${parsedSectionOpen ? '' : '-rotate-90'}`}>
+                                            <polyline points="6 9 12 15 18 9" />
+                                        </svg>
+                                    </button>
+                                    {parsedSectionOpen && (
+                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4 max-h-[400px] overflow-y-auto">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {Object.entries(parsedData).map(([key, value]) => (
+                                                    <div key={key} className={`bg-white rounded-lg p-3 border border-blue-100 shadow-sm ${typeof value === 'string' && value.length > 100 ? 'md:col-span-2' : ''}`}>
+                                                        <div className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1">{key.replace(/_/g, ' ')}</div>
+                                                        <div className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">
+                                                            {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value).substring(0, 500)}
+                                                            {typeof value === 'string' && value.length > 500 && <span className="text-gray-400">... (truncated)</span>}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Cover Letter */}
                             <div className="mb-4">
                                 <label className="block text-sm text-gray-600 mb-1">Cover Letter</label>
                                 <textarea
@@ -522,24 +695,6 @@ export default function JobApplicant() {
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-x-10 gap-y-5">
-                                <div>
-                                    <label className="block text-sm text-gray-600 mb-1">Resume Attachment</label>
-                                    <div className="flex items-center gap-3">
-                                        <label className="px-4 py-1.5 bg-white border border-gray-300 rounded text-sm text-gray-600 cursor-pointer hover:bg-gray-50 transition-colors">
-                                            ATTACH
-                                            <input type="file" className="hidden"
-                                                onChange={e => {
-                                                    if (e.target.files?.[0]) {
-                                                        updateForm('resume_attachment', e.target.files[0].name);
-                                                    }
-                                                }} />
-                                        </label>
-                                        {formData.resume_attachment && (
-                                            <span className="text-sm text-gray-500">{formData.resume_attachment}</span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div></div>
                                 <div>
                                     <label className="block text-sm text-gray-600 mb-1">Resume Link</label>
                                     <input type="text"
@@ -645,7 +800,6 @@ export default function JobApplicant() {
                             <thead className="bg-gray-50 border-b">
                                 <tr>
                                     <th className="text-left px-4 py-3 font-medium text-gray-600 w-10">#</th>
-                                    <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
                                     <th className="text-left px-4 py-3 font-medium text-gray-600">Applicant Name</th>
                                     <th className="text-left px-4 py-3 font-medium text-gray-600">Email</th>
                                     <th className="text-left px-4 py-3 font-medium text-gray-600">Job Opening</th>
@@ -658,8 +812,7 @@ export default function JobApplicant() {
                                 {filtered.map((row, i) => (
                                     <tr key={row.name} className="border-b hover:bg-gray-50">
                                         <td className="px-4 py-3 text-gray-400">{i + 1}</td>
-                                        <td className="px-4 py-3 text-blue-600 cursor-pointer font-medium" onClick={() => handleEdit(row)}>{row.name}</td>
-                                        <td className="px-4 py-3">{row.applicant_name || '-'}</td>
+                                        <td className="px-4 py-3 text-blue-600 cursor-pointer font-medium" onClick={() => handleEdit(row)}>{row.applicant_name || row.name || '-'}</td>
                                         <td className="px-4 py-3">{row.email_id || '-'}</td>
                                         <td className="px-4 py-3">{row.job_title || '-'}</td>
                                         <td className="px-4 py-3">{row.designation || '-'}</td>

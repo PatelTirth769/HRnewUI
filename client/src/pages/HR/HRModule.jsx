@@ -14,49 +14,7 @@ export default function HRModule() {
                 { label: 'Company', path: '/companies' },
                 { label: 'Department', path: '/master/departments' },
                 { label: 'Designation', path: '/master/designations' },
-            ],
-        },
-        {
-            title: 'Employee',
-            items: [
-                { label: 'Employee', path: '/employee-master' },
-                { label: 'Employee Grade', path: '/master/employee-grade' },
-            ],
-        },
-        {
-            title: 'Leaves',
-            items: [
-                { label: 'Leave Application', path: '/talv/leave-application' },
-            ],
-        },
-        {
-            title: 'Settings',
-            items: [
-                { label: 'HR Settings', path: '/master/hr-settings' },
-            ],
-        },
-        {
-            title: 'Attendance',
-            items: [
-                { label: 'Attendance', path: '/talv/attendance-dashboard' },
-                { label: 'Employee Checkin', path: '/talv/attendance-reports/shift-punch-register' },
-            ],
-        },
-        {
-            title: 'Key Reports',
-            items: [
-                { label: 'Employee Leave Balance', path: '/talv/employee-leave-balance' },
-            ],
-        },
-    ];
-
-    const employeeSections = [
-        {
-            title: 'Setup',
-            items: [
-                { label: 'Company', path: '/companies' },
-                { label: 'Department', path: '/master/departments' },
-                { label: 'Designation', path: '/master/designations' },
+                { label: 'Branch', path: '/master/branch' },
             ],
         },
         {
@@ -83,7 +41,53 @@ export default function HRModule() {
             title: 'Attendance',
             items: [
                 { label: 'Attendance', path: '/talv/attendance-dashboard' },
-                { label: 'Attendance Request', path: '/talv/attendance-control' },
+                { label: 'Attendance Request', path: '/talv/attendance-request' },
+                { label: 'Employee Checkin', path: '/talv/attendance-reports/shift-punch-register' },
+            ],
+        },
+        {
+            title: 'Key Reports',
+            items: [
+                { label: 'Employee Leave Balance', path: '/talv/employee-leave-balance' },
+            ],
+        },
+    ];
+
+    const employeeSections = [
+        {
+            title: 'Setup',
+            items: [
+                { label: 'Company', path: '/companies' },
+                { label: 'Department', path: '/master/departments' },
+                { label: 'Designation', path: '/master/designations' },
+                { label: 'Branch', path: '/master/branch' },
+            ],
+        },
+        {
+            title: 'Employee',
+            items: [
+                { label: 'Employee', path: '/employee-master' },
+                { label: 'Employee Grade', path: '/master/employee-grade' },
+            ],
+        },
+        {
+            title: 'Leaves',
+            items: [
+                { label: 'Leave Application', path: '/talv/leave-application' },
+                { label: 'Compensatory Leave Request', path: '/talv/compensatory-leave-request' },
+            ],
+        },
+        {
+            title: 'Settings',
+            items: [
+                { label: 'HR Settings', path: '/master/hr-settings' },
+            ],
+        },
+        {
+            title: 'Attendance',
+            items: [
+                { label: 'Attendance', path: '/talv/attendance-dashboard' },
+                { label: 'Attendance Request', path: '/talv/attendance-request' },
                 { label: 'Employee Checkin', path: '/talv/attendance-reports/shift-punch-register' },
             ],
         },

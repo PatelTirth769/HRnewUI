@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/images/logo.png';
+import { useUserRole } from '../../hooks/useUserRole';
 
 const Header = () => {
   const navigate = useNavigate();
+  const { isAdmin } = useUserRole();
 
 
   const [hoveredMenu, setHoveredMenu] = useState(null);
@@ -78,7 +80,8 @@ const Header = () => {
         'Country Master',
         'Bank Master',
         'HR Settings',
-        'Employee Grade'
+        'Employee Grade',
+        'Branch'
       ],
       // Minimal Needs submenu
       'Needs': [
@@ -160,7 +163,8 @@ const Header = () => {
       'Shift Planning Upload': null,
       'Shift Master': null,
       'HR View Leaves & Outdoor': null,
-      'Employee Leave Balance': null
+      'Employee Leave Balance': null,
+      'Leave Application': null
     }
   };
 
@@ -266,6 +270,8 @@ const Header = () => {
                               navigate('/master/hr-settings');
                             } else if (subItem === 'Employee Grade') {
                               navigate('/master/employee-grade');
+                            } else if (subItem === 'Branch') {
+                              navigate('/master/branch');
                             } else if (subItem === 'Ticker Message') {
                               navigate('/ticker-master');
                             } else if (subItem === 'Position') {
@@ -383,6 +389,7 @@ const Header = () => {
                       else if (itemName === 'Shift Master') navigate('/talv/shift-master');
                       else if (itemName === 'HR View Leaves & Outdoor') navigate('/talv/hr-view-leaves-outdoor');
                       else if (itemName === 'Employee Leave Balance') navigate('/talv/employee-leave-balance');
+                      else if (itemName === 'Leave Application') navigate('/talv/leave-application');
                     }}
                   >
                     {itemName}
@@ -451,87 +458,50 @@ const Header = () => {
           )}
         </div>
 
-        {/* Payroll Menu */}
-        <div className="relative">
-          <div
-            className="cursor-pointer hover:text-blue-600"
-            onMouseEnter={() => setHoveredPayroll(true)}
-            onMouseLeave={() => setHoveredPayroll(false)}
-          >
-            Payroll ▼
-          </div>
-          {hoveredPayroll && (
-            <div
-              className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
-              onMouseEnter={() => setHoveredPayroll(true)}
-              onMouseLeave={() => setHoveredPayroll(false)}
-            >
-              {payrollCountries.map((c) => (
-                <div key={c.key} className="relative"
-                  onMouseEnter={() => setHoveredSubMenu(`payroll-${c.key}`)}
-                  onMouseLeave={() => setHoveredSubMenu(null)}
-                >
-                  <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
-                    {c.label}
-                    <span className="text-xs text-gray-400">▶</span>
-                  </div>
-                  <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `payroll-${c.key}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
-                    {payrollMenus.map((m) => (
-                      <div
-                        key={m.key}
-                        className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
-                        onClick={() => navigate(`/payroll/${c.key}/${m.key}`)}
-                      >
-                        {m.label}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+
 
         {/* ERP Payroll Menu */}
-        <div className="relative">
-          <div
-            className="cursor-pointer hover:text-blue-600"
-            onMouseEnter={() => setHoveredERPPayroll(true)}
-            onMouseLeave={() => setHoveredERPPayroll(false)}
-          >
-            ERP Payroll ▼
-          </div>
-          {hoveredERPPayroll && (
+        {isAdmin && (
+          <div className="relative">
             <div
-              className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
+              className="cursor-pointer hover:text-blue-600"
               onMouseEnter={() => setHoveredERPPayroll(true)}
               onMouseLeave={() => setHoveredERPPayroll(false)}
             >
-              {Object.entries(erpPayrollMenus).map(([groupName, items]) => (
-                <div key={groupName} className="relative"
-                  onMouseEnter={() => setHoveredSubMenu(`erp-${groupName}`)}
-                  onMouseLeave={() => setHoveredSubMenu(null)}
-                >
-                  <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
-                    {groupName}
-                    <span className="text-xs text-gray-400">▶</span>
-                  </div>
-                  <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-64 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `erp-${groupName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
-                    {items.map((item) => (
-                      <div
-                        key={item.path}
-                        className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
-                        onClick={() => navigate(item.path)}
-                      >
-                        {item.label}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              ERP Payroll ▼
             </div>
-          )}
-        </div>
+            {hoveredERPPayroll && (
+              <div
+                className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
+                onMouseEnter={() => setHoveredERPPayroll(true)}
+                onMouseLeave={() => setHoveredERPPayroll(false)}
+              >
+                {Object.entries(erpPayrollMenus).map(([groupName, items]) => (
+                  <div key={groupName} className="relative"
+                    onMouseEnter={() => setHoveredSubMenu(`erp-${groupName}`)}
+                    onMouseLeave={() => setHoveredSubMenu(null)}
+                  >
+                    <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
+                      {groupName}
+                      <span className="text-xs text-gray-400">▶</span>
+                    </div>
+                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-64 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `erp-${groupName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+                      {items.map((item) => (
+                        <div
+                          key={item.path}
+                          className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
+                          onClick={() => navigate(item.path)}
+                        >
+                          {item.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* HR Menu */}
         <div className="relative">

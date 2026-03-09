@@ -8,6 +8,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
+      '/local-api': {
+        target: 'http://localhost:3636',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/local-api/, ''),
+      },
       '/api': {
         target: 'https://preeshe.hrhovercraft.in',
         changeOrigin: true,

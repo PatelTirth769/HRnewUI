@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+ser/node_modules/
+server/node_modules/
+client/node_modules/
+
+# Temp files
+ser/resume-parser/temp/
+
+# Environment
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
