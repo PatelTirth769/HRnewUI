@@ -2,12 +2,10 @@
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/images/logo.png';
 import { useUserRole } from '../../hooks/useUserRole';
-import useNavigation from '../../hooks/useNavigation';
 
 const Header = ({ onModuleClick }) => {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
-  const { navData, loading: navLoading } = useNavigation();
 
   const [theme, setTheme] = useState(() => localStorage.getItem('ui-theme') || 'corporate');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
