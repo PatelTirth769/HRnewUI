@@ -23,6 +23,19 @@ export default function ShiftAttendanceModule() {
             ],
         },
         {
+            title: 'Attendance Report',
+            items: [
+                { label: 'Shift Punch Register', path: '/talv/attendance-reports/shift-punch-register' },
+                { label: 'Attendance Register', path: '/talv/attendance-reports/attendance-register' },
+                { label: 'Over Time/Comp-Off', path: '/talv/attendance-reports/over-time-comp-off' },
+                { label: 'Shift Plan Register', path: '/talv/attendance-reports/shift-plan-register' },
+                { label: 'Shift Deviation Register', path: '/talv/attendance-reports/shift-deviation-register' },
+                { label: 'Absconding Report', path: '/talv/attendance-reports/absconding-report' },
+                { label: 'OT Summary', path: '/talv/attendance-reports/ot-summary' },
+                { label: 'Headcount/Occupancy Report', path: '/talv/attendance-reports/headcount-occupancy-report' },
+            ],
+        },
+        {
             title: 'Reports',
             items: [
                 { label: 'Monthly Attendance Sheet', path: '/talv/attendance-reports/attendance-register' },
@@ -44,6 +57,13 @@ export default function ShiftAttendanceModule() {
                 { label: 'Attendance', path: '/talv/attendance-dashboard' },
                 { label: 'Attendance Request', path: '/talv/attendance-control' },
                 { label: 'Employee Checkin', path: '/talv/attendance-reports/shift-punch-register' },
+            ],
+        },
+        {
+            title: 'Attendance Report',
+            items: [
+                { label: 'Shift Attendance', path: '/talv/attendance-reports/shift-punch-register' },
+                { label: 'Project Profitability', path: '/talv/attendance-reports/headcount-occupancy-report' },
             ],
         },
         {

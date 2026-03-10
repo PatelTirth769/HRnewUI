@@ -42,6 +42,7 @@ export default function HRModule() {
             items: [
                 { label: 'Attendance', path: '/talv/attendance-dashboard' },
                 { label: 'Attendance Request', path: '/talv/attendance-request' },
+                { label: 'Attendance Control', path: '/talv/attendance-control' },
                 { label: 'Employee Checkin', path: '/talv/attendance-reports/shift-punch-register' },
             ],
         },
@@ -88,6 +89,7 @@ export default function HRModule() {
             items: [
                 { label: 'Attendance', path: '/talv/attendance-dashboard' },
                 { label: 'Attendance Request', path: '/talv/attendance-request' },
+                { label: 'Attendance Control', path: '/talv/attendance-control' },
                 { label: 'Employee Checkin', path: '/talv/attendance-reports/shift-punch-register' },
             ],
         },

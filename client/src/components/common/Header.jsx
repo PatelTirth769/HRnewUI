@@ -3,19 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/images/logo.png';
 import { useUserRole } from '../../hooks/useUserRole';
 
-const Header = () => {
+const Header = ({ onModuleClick }) => {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
 
 
-  const [hoveredMenu, setHoveredMenu] = useState(null);
-  const [hoveredELC, setHoveredELC] = useState(false);
-  const [hoveredTALV, setHoveredTALV] = useState(false);
-  const [hoveredPayroll, setHoveredPayroll] = useState(false);
-  const [hoveredERPPayroll, setHoveredERPPayroll] = useState(false);
-  const [hoveredPerformance, setHoveredPerformance] = useState(false);
-  const [hoveredHR, setHoveredHR] = useState(false);
-  const [hoveredSubMenu, setHoveredSubMenu] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('ui-theme') || 'corporate');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const themes = ['corporate', 'minimal', 'warm'];
@@ -27,145 +19,9 @@ const Header = () => {
     localStorage.setItem('ui-theme', theme);
   }, [theme]);
 
-  const erpPayrollMenus = {
-    'Masters': [
-      { label: 'Salary Component', path: '/erp-payroll/salary-component' },
-      { label: 'Salary Structure', path: '/erp-payroll/salary-structure' },
-      { label: 'Income Tax Slab', path: '/erp-payroll/income-tax-slab' },
-      { label: 'Payroll Period', path: '/erp-payroll/payroll-period' },
-    ],
-    'Payroll': [
-      { label: 'Salary Structure Assignment', path: '/erp-payroll/salary-structure-assignment' },
-      { label: 'Bulk Salary Structure Assignment', path: '/erp-payroll/bulk-salary-structure-assignment' },
-      { label: 'Salary Slip', path: '/erp-payroll/salary-slip' },
-      { label: 'Payroll Entry', path: '/erp-payroll/payroll-entry' },
-      { label: 'Salary Withholding', path: '/erp-payroll/salary-withholding' },
-    ],
-    'Incentives': [
-      { label: 'Additional Salary', path: '/erp-payroll/additional-salary' },
-      { label: 'Employee Incentive', path: '/erp-payroll/employee-incentive' },
-      { label: 'Retention Bonus', path: '/erp-payroll/retention-bonus' },
-    ],
-    'Tax & Benefits': [
-      { label: 'Tax Exemption Declaration', path: '/erp-payroll/tax-exemption-declaration' },
-      { label: 'Tax Exemption Proof', path: '/erp-payroll/tax-exemption-proof' },
-      { label: 'Tax Exemption Categories', path: '/erp-payroll/tax-exemption-categories' },
-      { label: 'Benefit Application', path: '/erp-payroll/benefit-application' },
-      { label: 'Benefit Claim', path: '/erp-payroll/benefit-claim' },
-    ],
-    'Payroll Reports': [
-      { label: 'Salary Register', path: '/erp-payroll/reports/salary-register' },
-      { label: 'Salary Payments by Mode', path: '/erp-payroll/reports/salary-payments-mode' },
-      { label: 'Salary Payments via ECS', path: '/erp-payroll/reports/salary-payments-ecs' },
-      { label: 'Income Tax Computation', path: '/erp-payroll/reports/income-tax-computation' },
-    ],
-    'Deduction Reports': [
-      { label: 'PF Deductions', path: '/erp-payroll/reports/pf-deductions' },
-      { label: 'PT Deductions', path: '/erp-payroll/reports/pt-deductions' },
-      { label: 'Income Tax Deductions', path: '/erp-payroll/reports/income-tax-deductions' },
-    ],
-  };
+
 
   const menuItems = {
-    Master: {
-      'Org Set Up': [
-        'Company',
-        'Department',
-        'Designation',
-        'Holiday Master',
-        'Entity Master',
-        'Qualification Master',
-        'City Master',
-        'State Master',
-        'Country Master',
-        'Bank Master',
-        'HR Settings',
-        'Employee Grade',
-        'Branch'
-      ],
-      // Minimal Needs submenu
-      'Needs': [
-        'Position',
-        'Vendor',
-        'CV Status',
-        'Miscellaneous',
-        'Manpower Budget',
-        'Talent Register',
-        'Manage CV',
-        'Search CV',
-        'TR Tracker',
-        'Upload Candidate Master',
-        'Talent Acquisition',
-        'Talent Acquisition Approval',
-        'Talent Acquisition Manager Approval',
-        'HR View Talent Acquisitions'
-      ],
-      'Ticker Message': null,
-      'Event Planner': null,
-      'Policy Upload': null,
-      'Employee Master': null,
-      'Employee Report View': null,
-      'Emp Master Upload': null,
-      'Upload Emp Master Update': null,
-      'Reporting/Finance Manager Mapping': null,
-      'Upload Reporting/Finance Manager Mapping': null,
-      'View Emp Master Changes': null,
-      'User Master': null,
-      'Org Structure': null,
-      'Export Docs': null,
-      'Work Order Master': null,
-      'Bulk Emp Docs upload': null
-    },
-    'ELC & Letters': {
-      'Letter Printing': [
-        'Offer Letter',
-        'Appointment Letter',
-        'Confirmation Letter',
-        'Address Proof Letter',
-        'Appraisal Letter',
-        'Salary Certificate',
-        'Transfer Letter',
-        'Miscellaneous Letter'
-      ],
-      'Process Master': null,
-      'Employee Process Master': null,
-      'Exit Notes/Remarks/Warnings': null,
-      'Send Mail': null,
-      'Letter Designer': null,
-      'Letters Audit Trail': null
-    },
-    'TA & LV': {
-      'Capture Attendance': [
-        'Biometric Upload',
-        'Import Attendance',
-        'Import In Out Time',
-        'Client Emp Import Attendance'
-      ],
-      'Attendance Reports': [
-        'Shift Punch Register',
-        'Attendance Register',
-        'Client Emp Attendance Register',
-        'Over Time/Comp-Off',
-        'Shift Plan Register',
-        'Shift Deviation Register',
-        'Absconding Report',
-        'OT Summary',
-        'Headcount/Occupancy Report'
-      ],
-
-      'Attendance Dashboard': null,
-      'Attendance Policy': null,
-      'Leave Policy Config': null,
-      'Employee Leave Master': null,
-      'Upload Opening Leave Balance': null,
-      'Mobile App Linking': null,
-      'Attendance Control': null,
-      'Shift Planning Upload': null,
-      'Shift Master': null,
-      'HR View Leaves & Outdoor': null,
-      'Employee Leave Balance': null,
-      'Leave Application': null
-    }
   };
 
   const payrollCountries = [
@@ -192,410 +48,77 @@ const Header = () => {
         Dash Board
       </Link>
       <div className="flex items-center space-x-4 text-sm text-gray-700">
-        {/* Master Menu with Hover */}
-        <div className="relative">
+        {/* Master Menu */}
+        {isAdmin && (
           <div
             className="cursor-pointer hover:text-blue-600"
-            onMouseEnter={() => setHoveredMenu('Master')}
-            onMouseLeave={() => setHoveredMenu(null)}
+            onClick={() => onModuleClick('master')}
           >
-            Master ▼
+            Master
           </div>
-          {hoveredMenu === 'Master' && (
-            <div
-              className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
-              onMouseEnter={() => setHoveredMenu('Master')}
-              onMouseLeave={() => setHoveredMenu(null)}
-            >
-              {Object.entries(menuItems.Master).map(([itemName, subItems]) => (
-                <div key={itemName} className="relative"
-                  onMouseEnter={() => setHoveredSubMenu(`master-${itemName}`)}
-                  onMouseLeave={() => setHoveredSubMenu(null)}
-                >
-                  <div
-                    className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
-                    onClick={() => {
-                      if (itemName === 'Ticker Message') {
-                        navigate('/ticker-master');
-                      } else if (itemName === 'Event Planner') {
-                        navigate('/event-planner');
-                      } else if (itemName === 'Policy Upload') {
-                        navigate('/policy-upload');
-                      } else if (itemName === 'Employee Master') {
-                        navigate('/employee-master');
-                      } else if (itemName === 'Employee Report View') {
-                        navigate('/employee-master/report-view');
-                      } else if (itemName === 'Upload Emp Master Update') {
-                        navigate('/upload-emp-master-update');
-                      } else if (itemName === 'Upload ELC Master') {
-                        navigate('/upload-elc-master');
-                      } else if (itemName === 'Emp Master Upload') {
-                        navigate('/emp-master-upload');
-                      } else if (itemName === 'Reporting/Finance Manager Mapping') {
-                        navigate('/reporting-finance-manager-mapping');
-                      }
-                    }}
-                  >
-                    {itemName}
-                    {subItems && <span className="text-xs text-gray-400">▶</span>}
-                  </div>
-                  {subItems && (
-                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `master-${itemName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
-                      {subItems.map((subItem, subIndex) => (
-                        <div
-                          key={subIndex}
-                          className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
-                          onClick={() => {
-                            if (subItem === 'Company') {
-                              navigate('/companies');
-                            } else if (subItem === 'Department') {
-                              navigate('/master/departments');
-                            } else if (subItem === 'Designation') {
-                              navigate('/master/designations');
-                            } else if (subItem === 'Holiday Master') {
-                              navigate('/master/holiday-master');
-                            } else if (subItem === 'Entity Master') {
-                              navigate('/master/entity-master');
-                            } else if (subItem === 'Qualification Master') {
-                              navigate('/master/qualification-master');
-                            } else if (subItem === 'City Master') {
-                              navigate('/city-master');
-                            } else if (subItem === 'State Master') {
-                              navigate('/master/state-master');
-                            } else if (subItem === 'Country Master') {
-                              navigate('/country-master');
-                            } else if (subItem === 'Bank Master') {
-                              navigate('/bank-master');
-                            } else if (subItem === 'HR Settings') {
-                              navigate('/master/hr-settings');
-                            } else if (subItem === 'Employee Grade') {
-                              navigate('/master/employee-grade');
-                            } else if (subItem === 'Branch') {
-                              navigate('/master/branch');
-                            } else if (subItem === 'Ticker Message') {
-                              navigate('/ticker-master');
-                            } else if (subItem === 'Position') {
-                              navigate('/needs/position');
-                            } else if (subItem === 'Vendor') {
-                              navigate('/needs/vendor');
-                            } else if (subItem === 'CV Status') {
-                              navigate('/needs/cv-status');
-                            } else if (subItem === 'Miscellaneous') {
-                              navigate('/needs/miscellaneous');
-                            } else if (subItem === 'Manpower Budget') {
-                              navigate('/needs/manpower-budget');
-                            } else if (subItem === 'Talent Register') {
-                              navigate('/needs/talent-register');
-                            } else if (subItem === 'Manage CV') {
-                              navigate('/needs/manage-cv');
-                            } else if (subItem === 'Search CV') {
-                              navigate('/needs/search-cv');
-                            } else if (subItem === 'TR Tracker') {
-                              navigate('/needs/tr-tracker');
-                            } else if (subItem === 'Upload Candidate Master') {
-                              navigate('/needs/upload-candidate-master');
-                            } else if (subItem === 'Talent Acquisition') {
-                              navigate('/needs/talent-acquisition');
-                            } else if (subItem === 'Talent Acquisition Approval') {
-                              navigate('/needs/talent-acquisition-approval');
-                            } else if (subItem === 'Talent Acquisition Manager Approval') {
-                              navigate('/needs/talent-acquisition-manager-approval');
-                            } else if (subItem === 'HR View Talent Acquisitions') {
-                              navigate('/needs/hr-view-talent-acquisitions');
-                            }
-                          }}
-                        >
-                          {subItem}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
 
         {/* ELC & Letters Menu */}
-        <div className="relative">
+        {isAdmin && (
           <div
             className="cursor-pointer hover:text-blue-600"
-            onMouseEnter={() => setHoveredELC(true)}
-            onMouseLeave={() => setHoveredELC(false)}
+            onClick={() => onModuleClick('elcLetters')}
           >
-            ELC & Letters ▼
+            ELC & Letters
           </div>
-          {hoveredELC && (
-            <div
-              className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
-              onMouseEnter={() => setHoveredELC(true)}
-              onMouseLeave={() => setHoveredELC(false)}
-            >
-              {Object.entries(menuItems['ELC & Letters']).map(([itemName, subItems]) => (
-                <div key={itemName} className="relative"
-                  onMouseEnter={() => setHoveredSubMenu(`elc-${itemName}`)}
-                  onMouseLeave={() => setHoveredSubMenu(null)}
-                >
-                  <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
-                    {itemName}
-                    {subItems && <span className="text-xs text-gray-400">▶</span>}
-                  </div>
-                  {subItems && (
-                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `elc-${itemName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
-                      {subItems.map((subItem, subIndex) => (
-                        <div key={subIndex} className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm">
-                          {subItem}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
 
-        {/* TA & LV Menu */}
-        <div className="relative">
-          <div
-            className="cursor-pointer hover:text-blue-600"
-            onMouseEnter={() => setHoveredTALV(true)}
-            onMouseLeave={() => setHoveredTALV(false)}
-          >
-            TA & LV ▼
-          </div>
-          {hoveredTALV && (
-            <div
-              className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
-              onMouseEnter={() => setHoveredTALV(true)}
-              onMouseLeave={() => setHoveredTALV(false)}
-            >
-              {Object.entries(menuItems['TA & LV']).map(([itemName, subItems]) => (
-                <div key={itemName} className="relative"
-                  onMouseEnter={() => setHoveredSubMenu(`talv-${itemName}`)}
-                  onMouseLeave={() => setHoveredSubMenu(null)}
-                >
-                  <div
-                    className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
-                    onClick={() => {
-                      if (itemName === 'Attendance Dashboard') navigate('/talv/attendance-dashboard');
-                      else if (itemName === 'Attendance Policy') navigate('/talv/attendance-policy');
-                      else if (itemName === 'Leave Policy Config') navigate('/talv/leave-policy-config');
-                      else if (itemName === 'Employee Leave Master') navigate('/talv/employee-leave-master');
-                      else if (itemName === 'Upload Opening Leave Balance') navigate('/talv/upload-opening-leave-balance');
-                      else if (itemName === 'Mobile App Linking') navigate('/talv/mobile-app-linking');
-                      else if (itemName === 'Attendance Control') navigate('/talv/attendance-control');
-                      else if (itemName === 'Shift Planning Upload') navigate('/talv/shift-planning-upload');
-                      else if (itemName === 'Shift Master') navigate('/talv/shift-master');
-                      else if (itemName === 'HR View Leaves & Outdoor') navigate('/talv/hr-view-leaves-outdoor');
-                      else if (itemName === 'Employee Leave Balance') navigate('/talv/employee-leave-balance');
-                      else if (itemName === 'Leave Application') navigate('/talv/leave-application');
-                    }}
-                  >
-                    {itemName}
-                    {subItems && <span className="text-xs text-gray-400">▶</span>}
-                  </div>
-                  {subItems && Array.isArray(subItems) && (
-                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `talv-${itemName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
-                      {subItems.map((subItem, subIndex) => (
-                        <div
-                          key={subIndex}
-                          className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
-                          onClick={() => {
-                            if (itemName === 'Capture Attendance') {
-                              if (subItem === 'Biometric Upload') navigate('/talv/capture-attendance/biometric-upload');
-                              else if (subItem === 'Import Attendance') navigate('/talv/capture-attendance/import-attendance');
-                              else if (subItem === 'Import In Out Time') navigate('/talv/capture-attendance/import-in-out-time');
-                              else if (subItem === 'Client Emp Import Attendance') navigate('/talv/capture-attendance/client-emp-import-attendance');
-                            } else if (itemName === 'Attendance Reports') {
-                              if (subItem === 'Shift Punch Register') navigate('/talv/attendance-reports/shift-punch-register');
-                              else if (subItem === 'Attendance Register') navigate('/talv/attendance-reports/attendance-register');
-                              else if (subItem === 'Client Emp Attendance Register') navigate('/talv/attendance-reports/client-emp-attendance-register');
-                              else if (subItem === 'Over Time/Comp-Off') navigate('/talv/attendance-reports/over-time-comp-off');
-                              else if (subItem === 'Shift Plan Register') navigate('/talv/attendance-reports/shift-plan-register');
-                              else if (subItem === 'Shift Deviation Register') navigate('/talv/attendance-reports/shift-deviation-register');
-                              else if (subItem === 'Absconding Report') navigate('/talv/attendance-reports/absconding-report');
-                              else if (subItem === 'OT Summary') navigate('/talv/attendance-reports/ot-summary');
-                              else if (subItem === 'Headcount/Occupancy Report') navigate('/talv/attendance-reports/headcount-occupancy-report');
-                            }
-                          }}
-                        >
-                          {subItem}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {subItems && !Array.isArray(subItems) && (
-                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu && hoveredSubMenu.startsWith(`talv-${itemName}`) ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
-                      {Object.entries(subItems).map(([subKey, nestedItems]) => (
-                        <div key={subKey} className="relative"
-                          onMouseEnter={(e) => { e.stopPropagation(); setHoveredSubMenu(`talv-${itemName}-${subKey}`); }}
-                          onMouseLeave={(e) => { e.stopPropagation(); setHoveredSubMenu(`talv-${itemName}`); }}
-                        >
-                          <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
-                            {subKey}
-                            {nestedItems && <span className="text-xs text-gray-400">▶</span>}
-                          </div>
-                          {nestedItems && (
-                            <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-56 z-40 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `talv-${itemName}-${subKey}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
-                              {nestedItems.map((nestedItem, nestedIndex) => (
-                                <div
-                                  key={nestedIndex}
-                                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
-                                >
-                                  {nestedItem}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+
 
 
 
         {/* ERP Payroll Menu */}
         {isAdmin && (
-          <div className="relative">
-            <div
-              className="cursor-pointer hover:text-blue-600"
-              onMouseEnter={() => setHoveredERPPayroll(true)}
-              onMouseLeave={() => setHoveredERPPayroll(false)}
-            >
-              ERP Payroll ▼
-            </div>
-            {hoveredERPPayroll && (
-              <div
-                className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
-                onMouseEnter={() => setHoveredERPPayroll(true)}
-                onMouseLeave={() => setHoveredERPPayroll(false)}
-              >
-                {Object.entries(erpPayrollMenus).map(([groupName, items]) => (
-                  <div key={groupName} className="relative"
-                    onMouseEnter={() => setHoveredSubMenu(`erp-${groupName}`)}
-                    onMouseLeave={() => setHoveredSubMenu(null)}
-                  >
-                    <div className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center">
-                      {groupName}
-                      <span className="text-xs text-gray-400">▶</span>
-                    </div>
-                    <div className={`absolute left-full top-0 bg-white shadow-sm rounded-md py-2 w-64 z-30 border border-gray-200 transition-all duration-200 ${hoveredSubMenu === `erp-${groupName}` ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
-                      {items.map((item) => (
-                        <div
-                          key={item.path}
-                          className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
-                          onClick={() => navigate(item.path)}
-                        >
-                          {item.label}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div
+            className="cursor-pointer hover:text-blue-600"
+            onClick={() => onModuleClick('erpPayroll')}
+          >
+            ERP Payroll
           </div>
         )}
 
-        {/* HR Menu */}
-        <div className="relative">
-          <div
-            className="cursor-pointer hover:text-blue-600"
-            onMouseEnter={() => setHoveredHR(true)}
-            onMouseLeave={() => setHoveredHR(false)}
-            onClick={() => navigate('/hr')}
-          >
-            HR ▼
-          </div>
-          {hoveredHR && (
-            <div
-              className="absolute top-full left-0 bg-white shadow-sm rounded-md py-2 w-56 z-10 border border-gray-200"
-              onMouseEnter={() => setHoveredHR(true)}
-              onMouseLeave={() => setHoveredHR(false)}
-            >
-              <div
-                className="relative"
-                onMouseEnter={() => setHoveredSubMenu(`Recruitment`)}
-                onMouseLeave={() => setHoveredSubMenu(null)}
-              >
-                <div
-                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
-                  onClick={() => {
-                    navigate('/recruitment');
-                    setHoveredHR(false);
-                    setHoveredSubMenu(null);
-                  }}
-                >
-                  Recruitment
-                </div>
-              </div>
-              {/* Performance Item */}
-              <div
-                className="relative"
-                onMouseEnter={() => setHoveredSubMenu(`Performance`)}
-                onMouseLeave={() => setHoveredSubMenu(null)}
-              >
-                <div
-                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
-                  onClick={() => {
-                    navigate('/performance');
-                    setHoveredHR(false);
-                    setHoveredSubMenu(null);
-                  }}
-                >
-                  Performance
-                </div>
-              </div>
-              {/* Shift and Attendance Item */}
-              <div
-                className="relative"
-                onMouseEnter={() => setHoveredSubMenu(`ShiftAttendance`)}
-                onMouseLeave={() => setHoveredSubMenu(null)}
-              >
-                <div
-                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
-                  onClick={() => {
-                    navigate('/shift-attendance');
-                    setHoveredHR(false);
-                    setHoveredSubMenu(null);
-                  }}
-                >
-                  Shift & Attendance
-                </div>
-              </div>
-              {/* Leave Item */}
-              <div
-                className="relative"
-                onMouseEnter={() => setHoveredSubMenu(`Leave`)}
-                onMouseLeave={() => setHoveredSubMenu(null)}
-              >
-                <div
-                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm flex justify-between items-center"
-                  onClick={() => {
-                    navigate('/talv/leave');
-                    setHoveredHR(false);
-                    setHoveredSubMenu(null);
-                  }}
-                >
-                  Leave
-                </div>
-              </div>
-            </div>
-          )}
+        <div
+          className="cursor-pointer hover:text-blue-600"
+          onClick={() => onModuleClick('hr')}
+        >
+          HR
+        </div>
+
+        <div
+          className="cursor-pointer hover:text-blue-600"
+          onClick={() => onModuleClick('recruitment')}
+        >
+          Recruitment
+        </div>
+        <div
+          className="cursor-pointer hover:text-blue-600"
+          onClick={() => onModuleClick('performance')}
+        >
+          Performance
+        </div>
+        <div
+          className="cursor-pointer hover:text-blue-600"
+          onClick={() => onModuleClick('shiftAttendance')}
+        >
+          Shift & Attendance
+        </div>
+        <div
+          className="cursor-pointer hover:text-blue-600"
+          onClick={() => onModuleClick('leave')}
+        >
+          Leave
         </div>
 
         <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>
         <Link to="/settings" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Settings</Link>
         <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Employee Self Service</Link>
         <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Reports</Link>
-        <Link to="/about" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">About</Link>
-        <Link to="/contact" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Contact</Link>
+
         <div className="relative">
           <button
             className="flex items-center gap-1 border rounded px-2 py-1 shadow-sm"

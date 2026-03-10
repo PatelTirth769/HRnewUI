@@ -18,6 +18,7 @@ export default function LeaveModule() {
             title: 'Allocation',
             items: [
                 { label: 'Leave Allocation', path: '/talv/employee-leave-master' },
+                { label: 'Upload Opening Leave Balance', path: '/talv/upload-opening-leave-balance' },
             ],
         },
         {
@@ -25,6 +26,7 @@ export default function LeaveModule() {
             items: [
                 { label: 'Leave Application', path: '/talv/leave-application' },
                 { label: 'Compensatory Leave Request', path: '/talv/compensatory-leave-request' },
+                { label: 'HR View Leaves & Outdoor', path: '/talv/hr-view-leaves-outdoor' },
             ],
         },
         {

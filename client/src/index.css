@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
-a { 
-  text-decoration: none; 
-  color: inherit; 
+a {
+  text-decoration: none;
+  color: inherit;
 }
 
-a:hover { 
-  text-decoration: none; 
+a:hover {
+  text-decoration: none;
 }
 
 :root {
@@ -19,6 +19,7 @@ a:hover {
   --alert: #FF6F61;
   --card-bg: #FFFFFF;
 }
+
 [data-theme="minimal"] {
   --primary: #5A4FCF;
   --secondary: #EAE6FF;
@@ -29,6 +30,7 @@ a:hover {
   --alert: #FF6F61;
   --card-bg: #F8F3FF;
 }
+
 [data-theme="warm"] {
   --primary: #008080;
   --secondary: #F4E1D2;
@@ -40,22 +42,69 @@ a:hover {
   --card-bg: #FFF7E9;
 }
 
-.bg-gray-50 { background-color: var(--bg) !important; }
-.text-gray-800 { color: var(--text) !important; }
-.text-gray-700 { color: var(--text) !important; }
-.bg-blue-600 { background-color: var(--primary) !important; }
-.text-blue-700 { color: var(--primary) !important; }
-.border-blue-200 { border-color: var(--secondary) !important; }
-.bg-orange-500 { background-color: var(--accent) !important; }
-.bg-green-600 { background-color: var(--success) !important; }
-.text-green-600 { color: var(--success) !important; }
-.text-red-600 { color: var(--alert) !important; }
-.bg-white { background-color: var(--card-bg) !important; }
+.bg-gray-50 {
+  background-color: var(--bg) !important;
+}
 
-.card-soft { background-color: #f5f5f5; border-radius: 12px; padding: 16px; border: 1px solid #e5e7eb; }
-.card-soft-title { font-weight: 600; color: var(--text); }
-.stat-good { color: #3f8600; }
-.stat-bad { color: #cf1322; }
+.text-gray-800 {
+  color: var(--text) !important;
+}
+
+.text-gray-700 {
+  color: var(--text) !important;
+}
+
+.bg-blue-600 {
+  background-color: var(--primary) !important;
+}
+
+.text-blue-700 {
+  color: var(--primary) !important;
+}
+
+.border-blue-200 {
+  border-color: var(--secondary) !important;
+}
+
+.bg-orange-500 {
+  background-color: var(--accent) !important;
+}
+
+.bg-green-600 {
+  background-color: var(--success) !important;
+}
+
+.text-green-600 {
+  color: var(--success) !important;
+}
+
+.text-red-600 {
+  color: var(--alert) !important;
+}
+
+.bg-white {
+  background-color: var(--card-bg) !important;
+}
+
+.card-soft {
+  background-color: #f5f5f5;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+}
+
+.card-soft-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.stat-good {
+  color: #3f8600;
+}
+
+.stat-bad {
+  color: #cf1322;
+}
 
 /* Custom down-arrow for selects */
 .select-arrow {
@@ -68,4 +117,3 @@ a:hover {
   padding-right: 2rem;
   color: var(--text);
 }
-

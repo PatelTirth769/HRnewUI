@@ -6,6 +6,7 @@ client/node_modules/
 
 # Temp files
 ser/resume-parser/temp/
+ser/temp_uploads/
 
 # Environment
 .env

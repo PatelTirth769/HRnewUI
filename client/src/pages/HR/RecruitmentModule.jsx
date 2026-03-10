@@ -16,6 +16,8 @@ export default function RecruitmentModule() {
                 { label: 'Job Applicant', path: '/recruitment/job-applicant' },
                 { label: 'Job Offer', path: '/recruitment/job-offer' },
                 { label: 'Employee Referral', path: '/recruitment/employee-referral' },
+                { label: 'Upload Resume', path: '/talv/upload-resume' },
+                { label: 'Resume Database', path: '/talv/resume-database' },
             ],
         },
         {

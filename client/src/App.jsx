@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import Header from './components/common/Header';
+import Sidebar from './components/common/Sidebar';
 import Dashboard from './pages/Dashboard';
 import EmployeeSelfService from './pages/ESS/EmployeeSelfService';
 import EmployeeMIS from './pages/EmployeeMIS';
@@ -99,6 +100,8 @@ import LeaveApplicationList from './pages/TALV/LeaveApplicationList';
 import LeaveApplicationForm from './pages/TALV/LeaveApplicationForm';
 import CompensatoryLeaveRequest from './pages/TALV/CompensatoryLeaveRequest';
 import AttendanceRequest from './pages/TALV/AttendanceRequest';
+import UploadResume from './pages/TALV/UploadResume';
+import ResumeDatabase from './pages/TALV/ResumeDatabase';
 
 // ERP Payroll - Masters
 import ERPSalaryComponent from './pages/ERPPayroll/SalaryComponent';
@@ -163,14 +166,33 @@ import LeaveModule from './pages/HR/LeaveModule';
 
 function App() {
   const location = useLocation();
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [activeModule, setActiveModule] = React.useState(null);
+
+  const handleModuleClick = (moduleKey) => {
+    setActiveModule(moduleKey);
+    setIsSidebarOpen(true);
+  };
+
   const hideHeaderRoutes = ['/login', '/register'];
   const showHeader = !hideHeaderRoutes.includes(location.pathname);
 
   return (
-    <div className="App">
-      {showHeader && <Header />}
-      <main className="main-content min-h-screen bg-gray-50">
-        <div className="flex">
+    <div className="App flex flex-col h-screen overflow-hidden">
+      {showHeader && <Header onModuleClick={handleModuleClick} />}
+
+      <div className="flex flex-1 overflow-hidden relative">
+        {showHeader && (
+          <Sidebar
+            isOpen={isSidebarOpen}
+            onClose={() => setIsSidebarOpen(false)}
+            activeModule={activeModule}
+          />
+        )}
+
+        <main
+          className="flex-1 overflow-auto bg-gray-50 ml-0"
+        >
           <div className="flex-1">
             <Routes>
               {/* Public Routes */}
@@ -284,6 +306,8 @@ function App() {
                 <Route path="/erp-payroll/reports/pf-deductions" element={<ERPPFDeductions />} />
                 <Route path="/erp-payroll/reports/pt-deductions" element={<ERPPTDeductions />} />
                 <Route path="/erp-payroll/reports/income-tax-deductions" element={<ERPIncomeTaxDeductions />} />
+                <Route path="/talv/upload-resume" element={<UploadResume />} />
+                <Route path="/talv/resume-database" element={<ResumeDatabase />} />
                 <Route path="/talv/attendance-dashboard" element={<AttendanceDashboard />} />
                 <Route path="/talv/attendance-policy" element={<AttendancePolicyMaster />} />
                 <Route path="/talv/leave-policy-config" element={<LeavePolicyConfig />} />
@@ -364,8 +388,8 @@ function App() {
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

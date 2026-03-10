@@ -41,22 +41,56 @@ function cleanTextByRows(data) {
 function extractTextFile(file, cbAfterExtract) {
     logger.trace('Extracting text from:', file);
 
-    const dataBuffer = fs.readFileSync(file);
-    pdf(dataBuffer).then(function (data) {
+    const ext = path.extname(file).toLowerCase();
+
+    const handleText = (rawText) => {
         if (_.isFunction(cbAfterExtract)) {
-            const cleanData = cleanTextByRows(data.text);
+            const cleanData = cleanTextByRows(rawText);
             var File = new PreparedFile(file, cleanData.replace(/^\s/gm, ''));
             cbAfterExtract(File);
         } else {
             logger.error('cbAfterExtract should be a function');
             return cbAfterExtract(null, 'cbAfterExtract should be a function');
         }
-    }).catch(function (err) {
-        logger.error('PDF parse error:', err);
-        if (_.isFunction(cbAfterExtract)) {
-            return cbAfterExtract(null, err);
+    };
+
+    if (ext === '.pdf') {
+        const dataBuffer = fs.readFileSync(file);
+        pdf(dataBuffer).then(function (data) {
+            handleText(data.text);
+        }).catch(function (err) {
+            logger.error('PDF parse error:', err);
+            if (_.isFunction(cbAfterExtract)) {
+                return cbAfterExtract(null, err);
+            }
+        });
+    } else if (ext === '.docx' || ext === '.doc') {
+        const mammoth = require('mammoth');
+        mammoth.extractRawText({ path: file })
+            .then(function (result) {
+                handleText(result.value);
+            })
+            .catch(function (err) {
+                logger.error('DOCX parse error:', err);
+                if (_.isFunction(cbAfterExtract)) {
+                    return cbAfterExtract(null, err);
+                }
+            });
+    } else if (ext === '.txt') {
+        try {
+            const text = fs.readFileSync(file, 'utf8');
+            handleText(text);
+        } catch (err) {
+            logger.error('TXT parse error:', err);
+            if (_.isFunction(cbAfterExtract)) {
+                return cbAfterExtract(null, err);
+            }
         }
-    });
+    } else {
+        if (_.isFunction(cbAfterExtract)) {
+            return cbAfterExtract(null, new Error('Unsupported file type for extraction: ' + ext));
+        }
+    }
 }
 
 function cleanStr(str) {

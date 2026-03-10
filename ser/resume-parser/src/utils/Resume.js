@@ -13,7 +13,13 @@ Resume.prototype.addKey = function (key, value) {
     value = value.trim();
     if (value) {
         if (_.has(this.parts, key)) {
-            value = this.parts[key] + value;
+            // Check if the value is already present to avoid duplication
+            if (this.parts[key].includes(value)) {
+                return;
+            }
+            // Add a separator (space or newline depending on key)
+            const separator = (key === 'objective' || key === 'summary' || key === 'experience' || key === 'education') ? '\n\n' : ' ';
+            value = this.parts[key] + separator + value;
         }
         this.parts[key] = value;
     }
