@@ -2,10 +2,18 @@
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/images/logo.png';
 import { useUserRole } from '../../hooks/useUserRole';
+import { moduleNavigation } from '../../config/moduleNavigation';
 
 const Header = ({ onModuleClick }) => {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
+
+  // Temporary fallback for navLoading and navData until dynamic fetching is implemented
+  const navLoading = false;
+  const navData = Object.entries(moduleNavigation).reduce((acc, [key, value]) => {
+    acc[key] = { ...value, moduleKey: key };
+    return acc;
+  }, {});
 
   const [theme, setTheme] = useState(() => localStorage.getItem('ui-theme') || 'corporate');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
