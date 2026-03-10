@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { moduleNavigation } from '../../config/moduleNavigation';
 import { useUserRole } from '../../hooks/useUserRole';
+import useNavigation from '../../hooks/useNavigation';
 import logo from '../../assets/images/logo.png';
 
 const Icon = ({ name, className }) => {
@@ -117,21 +117,22 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { isAdmin } = useUserRole();
+    const { navData } = useNavigation();
     const [expandedSections, setExpandedSections] = useState({});
 
     useEffect(() => {
-        if (activeModule && moduleNavigation[activeModule]) {
+        if (activeModule && navData[activeModule]) {
             const initialExpanded = {};
-            moduleNavigation[activeModule].sections.forEach(section => {
+            navData[activeModule].sections.forEach(section => {
                 initialExpanded[section.title] = true;
             });
             setExpandedSections(initialExpanded);
         }
-    }, [activeModule]);
+    }, [activeModule, navData]);
 
-    if (!isOpen || !activeModule || !moduleNavigation[activeModule]) return null;
+    if (!isOpen || !activeModule || !navData[activeModule]) return null;
 
-    const config = moduleNavigation[activeModule];
+    const config = navData[activeModule];
 
     const toggleSection = (title) => {
         setExpandedSections(prev => ({
@@ -143,11 +144,11 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
     return (
         <>
             <div
-                className={`fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[45] transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                className={`fixed inset-0 bg-black/20 backdrop-blur-[2px] z-45 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                 onClick={onClose}
             />
 
-            <div className={`fixed inset-y-0 left-0 w-72 bg-white z-[50] transform transition-transform duration-300 ease-in-out shadow-2xl flex flex-col border-r border-gray-100 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className={`fixed inset-y-0 left-0 w-72 bg-white z-50 transform transition-transform duration-300 ease-in-out shadow-2xl flex flex-col border-r border-gray-100 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="p-6 border-b border-gray-50 flex flex-col gap-4 bg-white sticky top-0 z-10">
                     <div className="flex justify-between items-center">
                         <img src={logo} alt="Candid Offers" className="h-10 w-auto object-contain" />

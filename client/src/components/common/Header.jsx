@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/images/logo.png';
 import { useUserRole } from '../../hooks/useUserRole';
+import useNavigation from '../../hooks/useNavigation';
 
 const Header = ({ onModuleClick }) => {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
-
+  const { navData, loading: navLoading } = useNavigation();
 
   const [theme, setTheme] = useState(() => localStorage.getItem('ui-theme') || 'corporate');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
@@ -14,32 +15,9 @@ const Header = ({ onModuleClick }) => {
   const themeColors = { corporate: '#1F3C88', minimal: '#5A4FCF', warm: '#008080' };
 
   useEffect(() => {
-    const t = theme === 'corporate' ? '' : theme;
     document.documentElement.setAttribute('data-theme', theme === 'corporate' ? '' : theme);
     localStorage.setItem('ui-theme', theme);
   }, [theme]);
-
-
-
-  const menuItems = {
-  };
-
-  const payrollCountries = [
-    { key: 'india', label: 'India' },
-    { key: 'nepal', label: 'Nepal' },
-    { key: 'bangladesh', label: 'Bangladesh' },
-    { key: 'srilanka', label: 'Sri Lanka' },
-  ];
-  const payrollMenus = [
-    { key: 'config', label: 'Payroll Config' },
-    { key: 'salary-heads', label: 'Salary heads' },
-    { key: 'statutory-settings', label: 'Statutory Settings' },
-    { key: 'prepare', label: 'Upload Menu' },
-    { key: 'run', label: 'Run Payroll' },
-    { key: 'post', label: 'Post Payroll' },
-    { key: 'dashboard', label: 'Dashboard' },
-    { key: 'upload', label: 'Upload' },
-  ];
 
   return (
     <header className="bg-white px-4 py-2 flex justify-between items-center relative shadow-sm" >
@@ -48,71 +26,22 @@ const Header = ({ onModuleClick }) => {
         Dash Board
       </Link>
       <div className="flex items-center space-x-4 text-sm text-gray-700">
-        {/* Master Menu */}
-        {isAdmin && (
-          <div
-            className="cursor-pointer hover:text-blue-600"
-            onClick={() => onModuleClick('master')}
-          >
-            Master
-          </div>
-        )}
-
-        {/* ELC & Letters Menu */}
-        {isAdmin && (
-          <div
-            className="cursor-pointer hover:text-blue-600"
-            onClick={() => onModuleClick('elcLetters')}
-          >
-            ELC & Letters
-          </div>
-        )}
-
-
-
-
-
-        {/* ERP Payroll Menu */}
-        {isAdmin && (
-          <div
-            className="cursor-pointer hover:text-blue-600"
-            onClick={() => onModuleClick('erpPayroll')}
-          >
-            ERP Payroll
-          </div>
-        )}
-
-        <div
-          className="cursor-pointer hover:text-blue-600"
-          onClick={() => onModuleClick('hr')}
-        >
-          HR
-        </div>
-
-        <div
-          className="cursor-pointer hover:text-blue-600"
-          onClick={() => onModuleClick('recruitment')}
-        >
-          Recruitment
-        </div>
-        <div
-          className="cursor-pointer hover:text-blue-600"
-          onClick={() => onModuleClick('performance')}
-        >
-          Performance
-        </div>
-        <div
-          className="cursor-pointer hover:text-blue-600"
-          onClick={() => onModuleClick('shiftAttendance')}
-        >
-          Shift & Attendance
-        </div>
-        <div
-          className="cursor-pointer hover:text-blue-600"
-          onClick={() => onModuleClick('leave')}
-        >
-          Leave
-        </div>
+        {/* Dynamic module tabs loaded from database via ser backend */}
+        {!navLoading && Object.values(navData)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+          .map((mod) => {
+            if (mod.adminOnly && !isAdmin) return null;
+            return (
+              <div
+                key={mod.moduleKey}
+                className="cursor-pointer hover:text-blue-600"
+                onClick={() => onModuleClick(mod.moduleKey)}
+              >
+                {mod.title}
+              </div>
+            );
+          })
+        }
 
         <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>
         <Link to="/settings" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Settings</Link>
@@ -148,6 +77,5 @@ const Header = ({ onModuleClick }) => {
     </header >
   );
 };
-
 
 export default Header;

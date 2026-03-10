@@ -36,6 +36,9 @@ app.use('/resume-parser', require('./resume-parser/index'));
 // Bulk Resume Routes
 app.use('/api/resumes', require('./routes/resumes'));
 
+// Navigation Routes
+app.use('/api/navigation', require('./routes/navigation'));
+
 const PORT = process.env.PORT || 5000;
 
 // MongoDB Connection Logic (Mirrors main server config)
