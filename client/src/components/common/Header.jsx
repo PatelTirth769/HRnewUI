@@ -2,18 +2,27 @@
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/images/logo.png';
 import { useUserRole } from '../../hooks/useUserRole';
-import { moduleNavigation } from '../../config/moduleNavigation';
+
+const employeeHiddenModules = new Set(['master', 'elcLetters']);
 
 const Header = ({ onModuleClick }) => {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
 
-  // Temporary fallback for navLoading and navData until dynamic fetching is implemented
-  const navLoading = false;
-  const navData = Object.entries(moduleNavigation).reduce((acc, [key, value]) => {
-    acc[key] = { ...value, moduleKey: key };
-    return acc;
-  }, {});
+  const [navLoading, setNavLoading] = useState(true);
+  const [navData, setNavData] = useState({});
+
+  useEffect(() => {
+    fetch('/local-api/navigation')
+      .then(res => res.json())
+      .then(modules => {
+        const map = {};
+        modules.forEach(mod => { map[mod.moduleKey] = mod; });
+        setNavData(map);
+      })
+      .catch(err => console.error('Failed to load navigation:', err))
+      .finally(() => setNavLoading(false));
+  }, []);
 
   const [theme, setTheme] = useState(() => localStorage.getItem('ui-theme') || 'corporate');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
@@ -36,6 +45,7 @@ const Header = ({ onModuleClick }) => {
         {!navLoading && Object.values(navData)
           .sort((a, b) => (a.order || 0) - (b.order || 0))
           .map((mod) => {
+            if (!isAdmin && employeeHiddenModules.has(mod.moduleKey)) return null;
             if (mod.adminOnly && !isAdmin) return null;
             return (
               <div

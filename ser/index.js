@@ -33,6 +33,9 @@ app.use('/resumes/files', express.static(permanentUploadsDir));
 // Resume parser route
 app.use('/resume-parser', require('./resume-parser/index'));
 
+// Navigation Routes (navbar tabs from DB)
+app.use('/navigation', require('./routes/navigation'));
+
 // Bulk Resume Routes
 app.use('/api/resumes', require('./routes/resumes'));
 
