@@ -41,30 +41,20 @@ app.use('/api/resumes', require('./routes/resumes'));
 
 const PORT = process.env.PORT || 5000;
 
-// MongoDB Connection Logic (Mirrors main server config)
-const uriEnv = process.env.MONGO_URI || '';
-const isPlaceholder = uriEnv.includes('<') || uriEnv.includes('>');
-const primaryUri = isPlaceholder ? '' : uriEnv;
-const fallbackUri = process.env.MONGO_URI_LOCAL || 'mongodb://127.0.0.1:27017/new_project';
-const uriToUse = primaryUri || fallbackUri;
+// MongoDB Connection Logic (Atlas Exclusive)
+const uriToUse = process.env.MONGO_URI;
+
+if (!uriToUse) {
+    console.error('MONGO_URI is not defined in .env file');
+    process.exit(1);
+}
 
 mongoose.connect(uriToUse)
     .then(() => {
-        console.log(`MongoDB Connected: ${uriToUse.includes('127.0.0.1') ? 'local' : 'remote cluster'}`);
+        console.log('MongoDB Connected: Atlas cluster');
         app.listen(PORT, () => console.log(`Resume Parser Server started on port ${PORT}`));
     })
-    .catch(async err => {
+    .catch(err => {
         console.error('Mongo connection error:', err && err.message);
-        if (primaryUri && !primaryUri.includes('127.0.0.1')) {
-            try {
-                await mongoose.connect(fallbackUri);
-                console.log('MongoDB Connected: local fallback');
-                app.listen(PORT, () => console.log(`Resume Parser Server started on port ${PORT}`));
-            } catch (err2) {
-                console.error('Mongo local fallback error:', err2 && err2.message);
-                process.exit(1);
-            }
-        } else {
-            process.exit(1);
-        }
+        process.exit(1);
     });
