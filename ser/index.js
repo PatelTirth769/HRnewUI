@@ -42,6 +42,9 @@ app.use('/api/resumes', require('./routes/resumes'));
 // HR Dashboard Routes
 app.use('/hr-dashboard', require('./routes/hrDashboard'));
 
+// Recruitment Settings Routes
+app.use('/recruitment-settings', require('./routes/recruitmentSettings'));
+
 const PORT = process.env.PORT || 3636;
 
 // MongoDB Connection Logic (Atlas Exclusive)

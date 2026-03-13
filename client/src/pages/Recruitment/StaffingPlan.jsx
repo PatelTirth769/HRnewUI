@@ -144,34 +144,58 @@ export default function StaffingPlan() {
 
         setSaving(true);
         try {
-            const payload = {
+            const staffingRows = formData.staffing_details.map((r, idx) => ({
+                doctype: 'Staffing Plan Detail',
+                parenttype: 'Staffing Plan',
+                parentfield: 'staffing_details',
+                idx: idx + 1,
+                designation: r.designation,
+                vacancies: parseFloat(r.vacancies) || 0,
+                estimated_cost_per_position: parseFloat(r.estimated_cost_per_position) || 0,
+                total_estimated_cost: parseFloat(r.total_estimated_cost) || 0,
+                number_of_positions: parseFloat(r.number_of_positions) || 0,
+                ...(r.name ? { name: r.name } : {})
+            }));
+
+            const doc = {
+                doctype: 'Staffing Plan',
                 company: formData.company,
                 department: formData.department,
                 from_date: formData.from_date,
                 to_date: formData.to_date,
-                staffing_details: formData.staffing_details.map(r => ({
-                    designation: r.designation,
-                    vacancies: parseFloat(r.vacancies) || 0,
-                    estimated_cost_per_position: parseFloat(r.estimated_cost_per_position) || 0,
-                    total_estimated_cost: parseFloat(r.total_estimated_cost) || 0,
-                    number_of_positions: parseFloat(r.number_of_positions) || 0
-                })),
+                staffing_details: staffingRows,
                 total_estimated_budget: formData.total_estimated_budget
             };
 
             if (editingRecord) {
-                await API.put(`/api/resource/Staffing Plan/${encodeURIComponent(editingRecord.name)}`, payload);
+                doc.name = editingRecord.name;
+                await API.post('/api/method/frappe.client.save', { doc });
                 notification.success({ message: `Staffing Plan updated successfully!` });
             } else {
-                if (formData.name) payload.name = formData.name;
-                await API.post('/api/resource/Staffing Plan', payload);
+                if (formData.name) doc.name = formData.name;
+                await API.post('/api/method/frappe.client.insert', { doc });
                 notification.success({ message: `Staffing Plan created successfully!` });
             }
             setView('list');
             fetchData();
         } catch (err) {
             console.error('Save failed:', err);
-            notification.error({ message: err.response?.data?.exc_message || 'Failed to save Staffing Plan' });
+            console.error('Response data:', err.response?.data);
+            let errMsg = 'Failed to save Staffing Plan';
+            const respData = err.response?.data;
+            if (respData) {
+                if (respData._server_messages) {
+                    try {
+                        const msgs = JSON.parse(respData._server_messages);
+                        errMsg = msgs.map(m => { try { return JSON.parse(m).message; } catch { return m; } }).join('\n');
+                    } catch { errMsg = respData._server_messages; }
+                } else if (respData.exc_message) {
+                    errMsg = respData.exc_message;
+                } else if (respData.message) {
+                    errMsg = respData.message;
+                }
+            }
+            notification.error({ message: 'Save Failed', description: errMsg, duration: 8 });
         } finally { setSaving(false); }
     };
 

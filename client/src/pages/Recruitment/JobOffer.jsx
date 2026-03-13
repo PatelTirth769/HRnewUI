@@ -3,11 +3,12 @@ import { notification } from 'antd';
 import API from '../../services/api';
 
 export default function JobOffer() {
-    const [view, setView] = useState('list');
+    const [view, setView] = useState('list'); // 'list' | 'form' | 'print'
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
+    const [printData, setPrintData] = useState(null);
     // Column filters (ERPNext-style)
     const [filterID, setFilterID] = useState('');
     const [filterApplicantName, setFilterApplicantName] = useState('');
@@ -303,6 +304,156 @@ export default function JobOffer() {
     const hasActiveFilters = filterID || filterApplicantName || filterStatus || filterDesignation || filterCompany;
     const clearFilters = () => { setFilterID(''); setFilterApplicantName(''); setFilterStatus(''); setFilterDesignation(''); setFilterCompany(''); };
 
+    // ─── PRINT ─────────────────────────────────────────────────────
+    const handlePrint = async (record) => {
+        try {
+            const res = await API.get(`/api/resource/Job Offer/${encodeURIComponent(record.name)}`);
+            const d = res.data?.data || {};
+            const rawTerms = d.offer_terms || d.terms || [];
+            setPrintData({
+                name: d.name || '',
+                job_applicant: d.job_applicant || '',
+                applicant_name: d.applicant_name || '',
+                applicant_email: d.applicant_email || d.email_id || '',
+                offer_date: d.offer_date || '',
+                designation: d.designation || '',
+                company: d.company || '',
+                status: d.status || '',
+                job_offer_term_template: d.job_offer_term_template || '',
+                terms: rawTerms.map(t => ({ offer_term: t.offer_term || '', value: t.value || '' })),
+                terms_and_conditions: d.terms_and_conditions || '',
+                letter_head: d.letter_head || '',
+                print_heading: d.print_heading || ''
+            });
+            setView('print');
+            // Trigger print dialog after a brief delay so the DOM renders
+            setTimeout(() => window.print(), 500);
+        } catch (err) {
+            console.error('Print fetch failed:', err);
+            notification.error({ message: 'Failed to load Job Offer for printing' });
+        }
+    };
+
+    // Print current form data directly (when in form view)
+    const handlePrintCurrent = () => {
+        setPrintData({ ...formData });
+        setView('print');
+        setTimeout(() => window.print(), 500);
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // ─── PRINT VIEW ───────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    if (view === 'print' && printData) {
+        const formatDate = (d) => {
+            if (!d) return '';
+            const dt = new Date(d);
+            return dt.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        };
+        return (
+            <>
+                {/* Print-specific CSS */}
+                <style>{`
+                    @media print {
+                        body * { visibility: hidden !important; }
+                        .job-offer-print-area, .job-offer-print-area * { visibility: visible !important; }
+                        .job-offer-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
+                        .no-print { display: none !important; }
+                        @page { size: A4; margin: 15mm 20mm; }
+                    }
+                `}</style>
+
+                {/* Back / Re-print bar (hidden on print) */}
+                <div className="no-print p-4 bg-gray-50 border-b flex items-center gap-3">
+                    <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200" onClick={() => setView('list')}>← Back to List</button>
+                    <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700" onClick={() => window.print()}>🖨️ Print Again</button>
+                </div>
+
+                {/* Printable Area */}
+                <div className="job-offer-print-area" style={{ fontFamily: 'serif', color: '#222', maxWidth: '210mm', margin: '0 auto', padding: '20px 40px' }}>
+                    {/* ── Company Letter Head ── */}
+                    <div style={{ textAlign: 'center', borderBottom: '2px solid #1a237e', paddingBottom: '16px', marginBottom: '24px' }}>
+                        <h1 style={{ fontSize: '22px', fontWeight: 'bold', margin: '0 0 4px 0', fontFamily: 'sans-serif' }}>
+                            {printData.company || 'Company'}
+                        </h1>
+                        {printData.letter_head && (
+                            <p style={{ fontSize: '12px', color: '#555', margin: '2px 0' }}>Letter Head: {printData.letter_head}</p>
+                        )}
+                    </div>
+
+                    {/* ── Title ── */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 4px 0', fontFamily: 'sans-serif' }}>
+                            {printData.print_heading || 'Job Offer'}
+                        </h2>
+                        <p style={{ fontSize: '13px', color: '#555', margin: 0 }}>{printData.name}</p>
+                    </div>
+
+                    {/* ── Details Grid ── */}
+                    <table style={{ width: '100%', marginBottom: '24px', fontSize: '14px', borderCollapse: 'collapse' }}>
+                        <tbody>
+                            <tr>
+                                <td style={{ padding: '6px 0', color: '#666', width: '180px' }}>Applicant Name:</td>
+                                <td style={{ padding: '6px 0', fontWeight: 'bold' }}>{printData.applicant_name}</td>
+                                <td style={{ padding: '6px 0', color: '#666', width: '150px' }}>Offer Date:</td>
+                                <td style={{ padding: '6px 0', fontWeight: 'bold' }}>{formatDate(printData.offer_date)}</td>
+                            </tr>
+                            <tr>
+                                <td style={{ padding: '6px 0', color: '#666' }}>Applicant Email Address:</td>
+                                <td style={{ padding: '6px 0' }}>{printData.applicant_email}</td>
+                                <td style={{ padding: '6px 0', color: '#666' }}>Designation:</td>
+                                <td style={{ padding: '6px 0', fontWeight: 'bold' }}>{printData.designation}</td>
+                            </tr>
+                            {printData.job_offer_term_template && (
+                                <tr>
+                                    <td style={{ padding: '6px 0', color: '#666' }}>Job Offer Term Template:</td>
+                                    <td colSpan="3" style={{ padding: '6px 0' }}>{printData.job_offer_term_template}</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+
+                    {/* ── Offer Terms Table ── */}
+                    {printData.terms && printData.terms.length > 0 && (
+                        <table style={{ width: '100%', border: '1px solid #ddd', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '14px' }}>
+                            <thead>
+                                <tr style={{ backgroundColor: '#f5f5f5' }}>
+                                    <th style={{ border: '1px solid #ddd', padding: '8px 12px', textAlign: 'left', width: '50px' }}>Sr</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '8px 12px', textAlign: 'left', width: '180px' }}>Offer Term</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '8px 12px', textAlign: 'left' }}>Value / Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {printData.terms.map((term, idx) => (
+                                    <tr key={idx}>
+                                        <td style={{ border: '1px solid #ddd', padding: '8px 12px', textAlign: 'center', fontWeight: 'bold' }}>{idx + 1}</td>
+                                        <td style={{ border: '1px solid #ddd', padding: '8px 12px', fontWeight: '500' }}>{term.offer_term}</td>
+                                        <td style={{ border: '1px solid #ddd', padding: '8px 12px' }}>{term.value}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+
+                    {/* ── Terms and Conditions ── */}
+                    {printData.terms_and_conditions && (
+                        <div style={{ marginBottom: '24px' }}>
+                            <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '8px', fontFamily: 'sans-serif' }}>Terms and Conditions</h3>
+                            <div style={{ fontSize: '13px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}
+                                dangerouslySetInnerHTML={{ __html: printData.terms_and_conditions }}
+                            />
+                        </div>
+                    )}
+
+                    {/* ── Footer ── */}
+                    <div style={{ marginTop: '40px', fontSize: '12px', color: '#888', textAlign: 'center', borderTop: '1px solid #ddd', paddingTop: '12px' }}>
+                        This is a system-generated document from {printData.company || 'the company'}.
+                    </div>
+                </div>
+            </>
+        );
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // ─── FORM VIEW ────────────────────────────────────────────────
     // ═══════════════════════════════════════════════════════════════
@@ -321,6 +472,11 @@ export default function JobOffer() {
                             : <span className="text-xs px-2 py-0.5 rounded bg-orange-50 text-orange-600">Not Saved</span>}
                     </div>
                     <div className="flex gap-2">
+                        {editingRecord && (
+                            <button className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded border hover:bg-gray-200 flex items-center gap-1" onClick={handlePrintCurrent}>
+                                🖨️ Print
+                            </button>
+                        )}
                         <button className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded border hover:bg-gray-200" onClick={() => setView('list')}>Cancel</button>
                         <button className="px-5 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50" onClick={handleSave} disabled={saving}>
                             {saving ? 'Saving...' : 'Save'}
@@ -630,7 +786,10 @@ export default function JobOffer() {
                                             </td>
                                             <td className="px-4 py-3 text-gray-600">{row.designation || '-'}</td>
                                             <td className="px-4 py-3 text-gray-600">{row.company || '-'}</td>
-                                            <td className="px-4 py-3 flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <td className="px-4 py-3 flex justify-end gap-3">
+                                                <button className="text-gray-400 hover:text-green-600" title="Print" onClick={() => handlePrint(row)}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                                                </button>
                                                 <button className="text-gray-400 hover:text-blue-600" onClick={() => handleEdit(row)}>
                                                     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                                 </button>

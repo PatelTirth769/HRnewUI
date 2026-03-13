@@ -137,8 +137,54 @@ export default function JobRequisition() {
             notification.warning({ message: 'Please fill all required fields' });
             return;
         }
+
         setSaving(true);
         try {
+            // ── Enforce Staff Planning Check ──
+            const settingsRes = await fetch('/local-api/recruitment-settings');
+            const settings = await settingsRes.json();
+
+            if (settings.enforceStaffPlanning) {
+                // Check if a matching Staffing Plan exists
+                const today = new Date().toISOString().split('T')[0];
+                const filters = JSON.stringify([
+                    ["company", "=", formData.company],
+                    ["from_date", "<=", today],
+                    ["to_date", ">=", today]
+                ]);
+                const spRes = await API.get(`/api/resource/Staffing Plan?filters=${encodeURIComponent(filters)}&fields=["name"]&limit_page_length=None`);
+                const staffingPlans = spRes.data?.data || [];
+
+                if (staffingPlans.length === 0) {
+                    window.alert(
+                        `❌ No Active Staffing Plan!\n\nEnforce Staff Planning is enabled.\n\nNo active Staffing Plan found for "${formData.company}" covering today's date.\n\nPlease create a Staffing Plan first before creating a Job Requisition.`
+                    );
+                    setSaving(false);
+                    return;
+                }
+
+                // Check if any plan has the required designation with available vacancies
+                let hasVacancies = false;
+                for (const sp of staffingPlans) {
+                    const detailRes = await API.get(`/api/resource/Staffing Plan/${encodeURIComponent(sp.name)}`);
+                    const details = detailRes.data?.data?.staffing_details || [];
+                    const match = details.find(d => d.designation === formData.designation);
+                    if (match && (match.vacancies > 0 || match.number_of_positions > 0)) {
+                        hasVacancies = true;
+                        break;
+                    }
+                }
+
+                if (!hasVacancies) {
+                    window.alert(
+                        `❌ No Vacancies for Designation "${formData.designation}"!\n\nEnforce Staff Planning is enabled.\n\nNo active Staffing Plan has vacancies for this designation.\n\nPlease update your Staffing Plan to add "${formData.designation}" with available vacancies before creating a Job Requisition.`
+                    );
+                    setSaving(false);
+                    return;
+                }
+            }
+
+            // ── Proceed with save ──
             const payload = {
                 naming_series: formData.naming_series,
                 no_of_positions: parseInt(formData.no_of_positions) || 0,
