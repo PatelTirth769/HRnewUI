@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import Header from './components/common/Header';
 import Sidebar from './components/common/Sidebar';
@@ -158,20 +158,26 @@ import InterviewFeedback from './pages/Recruitment/InterviewFeedback';
 import AppointmentLetterTemplate from './pages/Recruitment/AppointmentLetterTemplate';
 import AppointmentLetter from './pages/Recruitment/AppointmentLetter';
 import RecruitmentAnalytics from './pages/Recruitment/RecruitmentAnalytics';
+import RecruitmentSettings from './pages/Recruitment/RecruitmentSettings';
 import HRModule from './pages/HR/HRModule';
 import RecruitmentModule from './pages/HR/RecruitmentModule';
 import PerformanceModule from './pages/HR/PerformanceModule';
 import ShiftAttendanceModule from './pages/HR/ShiftAttendanceModule';
 import LeaveModule from './pages/HR/LeaveModule';
+import HRDashboard from './pages/HR/HRDashboard';
 
 function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [activeModule, setActiveModule] = React.useState(null);
 
   const handleModuleClick = (moduleKey) => {
     setActiveModule(moduleKey);
     setIsSidebarOpen(true);
+    if (moduleKey === 'hr') {
+        navigate('/hr-dashboard');
+    }
   };
 
   const hideHeaderRoutes = ['/login', '/register'];
@@ -382,7 +388,9 @@ function App() {
                 <Route path="/recruitment/appointment-letter-template" element={<AppointmentLetterTemplate />} />
                 <Route path="/recruitment/appointment-letter" element={<AppointmentLetter />} />
                 <Route path="/recruitment/recruitment-analytics" element={<RecruitmentAnalytics />} />
+                <Route path="/recruitment/settings" element={<RecruitmentSettings />} />
                 <Route path="/hr" element={<HRModule />} />
+                <Route path="/hr-dashboard" element={<HRDashboard />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />

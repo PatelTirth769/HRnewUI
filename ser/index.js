@@ -39,7 +39,10 @@ app.use('/navigation', require('./routes/navigation'));
 // Bulk Resume Routes
 app.use('/api/resumes', require('./routes/resumes'));
 
-const PORT = process.env.PORT || 5000;
+// HR Dashboard Routes
+app.use('/hr-dashboard', require('./routes/hrDashboard'));
+
+const PORT = process.env.PORT || 3636;
 
 // MongoDB Connection Logic (Atlas Exclusive)
 const uriToUse = process.env.MONGO_URI;

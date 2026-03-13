@@ -96,6 +96,13 @@ export const moduleNavigation = {
                     { label: 'Recruitment Analytics', path: '/recruitment/recruitment-analytics', adminOnly: true },
                 ],
             },
+            {
+                title: 'Settings',
+                icon: 'cog',
+                items: [
+                    { label: 'Recruitment Setting', path: '/recruitment/settings', adminOnly: true },
+                ],
+            },
         ],
     },
     performance: {
