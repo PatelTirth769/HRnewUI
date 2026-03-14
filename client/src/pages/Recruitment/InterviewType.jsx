@@ -248,7 +248,6 @@ export default function InterviewType() {
             {!loading && (
                 <div className="mt-3 text-xs text-gray-400 flex justify-between">
                     <span>Total: {data.length} records</span>
-                    <span>Source: ERPNext → /api/resource/Interview Type</span>
                 </div>
             )}
         </div>

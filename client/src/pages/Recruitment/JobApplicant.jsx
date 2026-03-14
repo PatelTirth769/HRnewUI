@@ -1061,7 +1061,6 @@ export default function JobApplicant() {
             {!loading && (
                 <div className="mt-3 text-xs text-gray-400 flex justify-between">
                     <span>Total: {data.length} records</span>
-                    <span>Source: ERPNext → /api/resource/Job Applicant</span>
                 </div>
             )}
         </div>

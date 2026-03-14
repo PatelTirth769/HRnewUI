@@ -534,7 +534,6 @@ export default function SalaryComponent() {
             {!loading && (
                 <div className="mt-3 text-xs text-gray-400 flex justify-between">
                     <span>Total: {data.length} components ({data.filter(d => d.type === 'Earning').length} Earning, {data.filter(d => d.type === 'Deduction').length} Deduction)</span>
-                    <span>Source: ERPNext → /api/resource/Salary Component</span>
                 </div>
             )}
         </div>

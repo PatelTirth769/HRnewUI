@@ -528,7 +528,6 @@ export default function AppraisalTemplate() {
             {!loading && (
                 <div className="mt-3 text-xs text-gray-400 flex justify-between">
                     <span>Total: {data.length} templates (Showing {filtered.length})</span>
-                    <span>Source: ERPNext → /api/resource/Appraisal Template</span>
                 </div>
             )}
         </div>

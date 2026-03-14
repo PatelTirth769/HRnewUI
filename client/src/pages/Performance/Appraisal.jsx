@@ -766,7 +766,6 @@ export default function Appraisal() {
             {!loading && (
                 <div className="mt-3 text-xs text-gray-400 flex justify-between">
                     <span>Total: {data.length} Appraisals (Showing {filtered.length})</span>
-                    <span>Source: ERPNext → {API_BASE}</span>
                 </div>
             )}
         </div>

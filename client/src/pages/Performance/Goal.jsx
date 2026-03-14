@@ -482,7 +482,6 @@ export default function Goal() {
             {!loading && (
                 <div className="mt-3 text-xs text-gray-400 flex justify-between">
                     <span>Total: {data.length} (Showing {filtered.length})</span>
-                    <span>Source: ERPNext → {API_BASE}</span>
                 </div>
             )}
         </div>
