@@ -51,9 +51,10 @@ const LoginPage = () => {
   const onFinish = async (values) => {
     setLoading(true);
 
-    // ... other roles (candidate, recruiter) kept as is or ignored for now
+    // Default to 'admin' role logic since the role field is removed
+    const role = values.role || 'admin';
 
-    if (values.role == 'admin') {
+    if (role == 'admin') {
       try {
         // ERPNext Login Endpoint
         const response = await API.post('/api/method/login', {
@@ -98,7 +99,7 @@ const LoginPage = () => {
           localStorage.setItem('isLogged', 'true');
           localStorage.setItem('user', values.email);
           localStorage.setItem('userToken', 'session-active'); // Set dummy token for ProtectedRoute
-          localStorage.setItem('userRole', values.role); // Store form role
+          localStorage.setItem('userRole', role); // Store form role
           localStorage.setItem('userIsHRAdmin', isHRAdmin ? 'true' : 'false'); // Store actual ERPNext admin status
 
           // Redirect to Home (Main Page)
@@ -122,7 +123,7 @@ const LoginPage = () => {
       }
     }
     // ... keep other roles logic if necessary, or just return
-    else if (values.role == 'agent') {
+    else if (role == 'agent') {
       navigate('/agent/dashboard');
     }
     setLoading(false);
@@ -168,28 +169,13 @@ const LoginPage = () => {
 
           <Form layout="vertical" onFinish={onFinish}>
             <Form.Item
-              label="Role"
-              name="role"
-              rules={[{ required: true, message: 'Role is required' }]}
-            >
-              <Select
-                prefix={<FaUsers style={{ color: '#888' }} />}
-                placeholder="I am"
-              >
-                <Select.Option value="admin">Admin</Select.Option>
-                <Select.Option value="recruiter">Recruiter</Select.Option>
-                <Select.Option value="agent">Agent</Select.Option>
-                <Select.Option value="candidate">Candidate</Select.Option>
-              </Select>
-            </Form.Item>
-            <Form.Item
-              label="Email"
+              label="Email (Employee id or Phone No)"
               name="email"
-              rules={[{ required: true, message: 'Email is required' }]}
+              rules={[{ required: true, message: 'Email or ID is required' }]}
             >
               <Input
                 prefix={<FaUser style={{ color: '#888' }} />}
-                placeholder="Email"
+                placeholder="Email (Employee id or Phone No)"
                 autoComplete="new-password"
                 style={{
                   padding: '10px',

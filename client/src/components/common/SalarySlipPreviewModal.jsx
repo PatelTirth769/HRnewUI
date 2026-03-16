@@ -11,23 +11,45 @@ import Logo from '../../assets/images/logo.png';
  *  2. Then POSTs to `hrms.payroll.doctype.salary_structure.salary_structure.make_salary_slip`
  *     with source_name (the salary structure name) to get a draft Salary Slip object.
  *  3. Renders the A4 print layout with logo, DRAFT watermark, and computed tables.
+ * 
+ * Update: Now also supports `slipName` prop to fetch and show a specific existing slip.
  */
-export default function SalarySlipPreviewModal({ isOpen, onClose, assignmentData }) {
+export default function SalarySlipPreviewModal({ isOpen, onClose, assignmentData, slipName }) {
+
     const [loading, setLoading] = useState(false);
     const [slipData, setSlipData] = useState(null);
     const [errorMsg, setErrorMsg] = useState(null);
 
     useEffect(() => {
-        if (isOpen && assignmentData?.salary_structure) {
+        if (isOpen && (assignmentData?.salary_structure || slipName)) {
             setErrorMsg(null);
             setSlipData(null);
             fetchPreview();
         }
-    }, [isOpen, assignmentData]);
+    }, [isOpen, assignmentData, slipName]);
+
 
     const fetchPreview = async () => {
         setLoading(true);
+
+        if (slipName) {
+            try {
+                const res = await API.get(`/api/resource/Salary Slip/${encodeURIComponent(slipName)}`);
+                if (res.data?.data) {
+                    setSlipData(res.data.data);
+                    setLoading(false);
+                    return;
+                }
+            } catch (err) {
+                console.error('Failed to fetch specific slip:', err);
+                setErrorMsg('Could not load the selected Salary Slip.');
+            }
+            setLoading(false);
+            return;
+        }
+
         try {
+
             // Strategy 1: POST to make_salary_slip with a target_doc containing employee info
             // This replicates what ERPNext does internally when previewing from an Assignment
             const targetDoc = JSON.stringify({
