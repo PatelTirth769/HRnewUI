@@ -3,7 +3,7 @@ import lingayasHeaderLogo from '../assets/images/lingayas_header.jpeg';
 import lingayasSidebarLogo from '../assets/images/lingayas_side.jpeg';
 
 // Change this one value to switch logo set globally.
-export const DEFAULT_BRAND_CODE = 'preeshe';
+export const DEFAULT_BRAND_CODE = 'lingayas';
 
 const BRANDING_BY_CODE = {
   preeshe: {

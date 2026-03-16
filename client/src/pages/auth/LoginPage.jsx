@@ -16,6 +16,7 @@ const { Title, Text } = Typography;
 const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [auth, setAuth] = useAuth();
   const [code, setCode] = useState('');
@@ -27,6 +28,9 @@ const LoginPage = () => {
   const [systems, setSystems] = useState([]);
   const [selectedSystem, setSelectedSystem] = useState(null);
   const [loadingSystems, setLoadingSystems] = useState(true);
+
+  const emailInputValue = Form.useWatch('email', form);
+  const isAdministratorLogin = (emailInputValue || '').toLowerCase().includes('administrator');
 
   const apiAuthenticate = async () => {
     const data = {
@@ -78,7 +82,7 @@ const LoginPage = () => {
   };
 
   const onFinish = async (values) => {
-    if (!selectedSystem) {
+    if (isAdministratorLogin && !selectedSystem) {
       notification.warning({ message: 'Please select a system to log into' });
       return;
     }
@@ -205,7 +209,7 @@ const LoginPage = () => {
             Login to your account
           </Title>
 
-          <Form layout="vertical" onFinish={onFinish}>
+          <Form layout="vertical" onFinish={onFinish} form={form}>
             <Form.Item
               label="Email (Employee id or Phone No)"
               name="email"
@@ -242,11 +246,13 @@ const LoginPage = () => {
               />
             </Form.Item>
             <Form.Item>
-              <Button type="primary" htmlType="submit" className="auth-btn w-100" disabled={loading || !selectedSystem}>
+              <Button type="primary" htmlType="submit" className="auth-btn w-100" disabled={loading || (isAdministratorLogin && !selectedSystem)}>
                 {loading ? (
                   <>Logging in... <Spin indicator={<LoadingOutlined spin />} /></>
                 ) : (
-                  selectedSystem ? `Login to ${systems.find(s => s.code === selectedSystem)?.name || 'System'}` : 'Select a system →'
+                  isAdministratorLogin
+                    ? (selectedSystem ? `Login to ${systems.find(s => s.code === selectedSystem)?.name || 'System'}` : 'Select a system →')
+                    : 'Login'
                 )}
               </Button>
             </Form.Item>
@@ -263,7 +269,8 @@ const LoginPage = () => {
         </div>
 
         {/* ─── RIGHT: System Selector Panel ─── */}
-        <div className="system-selector-panel card-glass">
+        {isAdministratorLogin && (
+          <div className="system-selector-panel card-glass">
           <div className="system-selector-header">
             <FaServer style={{ fontSize: '1.2rem', color: '#667eea' }} />
             <span className="system-selector-title">Select System</span>
@@ -323,6 +330,7 @@ const LoginPage = () => {
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );
