@@ -45,6 +45,12 @@ app.use('/hr-dashboard', require('./routes/hrDashboard'));
 // Recruitment Settings Routes
 app.use('/recruitment-settings', require('./routes/recruitmentSettings'));
 
+// Systems Routes (multi-system admin login)
+app.use('/systems', require('./routes/systems'));
+
+// ERP Proxy Routes (forwards requests to selected ERPNext instance)
+app.use('/erp-proxy', require('./routes/erpProxy'));
+
 const PORT = process.env.PORT || 3636;
 
 // MongoDB Connection Logic (Atlas Exclusive)

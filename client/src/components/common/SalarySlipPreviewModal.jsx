@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
 import { notification } from 'antd';
-import Logo from '../../assets/images/logo.png';
+import { getBranding } from '../../config/branding';
 
 /**
  * SalarySlipPreviewModal
@@ -15,6 +15,8 @@ import Logo from '../../assets/images/logo.png';
  * Update: Now also supports `slipName` prop to fetch and show a specific existing slip.
  */
 export default function SalarySlipPreviewModal({ isOpen, onClose, assignmentData, slipName }) {
+
+    const branding = getBranding();
 
     const [loading, setLoading] = useState(false);
     const [slipData, setSlipData] = useState(null);
@@ -209,7 +211,7 @@ export default function SalarySlipPreviewModal({ isOpen, onClose, assignmentData
                     <div className="space-y-8">
                         {/* Header: Logo and Title */}
                         <div className="flex justify-between items-end border-b pb-4">
-                            <img src={Logo} alt="Preeshe Consultancy" className="h-20 object-contain" />
+                            <img src={branding.salarySlipLogo} alt={`${branding.displayName} logo`} className="h-20 object-contain" />
                             <h2 className="text-xl font-bold text-gray-700">Preview for {slipData.employee}</h2>
                         </div>
 

@@ -47,7 +47,6 @@ input::placeholder {
 }
 
 /* Consolidated login-page style */
-/* Consolidated login-page style */
 .login-page {
   background: url('../../assets/images/login_bg.jpeg') no-repeat center center fixed;
   background-size: 100% 100%;
@@ -59,6 +58,17 @@ input::placeholder {
 }
 
 /* Removed duplicate .login-page block */
+
+/* ─── Two-panel auth layout ─── */
+.auth-container-multi {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 2rem 1rem;
+  padding-top: 30vh;
+  gap: 24px;
+}
 
 .auth-container {
   flex: 1;
@@ -115,6 +125,184 @@ input::placeholder {
   width: 100%;
   text-align: right;
   z-index: 10;
+}
+
+/* ─── System Selector Panel ─── */
+.system-selector-panel {
+  width: 340px;
+  max-width: 92vw;
+  padding: 24px 24px 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.system-selector-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.system-selector-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.system-selector-subtitle {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  margin-bottom: 18px;
+  margin-top: 0;
+}
+
+.system-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 0;
+  color: #94a3b8;
+  font-size: 0.88rem;
+}
+
+.system-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.system-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.7);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.system-card:hover {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.system-card-selected {
+  border-color: #667eea !important;
+  background: rgba(102, 126, 234, 0.08) !important;
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.15) !important;
+}
+
+.system-card-upcoming {
+  cursor: default !important;
+}
+
+.system-card-upcoming:hover {
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: none;
+}
+
+.system-card-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.system-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.system-card-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.system-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  width: fit-content;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.system-badge-active {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.system-badge-upcoming {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.system-card-check {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.system-selected-info {
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: rgba(102, 126, 234, 0.08);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: #475569;
+  text-align: center;
+  border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 860px) {
+  .auth-container-multi {
+    flex-direction: column;
+    align-items: center;
+    padding-top: 20vh;
+    gap: 16px;
+  }
+
+  .system-selector-panel {
+    width: 420px;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-container-multi {
+    padding-top: 12vh;
+  }
+
+  .auth-card,
+  .system-selector-panel {
+    width: 100%;
+  }
 }
 
 /* End of styles */

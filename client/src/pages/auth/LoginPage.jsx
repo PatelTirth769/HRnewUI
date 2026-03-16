@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Form, Input, Button, Typography, notification, Spin, Select } from 'antd';
+import { Form, Input, Button, Typography, notification, Spin } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
 
 import api from '../../utility/api';
 import { useAuth } from '../../context/auth.jsx';
 import Config from '../../utility/Config';
-import { FaUsers, FaUser, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FaUser, FaLock, FaEye, FaEyeSlash, FaServer, FaClock } from 'react-icons/fa';
 import './style.css';
-import API from '../../services/api';
+import API, { setActiveSystem } from '../../services/api';
+import axios from 'axios';
 
 const { Title, Text } = Typography;
 
@@ -21,6 +22,11 @@ const LoginPage = () => {
   const [accessToken, setAccessToken] = useState('');
   const [profile, setProfile] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Systems state
+  const [systems, setSystems] = useState([]);
+  const [selectedSystem, setSelectedSystem] = useState(null);
+  const [loadingSystems, setLoadingSystems] = useState(true);
 
   const apiAuthenticate = async () => {
     const data = {
@@ -46,86 +52,107 @@ const LoginPage = () => {
 
   useEffect(() => {
     apiAuthenticate();
+    fetchSystems();
   }, []);
 
+  // Fetch systems from backend
+  const fetchSystems = async () => {
+    setLoadingSystems(true);
+    try {
+      const res = await axios.get('/local-api/systems');
+      const systemsList = res.data || [];
+      setSystems(systemsList);
+      // Auto-select first active system
+      const firstActive = systemsList.find(s => s.status === 'active');
+      if (firstActive) {
+        setSelectedSystem(firstActive.code);
+      }
+    } catch (err) {
+      console.error('Failed to fetch systems:', err);
+      // Fallback: default to preeshe
+      setSystems([{ name: 'Preeshe', code: 'preeshe', status: 'active', order: 1 }]);
+      setSelectedSystem('preeshe');
+    } finally {
+      setLoadingSystems(false);
+    }
+  };
+
   const onFinish = async (values) => {
+    if (!selectedSystem) {
+      notification.warning({ message: 'Please select a system to log into' });
+      return;
+    }
+
     setLoading(true);
 
-    // Default to 'admin' role logic since the role field is removed
-    const role = values.role || 'admin';
+    // Set active system in api.js so all calls route through the proxy
+    setActiveSystem(selectedSystem);
 
-    if (role == 'admin') {
-      try {
-        // ERPNext Login Endpoint
-        const response = await API.post('/api/method/login', {
-          usr: values.email,
-          pwd: values.password
-        });
+    try {
+      // ERPNext Login Endpoint (routed through proxy)
+      const response = await API.post('/api/method/login', {
+        usr: values.email,
+        pwd: values.password
+      });
 
-        if (response.data.message === 'Logged In') {
-          // Fetch actual ERPNext roles for this user
-          let isHRAdmin = false;
-          try {
-            // Employees often can't query 'Has Role' or 'User' doctypes (gives 403 Forbidden).
-            // A safer check is to see if we can read the Employee doctype itself.
-            // If the user has HR Manager/User role, they can see ALL employees.
-            // If they are just an employee, they can strictly see their own record.
-            // But we can check if they have HR Admin rights by testing if they can read the 'User' list or by a specific API.
-            // A good trick is to call /api/method/frappe.auth.get_logged_user which gives basic info, 
-            // but to get roles, frappe.client.get_value might work if they have permission to read their own User record.
+      if (response.data.message === 'Logged In') {
+        // Fetch actual ERPNext roles for this user
+        let isHRAdmin = false;
+        try {
+          const userRes = await API.get(`/api/resource/User/${encodeURIComponent(values.email)}`);
+          const userData = userRes.data?.data;
+          const roles = userData?.roles?.map(r => r.role) || [];
 
-            const userRes = await API.get(`/api/resource/User/${encodeURIComponent(values.email)}`);
-            const userData = userRes.data?.data;
-            const roles = userData?.roles?.map(r => r.role) || [];
+          console.log("PARSED ROLES ARRAY:", roles);
 
-            console.log("PARSED ROLES ARRAY:", roles);
-
-            // User is HR Admin if they have any of these roles
-            const adminRoles = ['HR Manager', 'HR User', 'System Manager', 'Administrator'];
-            isHRAdmin = roles.some(r => adminRoles.includes(r));
-            console.log("IS HR ADMIN EVALUATED TO:", isHRAdmin);
-          } catch (roleErr) {
-            console.error('Could not fetch User doctype. They likely only have Employee role permissions:', roleErr);
-            // If it's a 403 Forbidden reading their own User document, they definitely aren't an admin
-            isHRAdmin = false;
-          }
-
-          notification.success({
-            message: 'Login Successful',
-            description: `Welcome back, ${response.data.full_name}`,
-          });
-
-          // Store basic user info 
-          localStorage.setItem('isLogged', 'true');
-          localStorage.setItem('user', values.email);
-          localStorage.setItem('userToken', 'session-active'); // Set dummy token for ProtectedRoute
-          localStorage.setItem('userRole', role); // Store form role
-          localStorage.setItem('userIsHRAdmin', isHRAdmin ? 'true' : 'false'); // Store actual ERPNext admin status
-
-          // Redirect to Home (Main Page)
-          navigate('/home');
-        }
-      } catch (err) {
-        console.error("Login Error:", err);
-        const status = err.response?.status;
-        let errorMsg = 'Login Failed';
-
-        if (status === 401) {
-          errorMsg = "Invalid Username or Password. Please check if your 'Administrator' username is capitalized.";
-        } else if (err.response?.data?.message) {
-          errorMsg = err.response.data.message;
+          // User is HR Admin if they have any of these roles
+          const adminRoles = ['HR Manager', 'HR User', 'System Manager', 'Administrator'];
+          isHRAdmin = roles.some(r => adminRoles.includes(r));
+          console.log("IS HR ADMIN EVALUATED TO:", isHRAdmin);
+        } catch (roleErr) {
+          console.error('Could not fetch User doctype:', roleErr);
+          isHRAdmin = false;
         }
 
-        notification.error({
-          message: 'Login Failed',
-          description: errorMsg
+        notification.success({
+          message: 'Login Successful',
+          description: `Welcome back, ${response.data.full_name}`,
         });
+
+        // Store basic user info 
+        localStorage.setItem('isLogged', 'true');
+        localStorage.setItem('user', values.email);
+        localStorage.setItem('userToken', 'session-active');
+        localStorage.setItem('userRole', 'admin');
+        localStorage.setItem('userIsHRAdmin', isHRAdmin ? 'true' : 'false');
+        localStorage.setItem('activeSystem', selectedSystem);
+
+        // Find the selected system name for display
+        const sys = systems.find(s => s.code === selectedSystem);
+        if (sys) {
+          localStorage.setItem('activeSystemName', sys.name);
+        }
+
+        // Redirect to Home (Main Page)
+        navigate('/home');
       }
+    } catch (err) {
+      console.error("Login Error:", err);
+      const status = err.response?.status;
+      let errorMsg = 'Login Failed';
+
+      if (status === 401) {
+        errorMsg = "Invalid Username or Password.";
+      } else if (err.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      }
+
+      notification.error({
+        message: 'Login Failed',
+        description: errorMsg
+      });
     }
-    // ... keep other roles logic if necessary, or just return
-    else if (role == 'agent') {
-      navigate('/agent/dashboard');
-    }
+
     setLoading(false);
   };
 
@@ -136,14 +163,12 @@ const LoginPage = () => {
     if (linkedInCode) {
       const fetchLinkedInData = async () => {
         try {
-          // Get access token
           const accessTokenResponse = await api.post('/linkedin/getAccessToken', {
             code: linkedInCode,
           });
           const accessToken = accessTokenResponse.data.accessToken;
           setAccessToken(accessToken);
 
-          // Get profile data
           const profileResponse = await api.post('/linkedin/getProfileData', {
             accessToken,
           });
@@ -159,9 +184,22 @@ const LoginPage = () => {
     }
   }, [location]);
 
+  // System card color palette
+  const systemColors = [
+    { bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', text: '#fff' },
+    { bg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', text: '#fff' },
+    { bg: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', text: '#fff' },
+    { bg: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', text: '#fff' },
+    { bg: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', text: '#fff' },
+    { bg: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)', text: '#fff' },
+  ];
+
+  const getSystemColor = (index) => systemColors[index % systemColors.length];
+
   return (
     <div className="login-page">
-      <div className="auth-container">
+      <div className="auth-container-multi">
+        {/* ─── LEFT: Login Form ─── */}
         <div className="login-div card-glass auth-card">
           <Title level={3} className="auth-title">
             Login to your account
@@ -203,21 +241,13 @@ const LoginPage = () => {
                 }
               />
             </Form.Item>
-            {/* <Form.Item>
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="d-flex align-items-start justify-content-center">
-                  <input className="mx-2" type="checkbox" />
-
-                  <span>Keep me logged in</span>
-                </div>
-                <Link to="/rcf/forgotpassword" style={{ color: "#4D4D4D" }}>
-                  Forgot Password?
-                </Link>
-              </div>
-            </Form.Item> */}
             <Form.Item>
-              <Button type="primary" htmlType="submit" className="auth-btn w-100">
-                Login {loading && <Spin indicator={<LoadingOutlined spin />} />}
+              <Button type="primary" htmlType="submit" className="auth-btn w-100" disabled={loading || !selectedSystem}>
+                {loading ? (
+                  <>Logging in... <Spin indicator={<LoadingOutlined spin />} /></>
+                ) : (
+                  selectedSystem ? `Login to ${systems.find(s => s.code === selectedSystem)?.name || 'System'}` : 'Select a system →'
+                )}
               </Button>
             </Form.Item>
           </Form>
@@ -230,6 +260,68 @@ const LoginPage = () => {
               </Link>
             </Text>
           </div>
+        </div>
+
+        {/* ─── RIGHT: System Selector Panel ─── */}
+        <div className="system-selector-panel card-glass">
+          <div className="system-selector-header">
+            <FaServer style={{ fontSize: '1.2rem', color: '#667eea' }} />
+            <span className="system-selector-title">Select System</span>
+          </div>
+          <p className="system-selector-subtitle">
+            Choose which system to access
+          </p>
+
+          {loadingSystems ? (
+            <div className="system-loading">
+              <Spin indicator={<LoadingOutlined spin style={{ fontSize: 24, color: '#667eea' }} />} />
+              <span>Loading systems...</span>
+            </div>
+          ) : (
+            <div className="system-cards-list">
+              {systems.map((sys, index) => {
+                const isActive = sys.status === 'active';
+                const isSelected = selectedSystem === sys.code;
+                const colorSet = getSystemColor(index);
+
+                return (
+                  <div
+                    key={sys.code}
+                    className={`system-card ${isSelected ? 'system-card-selected' : ''} ${!isActive ? 'system-card-upcoming' : ''}`}
+                    onClick={() => isActive && setSelectedSystem(sys.code)}
+                    style={{
+                      cursor: isActive ? 'pointer' : 'default',
+                      opacity: isActive ? 1 : 0.55,
+                    }}
+                  >
+                    <div className="system-card-icon" style={{ background: colorSet.bg }}>
+                      {sys.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="system-card-info">
+                      <div className="system-card-name">{sys.name}</div>
+                      {isActive ? (
+                        <span className="system-badge system-badge-active">Active</span>
+                      ) : (
+                        <span className="system-badge system-badge-upcoming">
+                          <FaClock style={{ fontSize: '0.65rem', marginRight: '3px' }} />
+                          Coming Soon
+                        </span>
+                      )}
+                    </div>
+                    {isSelected && isActive && (
+                      <div className="system-card-check">✓</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {selectedSystem && (
+            <div className="system-selected-info">
+              Logging into: <strong>{systems.find(s => s.code === selectedSystem)?.name}</strong>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -104,12 +104,19 @@ const EmployeeSelfService = () => {
         setLoadingMyEmp(false);
         return;
       }
-      
-      // 2. Fetch Employee doc by user_id
-      const empRes = await API.get(`/api/resource/Employee?fields=["ctc","salary_currency","name","employee_name","company","department","user_id","holiday_list","salutation","first_name","middle_name","last_name","gender","date_of_birth","personal_email","cell_number","current_address","permanent_address","pan_number","blood_group","marital_status"]&filters=[["user_id","=","${userId}"]]`);
-      const empData = empRes.data;
-      if (empData && empData.data && empData.data.length > 0) {
-        setMyEmpData(empData.data[0]);
+
+      // 2. Fetch employee id for the logged in user
+      const empListRes = await API.get(`/api/resource/Employee?fields=["name"]&filters=[["user_id","=","${userId}"]]&limit_page_length=1`);
+      const empId = empListRes.data?.data?.[0]?.name;
+      if (!empId) {
+        return;
+      }
+
+      // 3. Fetch full Employee document so all profile tabs can render available details
+      const empDocRes = await API.get(`/api/resource/Employee/${encodeURIComponent(empId)}`);
+      const empDoc = empDocRes.data?.data;
+      if (empDoc) {
+        setMyEmpData(empDoc);
       }
     } catch (e) {
       console.error("Failed to fetch my employee data", e);

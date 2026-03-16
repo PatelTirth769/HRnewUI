@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { moduleNavigation } from '../../config/moduleNavigation';
 import { useUserRole } from '../../hooks/useUserRole';
-import logo from '../../assets/images/logo.png';
+import { getBranding } from '../../config/branding';
 
 const Icon = ({ name, className }) => {
     const icons = {
@@ -117,6 +117,7 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { isAdmin } = useUserRole();
+    const branding = getBranding();
     const [expandedSections, setExpandedSections] = useState({});
 
     useEffect(() => {
@@ -150,7 +151,7 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
             <div className={`fixed inset-y-0 left-0 w-72 bg-white z-[50] transform transition-transform duration-300 ease-in-out shadow-2xl flex flex-col border-r border-gray-100 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="p-6 border-b border-gray-50 flex flex-col gap-4 bg-white sticky top-0 z-10">
                     <div className="flex justify-between items-center">
-                        <img src={logo} alt="Candid Offers" className="h-10 w-auto object-contain" />
+                        <img src={branding.sidebarLogo} alt={`${branding.displayName} logo`} className="h-10 w-auto object-contain" />
                         <button
                             onClick={onClose}
                             className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 text-gray-400 hover:text-gray-600 group"

@@ -1,6 +1,5 @@
 import axios from 'axios';
 import Config from './Config';
-import { useLocation } from 'react-router-dom';
 
 class api {
   constructor() {
@@ -27,9 +26,9 @@ class api {
       (res) => res,
       (err) => {
         if (err.response && err.response.status === 403) {
-          const his = useLocation();
-          his.push('/login');
-          window.location.reload();
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
         }
         return Promise.reject(err);
       }

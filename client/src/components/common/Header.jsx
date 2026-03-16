@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import logo from '../../assets/images/logo.png';
 import { useUserRole } from '../../hooks/useUserRole';
+import { getBranding } from '../../config/branding';
 
 const employeeHiddenModules = new Set(['master', 'elcLetters']);
 
 const Header = ({ onModuleClick }) => {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
+  const branding = getBranding();
 
   const [navLoading, setNavLoading] = useState(true);
   const [navData, setNavData] = useState({});
@@ -36,9 +37,12 @@ const Header = ({ onModuleClick }) => {
 
   return (
     <header className="bg-white px-4 py-2 flex justify-between items-center relative shadow-sm" >
-      <Link to="/home" className="no-underline text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors flex items-center gap-2">
-        <img src={logo} alt="Logo" className="h-8 w-auto" />
-        Dash Board
+      <Link
+        to="/home"
+        className={`no-underline text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors flex items-center ${branding.showHeaderTitle ? 'gap-2' : ''}`}
+      >
+        <img src={branding.headerLogo} alt={`${branding.displayName} logo`} className="h-10 w-auto object-contain" />
+        {branding.showHeaderTitle ? branding.headerTitle : null}
       </Link>
       <div className="flex items-center space-x-4 text-sm text-gray-700">
         {/* Dynamic module tabs loaded from database via ser backend */}
@@ -61,9 +65,7 @@ const Header = ({ onModuleClick }) => {
 
         <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>
         <Link to="/settings" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Settings</Link>
-        <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Self Service</Link>
-        <Link to="/approver" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Approver</Link>
-
+        <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Employee Self Service</Link>
         <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Reports</Link>
 
         <div className="relative">
