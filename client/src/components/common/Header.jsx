@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/images/logo.png';
 import { useUserRole } from '../../hooks/useUserRole';
@@ -61,7 +61,9 @@ const Header = ({ onModuleClick }) => {
 
         <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>
         <Link to="/settings" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Settings</Link>
-        <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Employee Self Service</Link>
+        <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Self Service</Link>
+        <Link to="/approver" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Approver</Link>
+
         <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Reports</Link>
 
         <div className="relative">

@@ -5,6 +5,8 @@ import Header from './components/common/Header';
 import Sidebar from './components/common/Sidebar';
 import Dashboard from './pages/Dashboard';
 import EmployeeSelfService from './pages/ESS/EmployeeSelfService';
+import Approver from './pages/ESS/Approver';
+
 import EmployeeMIS from './pages/EmployeeMIS';
 import CompanyMaster from './components/company/CompanyMaster';
 import Home from './pages/Home';
@@ -211,6 +213,8 @@ function App() {
                 <Route path="/home" element={<Home />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/employee-self-service/*" element={<EmployeeSelfService />} />
+                <Route path="/approver/*" element={<Approver />} />
+
                 <Route path="/employee-mis" element={<EmployeeMIS />} />
                 <Route path="/companies" element={<CompanyMaster />} />
                 <Route path="/about" element={<About />} />

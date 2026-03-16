@@ -40,30 +40,59 @@ export default function ESSAttendanceYearly({ employeeData }) {
         try {
             const startOfYear = `${year}-01-01`;
             const endOfYear = `${year}-12-31`;
-            const res = await API.get(`/api/resource/Attendance?fields=["name","attendance_date","status","working_hours"]&filters=[["employee","=","${employeeData.name}"],["attendance_date",">=","${startOfYear}"],["attendance_date","<=","${endOfYear}"]]&limit_page_length=None`);
             
+            const [attRes, checkinRes] = await Promise.all([
+                API.get(`/api/resource/Attendance?fields=["name","attendance_date","status","working_hours"]&filters=[["employee","=","${employeeData.name}"],["attendance_date",">=","${startOfYear}"],["attendance_date","<=","${endOfYear}"]]&limit_page_length=None`),
+                API.get(`/api/resource/Employee Checkin?fields=["name","time","log_type"]&filters=[["employee","=","${employeeData.name}"],["time",">=","${startOfYear} 00:00:00"],["time","<=","${endOfYear} 23:59:59"]]&limit_page_length=None`)
+            ]);
+            
+            const checkinDates = new Set(checkinRes.data.data.map(c => c.time.split(' ')[0]));
+
             // Process month-wise data
             const monthlyStats = Array.from({ length: 12 }, (_, i) => ({
                 month: dayjs().month(i).format('MMM'),
                 present: 0,
                 absent: 0,
-                leave: 0
+                leave: 0,
+                processedDates: new Set()
             }));
 
-            res.data.data.forEach(att => {
-                const date = dayjs(att.attendance_date);
-                const mIndex = date.month();
-                const isHoliday = holidays.includes(att.attendance_date);
-                const isSunday = date.day() === 0;
+            // Priority 1: Checkins Always Mean Present
+            checkinDates.forEach(dStr => {
+                const dObj = dayjs(dStr);
+                if (dObj.year() === year) {
+                    const mIndex = dObj.month();
+                    monthlyStats[mIndex].present++;
+                    monthlyStats[mIndex].processedDates.add(dStr);
+                }
+            });
 
+            // Priority 2: Formal Attendance Records for other statuses
+            attRes.data.data.forEach(att => {
+                if (monthlyStats[dayjs(att.attendance_date).month()].processedDates.has(att.attendance_date)) return;
+
+                const dateObj = dayjs(att.attendance_date);
+                const mIndex = dateObj.month();
+                const isHoliday = holidays.includes(att.attendance_date);
+                const isSunday = dateObj.day() === 0;
+
+                // If formal record says Present, but we are here, there are no checkins. Override it.
                 let effectiveStatus = att.status;
-                if (att.status === 'Present' && parseFloat(att.working_hours || 0) === 0 && (isSunday || isHoliday)) {
-                    effectiveStatus = 'Weekly Off';
+                if (att.status === 'Present') {
+                    if (isSunday) effectiveStatus = 'Weekly Off';
+                    else if (isHoliday) effectiveStatus = 'Holiday';
+                    else effectiveStatus = 'Absent';
                 }
 
-                if (effectiveStatus === 'Present') monthlyStats[mIndex].present++;
-                else if (effectiveStatus === 'Absent') monthlyStats[mIndex].absent++;
-                else if (effectiveStatus === 'On Leave' || effectiveStatus === 'Half Day') monthlyStats[mIndex].leave++;
+                if (effectiveStatus === 'Present') {
+                    monthlyStats[mIndex].present++;
+                } else if (effectiveStatus === 'Absent') {
+                    monthlyStats[mIndex].absent++;
+                } else if (effectiveStatus === 'On Leave' || effectiveStatus === 'Half Day') {
+                    monthlyStats[mIndex].leave++;
+                }
+                
+                monthlyStats[mIndex].processedDates.add(att.attendance_date);
             });
 
             setData(monthlyStats);

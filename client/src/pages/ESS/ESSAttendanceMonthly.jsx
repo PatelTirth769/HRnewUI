@@ -9,6 +9,7 @@ export default function ESSAttendanceMonthly({ employeeData }) {
     const [month, setMonth] = useState(dayjs());
 
     const [holidays, setHolidays] = useState([]);
+    const [checkins, setCheckins] = useState([]);
 
     useEffect(() => {
         if (employeeData?.name) {
@@ -35,8 +36,14 @@ export default function ESSAttendanceMonthly({ employeeData }) {
         try {
             const startOfMonth = month.startOf('month').format('YYYY-MM-DD');
             const endOfMonth = month.endOf('month').format('YYYY-MM-DD');
-            const res = await API.get(`/api/resource/Attendance?fields=["name","attendance_date","status","working_hours"]&filters=[["employee","=","${employeeData.name}"],["attendance_date",">=","${startOfMonth}"],["attendance_date","<=","${endOfMonth}"]]`);
-            setData(res.data.data || []);
+            
+            const [attRes, checkinRes] = await Promise.all([
+                API.get(`/api/resource/Attendance?fields=["name","attendance_date","status","working_hours"]&filters=[["employee","=","${employeeData.name}"],["attendance_date",">=","${startOfMonth}"],["attendance_date","<=","${endOfMonth}"]]`),
+                API.get(`/api/resource/Employee Checkin?fields=["name","time","log_type"]&filters=[["employee","=","${employeeData.name}"],["time",">=","${startOfMonth} 00:00:00"],["time","<=","${endOfMonth} 23:59:59"]]&limit_page_length=None`)
+            ]);
+
+            setData(attRes.data.data || []);
+            setCheckins(checkinRes.data.data || []);
         } catch (err) {
             console.error(err);
             notification.error({ message: "Failed to load monthly attendance" });
@@ -46,26 +53,43 @@ export default function ESSAttendanceMonthly({ employeeData }) {
     };
 
     const getStatus = (date) => {
+        // Ignore dates that do not belong to the currently selected month
+        if (date.month() !== month.month() || date.year() !== month.year()) {
+            return null;
+        }
+
         const dateStr = date.format('YYYY-MM-DD');
         const record = data.find(att => att.attendance_date === dateStr);
+        const hasCheckins = checkins.some(c => c.time.startsWith(dateStr));
         const isHoliday = holidays.includes(dateStr);
         const isSunday = date.day() === 0;
 
+        // Priority 1: Checkins Always Mean Present
+        if (hasCheckins) {
+            return { status: 'Present', color: 'success', badge: 'success' };
+        }
+
+        // Priority 2: Formal Attendance Records
         if (record) {
             if (record.status === 'Present') {
-                // If marked Present but 0 working hours and is Sunday/Holiday, it's likely a false positive from backend
-                if (parseFloat(record.working_hours || 0) === 0 && (isSunday || isHoliday)) {
-                    return { status: 'Weekly Off', color: 'default', badge: 'default' };
-                }
-                return { status: 'Present', color: 'success', badge: 'success' };
+                // Handle false positive "Present" when there are NO checkins
+                if (isSunday) return { status: 'Weekly Off', color: 'default', badge: 'default' };
+                if (isHoliday) return { status: 'Holiday', color: 'default', badge: 'default' };
+                return { status: 'Absent', color: 'error', badge: 'error' };
             }
             if (record.status === 'Absent') return { status: 'Absent', color: 'error', badge: 'error' };
             if (record.status === 'Half Day') return { status: 'Half Day', color: 'warning', badge: 'warning' };
             if (record.status === 'On Leave') return { status: 'On Leave', color: 'processing', badge: 'processing' };
         }
 
+        // Priority 3: Non-Working Days
         if (isHoliday) return { status: 'Holiday', color: 'default', badge: 'default' };
         if (isSunday) return { status: 'Weekly Off', color: 'default', badge: 'default' };
+
+        // Priority 4: Past working days without any records are Absent
+        if (date.isBefore(dayjs(), 'day') || date.isSame(dayjs(), 'day')) {
+            return { status: 'Absent', color: 'error', badge: 'error' };
+        }
 
         return null;
     };
@@ -81,21 +105,21 @@ export default function ESSAttendanceMonthly({ employeeData }) {
         );
     };
 
-    const stats = {
-        present: data.filter(r => {
-            const date = dayjs(r.attendance_date);
-            const isHoliday = holidays.includes(r.attendance_date);
-            const isSunday = date.day() === 0;
-            if (r.status === 'Present') {
-                if (parseFloat(r.working_hours || 0) === 0 && (isSunday || isHoliday)) return false;
-                return true;
-            }
-            return false;
-        }).length,
-        absent: data.filter(r => r.status === 'Absent').length,
-        halfDay: data.filter(r => r.status === 'Half Day').length,
-        onLeave: data.filter(r => r.status === 'On Leave').length,
-    };
+    const stats = (() => {
+        const days = Array.from({ length: month.daysInMonth() }, (_, i) => month.date(i + 1));
+        const res = { present: 0, absent: 0, halfDay: 0, onLeave: 0 };
+        
+        days.forEach(d => {
+            const info = getStatus(d);
+            if (!info) return;
+            if (info.status === 'Present') res.present++;
+            else if (info.status === 'Absent') res.absent++;
+            else if (info.status === 'Half Day') res.halfDay++;
+            else if (info.status === 'On Leave') res.onLeave++;
+        });
+        
+        return res;
+    })();
 
     return (
         <div className="space-y-4">

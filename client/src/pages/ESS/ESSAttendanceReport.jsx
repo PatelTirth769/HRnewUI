@@ -37,19 +37,71 @@ export default function ESSAttendanceReport({ employeeData }) {
         try {
             const fromDate = dates[0].format('YYYY-MM-DD');
             const toDate = dates[1].format('YYYY-MM-DD');
-            const res = await API.get(`/api/resource/Attendance?fields=["name","attendance_date","status","in_time","out_time","working_hours","shift","late_entry","early_exit"]&filters=[["employee","=","${employeeData.name}"],["attendance_date",">=","${fromDate}"],["attendance_date","<=","${toDate}"]]&order_by=attendance_date desc`);
+            const [attRes, checkinRes] = await Promise.all([
+                API.get(`/api/resource/Attendance?fields=["name","attendance_date","status","in_time","out_time","working_hours","shift","late_entry","early_exit"]&filters=[["employee","=","${employeeData.name}"],["attendance_date",">=","${fromDate}"],["attendance_date","<=","${toDate}"]]&order_by=attendance_date desc`),
+                API.get(`/api/resource/Employee Checkin?fields=["name","time","log_type"]&filters=[["employee","=","${employeeData.name}"],["time",">=","${fromDate} 00:00:00"],["time","<=","${toDate} 23:59:59"]]&limit_page_length=None`)
+            ]);
             
-            const processed = (res.data.data || []).map(att => {
+            const attendanceDocs = attRes.data.data || [];
+            const checkinDocs = checkinRes.data.data || [];
+
+            // 1. Group checkins by date and determine IN/OUT times
+            const checkinsByDate = {};
+            checkinDocs.forEach(c => {
+                const d = c.time.split(' ')[0];
+                if (!checkinsByDate[d]) checkinsByDate[d] = [];
+                checkinsByDate[d].push(c);
+            });
+
+            const processedDates = new Set();
+            const finalResults = [];
+
+            // 2. Priority 1: Checkins Always Mean Present
+            Object.keys(checkinsByDate).forEach(d => {
+                const sorted = checkinsByDate[d].sort((a,b) => a.time.localeCompare(b.time));
+                const firstIn = sorted[0];
+                const lastOut = sorted[sorted.length - 1];
+                
+                // See if there's a formal record to get shift/working_hours
+                const formalRecord = attendanceDocs.find(att => att.attendance_date === d);
+
+                finalResults.push({
+                    name: formalRecord?.name || `virtual_${d}`,
+                    attendance_date: d,
+                    status: 'Present',
+                    in_time: firstIn.time,
+                    out_time: lastOut.time,
+                    working_hours: formalRecord?.working_hours || null,
+                    shift: formalRecord?.shift || 'N/A',
+                    late_entry: formalRecord?.late_entry || 0,
+                    early_exit: formalRecord?.early_exit || 0
+                });
+                processedDates.add(d);
+            });
+
+            // 3. Priority 2: Formal Attendance Records for other statuses
+            attendanceDocs.forEach(att => {
+                if (processedDates.has(att.attendance_date)) return;
+
                 const date = dayjs(att.attendance_date);
                 const isHoliday = holidays.includes(att.attendance_date);
                 const isSunday = date.day() === 0;
 
-                if (att.status === 'Present' && parseFloat(att.working_hours || 0) === 0 && (isSunday || isHoliday)) {
-                    return { ...att, status: isSunday ? 'Weekly Off' : 'Holiday' };
+                let effectiveStatus = att.status;
+                // If this formal record claims "Present" but it's not in processedDates (which contains all days with checkins),
+                // then NO checkins exist for this day! Override it.
+                if (att.status === 'Present') {
+                    if (isSunday) effectiveStatus = 'Weekly Off';
+                    else if (isHoliday) effectiveStatus = 'Holiday';
+                    else effectiveStatus = 'Absent';
                 }
-                return att;
+
+                finalResults.push({ ...att, status: effectiveStatus });
+                processedDates.add(att.attendance_date);
             });
-            setData(processed);
+
+            const sorted = finalResults.sort((a,b) => dayjs(b.attendance_date).unix() - dayjs(a.attendance_date).unix());
+            setData(sorted);
         } catch (err) {
             console.error(err);
             notification.error({ message: "Failed to load attendance report" });
