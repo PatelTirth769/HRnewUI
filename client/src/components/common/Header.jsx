@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useUserRole } from '../../hooks/useUserRole';
 import { getBranding } from '../../config/branding';
 
-const employeeHiddenModules = new Set(['master', 'elcLetters']);
+const employeeHiddenModules = new Set(['master', 'elcLetters', 'approvers']);
 
 const Header = ({ onModuleClick }) => {
   const navigate = useNavigate();
@@ -65,7 +65,8 @@ const Header = ({ onModuleClick }) => {
 
         <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>
         <Link to="/settings" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Settings</Link>
-        <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Employee Self Service</Link>
+        <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Self Service</Link>
+        <Link to="/approver" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Approvers</Link>
         <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Reports</Link>
 
         <div className="relative">

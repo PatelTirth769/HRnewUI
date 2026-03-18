@@ -207,6 +207,18 @@ export default function ESSAttendanceDaily({ employeeData }) {
                                 {data.late_entry === 1 ? <Tag color="orange">Late Entry</Tag> : (data.status === 'Present' ? <Tag color="gray" className="opacity-50">On Time</Tag> : null)}
                                 {data.early_exit === 1 ? <Tag color="magenta">Early Exit</Tag> : (data.status === 'Present' ? <Tag color="gray" className="opacity-50">Full Duration</Tag> : null)}
                                 {data.status === 'Present (Checkin)' && <div className="text-[10px] text-gray-400 italic">Processing pending...</div>}
+                                {(data.status === 'Absent' || data.late_entry === 1 || data.early_exit === 1) && (
+                                    <div className="mt-2 text-center">
+                                        <Button 
+                                            size="small" 
+                                            type="link" 
+                                            className="text-[10px] p-0 h-auto"
+                                            onClick={() => window.location.hash = '#/employee-self-service/request/attendance-regularise'}
+                                        >
+                                            → Regularise
+                                        </Button>
+                                    </div>
+                                )}
                             </Space>
                         </Card>
                     </div>

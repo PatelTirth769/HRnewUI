@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import Header from './components/common/Header';
+import { useUserRole } from './hooks/useUserRole';
 import Sidebar from './components/common/Sidebar';
 import Dashboard from './pages/Dashboard';
 import EmployeeSelfService from './pages/ESS/EmployeeSelfService';
@@ -168,6 +169,11 @@ import ShiftAttendanceModule from './pages/HR/ShiftAttendanceModule';
 import LeaveModule from './pages/HR/LeaveModule';
 import HRDashboard from './pages/HR/HRDashboard';
 
+const RootRedirect = () => {
+  const { isAdmin } = useUserRole();
+  return <Navigate to={isAdmin ? "/home" : "/employee-self-service"} replace />;
+};
+
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -175,6 +181,10 @@ function App() {
   const [activeModule, setActiveModule] = React.useState(null);
 
   const handleModuleClick = (moduleKey) => {
+    if (moduleKey === 'approvers') {
+      navigate('/approver');
+      return;
+    }
     setActiveModule(moduleKey);
     setIsSidebarOpen(true);
     if (moduleKey === 'hr') {
@@ -209,7 +219,7 @@ function App() {
 
               {/* Protected Routes */}
               <Route element={<ProtectedRoute />}>
-                <Route path="/" element={<Navigate to="/home" replace />} />
+                <Route path="/" element={<RootRedirect />} />
                 <Route path="/home" element={<Home />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/employee-self-service/*" element={<EmployeeSelfService />} />

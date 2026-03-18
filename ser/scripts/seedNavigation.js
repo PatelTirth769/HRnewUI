@@ -69,7 +69,7 @@ const modules = [
   },
   {
     moduleKey: 'erpPayroll',
-    title: 'ERP Payroll',
+    title: 'Payroll',
     order: 3,
     adminOnly: false,
     sections: [
@@ -261,6 +261,9 @@ async function seed() {
   if (!uri) { console.error('MONGO_URI not set'); process.exit(1); }
   await mongoose.connect(uri);
   console.log('Connected to MongoDB Atlas');
+  const moduleKeys = modules.map((mod) => mod.moduleKey);
+  await Navigation.deleteMany({ moduleKey: { $nin: moduleKeys } });
+  console.log('Removed stale navigation modules');
   for (const mod of modules) {
     await Navigation.findOneAndUpdate(
       { moduleKey: mod.moduleKey },

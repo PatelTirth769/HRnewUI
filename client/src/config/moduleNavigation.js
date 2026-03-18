@@ -219,7 +219,7 @@ export const moduleNavigation = {
         ],
     },
     erpPayroll: {
-        title: 'ERP Payroll',
+        title: 'Payroll',
         sections: [
             {
                 title: 'Masters',
@@ -357,6 +357,52 @@ export const moduleNavigation = {
                     { label: 'Talent Acquisition Approval', path: '/needs/talent-acquisition-approval' },
                     { label: 'Talent Acquisition Manager Approval', path: '/needs/talent-acquisition-manager-approval' },
                     { label: 'HR View Talent Acquisitions', path: '/needs/hr-view-talent-acquisitions' },
+                ],
+            },
+        ],
+    },
+    approvers: {
+        title: 'Approvers',
+        sections: [
+            {
+                title: 'Approvals',
+                icon: 'briefcase',
+                items: [
+                    { label: 'Attendance Regularisation', path: '/approver/approvals-attendance-regularisation' },
+                    { label: 'Leave/OD/WFH', path: '/approver/approvals-leave-od-wfh' },
+                    { label: 'HelpDesk', path: '/approver/approvals-helpdesk' },
+                    { label: 'Work On Holiday', path: '/approver/approvals-work-on-holiday' },
+                    { label: 'Resignations', path: '/approver/approvals-resignations' },
+                    { label: 'Confirmation Review', path: '/approver/approvals-confirmation-review' },
+                    { label: 'HOD Attendance Regularisation', path: '/approver/approvals-hod-attendance-regularisation' },
+                    { label: 'Proxy Leave Application', path: '/approver/approvals-proxy-leave-application' },
+                ],
+            },
+            {
+                title: 'HR Approvals',
+                icon: 'user-group',
+                items: [
+                    { label: 'Attendance Regularisation', path: '/approver/hrapprovals-attendance-regularisation' },
+                    { label: 'Resignations', path: '/approver/hrapprovals-resignations' },
+                    { label: 'HR Confirmation Review', path: '/approver/hrapprovals-hr-confirmation-review' },
+                    { label: 'Work On Holiday', path: '/approver/hrapprovals-work-on-holiday' },
+                ],
+            },
+            {
+                title: 'Finance Approval',
+                icon: 'chart-bar',
+                items: [
+                    { label: 'Expense Requisition', path: '/approver/financeapproval-expense-requisition' },
+                    { label: 'Expense Claim', path: '/approver/financeapproval-expense-claim' },
+                ],
+            },
+            {
+                title: 'Claim Approval',
+                icon: 'document-text',
+                items: [
+                    { label: 'Expense Claim', path: '/approver/claimapproval-expense-claim' },
+                    { label: 'Reimbursement', path: '/approver/claimapproval-reimbursement' },
+                    { label: 'Expense Requisition', path: '/approver/claimapproval-expense-requisition' },
                 ],
             },
         ],

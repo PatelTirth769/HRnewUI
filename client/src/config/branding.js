@@ -3,7 +3,7 @@ import lingayasHeaderLogo from '../assets/images/lingayas_header.jpeg';
 import lingayasSidebarLogo from '../assets/images/lingayas_side.jpeg';
 
 // Change this one value to switch logo set globally.
-export const DEFAULT_BRAND_CODE = 'lingayas';
+export const DEFAULT_BRAND_CODE = 'preeshe';
 
 const BRANDING_BY_CODE = {
   preeshe: {
@@ -24,10 +24,19 @@ const BRANDING_BY_CODE = {
     showHeaderTitle: false,
     headerTitle: 'Dash Board',
   },
+  schooler: {
+    code: 'schooler',
+    displayName: 'Schooler',
+    headerLogo: defaultLogo,
+    sidebarLogo: defaultLogo,
+    salarySlipLogo: defaultLogo,
+    showHeaderTitle: true,
+    headerTitle: 'Schooler Dashboard',
+  },
 };
 
 export const getActiveBrandCode = () => {
-  const code = DEFAULT_BRAND_CODE;
+  const code = (localStorage.getItem('activeSystem') || DEFAULT_BRAND_CODE).toLowerCase();
   return BRANDING_BY_CODE[code] ? code : DEFAULT_BRAND_CODE;
 };
 

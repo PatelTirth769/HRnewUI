@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
+const System = require('./models/System');
 require('dotenv').config();
 
 const app = express();
@@ -53,6 +54,49 @@ app.use('/erp-proxy', require('./routes/erpProxy'));
 
 const PORT = process.env.PORT || 3636;
 
+function getDefaultSystems() {
+    const preesheUrl = process.env.PREESHE_ERP_URL || 'https://preeshe.hrhovercraft.in';
+    const lingayasUrl = process.env.LINGAYAS_ERP_URL || 'https://erpdev.lingayasvidyapeeth.edu.in:8000';
+    // Keep Schooler configurable. If not provided, it falls back to Preeshe ERP URL.
+    const schoolerUrl = process.env.SCHOOLER_ERP_URL || preesheUrl;
+
+    return [
+        {
+            name: 'Preeshe',
+            code: 'preeshe',
+            erpNextUrl: preesheUrl,
+            status: 'active',
+            order: 1,
+        },
+        {
+            name: 'Lingayas Vidyapeeth',
+            code: 'lingayas',
+            erpNextUrl: lingayasUrl,
+            status: 'active',
+            order: 2,
+        },
+        {
+            name: 'Schooler',
+            code: 'schooler',
+            erpNextUrl: schoolerUrl,
+            status: 'active',
+            order: 3,
+        },
+    ];
+}
+
+async function bootstrapDefaultSystems() {
+    const defaults = getDefaultSystems();
+
+    for (const sys of defaults) {
+        await System.updateOne(
+            { code: sys.code },
+            { $set: sys },
+            { upsert: true }
+        );
+    }
+}
+
 // MongoDB Connection Logic (Atlas Exclusive)
 const uriToUse = process.env.MONGO_URI;
 
@@ -64,6 +108,10 @@ if (!uriToUse) {
 mongoose.connect(uriToUse)
     .then(() => {
         console.log('MongoDB Connected: Atlas cluster');
+        return bootstrapDefaultSystems();
+    })
+    .then(() => {
+        console.log('Default systems synced (Preeshe, Lingayas Vidyapeeth, Schooler)');
         app.listen(PORT, () => console.log(`Resume Parser Server started on port ${PORT}`));
     })
     .catch(err => {

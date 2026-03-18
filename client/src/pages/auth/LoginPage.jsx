@@ -12,6 +12,7 @@ import API, { setActiveSystem } from '../../services/api';
 import axios from 'axios';
 
 const { Title, Text } = Typography;
+const SCHOOLER_APP_URL = import.meta.env.VITE_SCHOOLER_APP_URL || 'http://localhost:5174';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -65,9 +66,16 @@ const LoginPage = () => {
     try {
       const res = await axios.get('/local-api/systems');
       const systemsList = res.data || [];
-      setSystems(systemsList);
+      const hiddenSystems = new Set(['celejor', 'celejio', 'bombiam', 'bombaim']);
+      const filteredSystems = systemsList.filter((system) => {
+        const code = (system?.code || '').toLowerCase();
+        const name = (system?.name || '').toLowerCase();
+        return !hiddenSystems.has(code) && !hiddenSystems.has(name);
+      });
+
+      setSystems(filteredSystems);
       // Auto-select first active system
-      const firstActive = systemsList.find(s => s.status === 'active');
+      const firstActive = filteredSystems.find(s => s.status === 'active');
       if (firstActive) {
         setSelectedSystem(firstActive.code);
       }
@@ -137,8 +145,18 @@ const LoginPage = () => {
           localStorage.setItem('activeSystemName', sys.name);
         }
 
-        // Redirect to Home (Main Page)
-        navigate('/home');
+        if ((selectedSystem || '').toLowerCase() === 'schooler') {
+          // Open Schooler frontend when Schooler is selected at login.
+          window.location.href = SCHOOLER_APP_URL;
+          return;
+        }
+
+        // Redirect based on role
+        if (isHRAdmin) {
+          navigate('/home');
+        } else {
+          navigate('/employee-self-service');
+        }
       }
     } catch (err) {
       console.error("Login Error:", err);

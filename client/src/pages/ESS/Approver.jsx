@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useUserRole } from '../../hooks/useUserRole';
 import API from '../../services/api';
 
 const Approver = () => {
@@ -28,6 +29,7 @@ const Approver = () => {
     return p;
   })();
 
+  const { isAdmin } = useUserRole();
   const [open, setOpen] = useState({ approvals: true });
 
   return (
@@ -37,9 +39,10 @@ const Approver = () => {
           <aside className="w-64 shrink-0 left-0 top-0">
             <div className="card-soft p-0 overflow-hidden">
               {sections.map((s) => (
-                <div key={s.key} className="border-b">
+                <div key={s.key} className="border-b" style={!isAdmin ? { filter: 'blur(1px)', opacity: 0.6 } : {}}>
                   <button
                     className={`w-full flex items-center justify-between px-3 py-3 text-left ${open[s.key] ? 'bg-gray-50' : ''}`}
+                    disabled={!isAdmin}
                     onClick={() => setOpen((o) => ({ ...o, [s.key]: !o[s.key] }))}
                   >
                     <span className="flex items-center gap-3">
@@ -58,6 +61,7 @@ const Approver = () => {
                           <button
                             key={c}
                             className={`block w-full text-left px-2 py-2 text-sm rounded ${activeView === k ? 'bg-orange-500 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                            disabled={!isAdmin}
                             onClick={() => navigate(`${base}/${k}`)}
                           >
                             {c}
@@ -74,217 +78,228 @@ const Approver = () => {
           <div className="flex-1">
             <div className="text-2xl font-semibold text-gray-900 mb-4">Approver</div>
             
-            <div className="space-y-6">
-              {/* Approvals Section */}
-              {activeView === 'approvals-attendance-regularisation' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Approvals › <span className="font-medium">Attendance Regularisation</span></div>
-                  <div className="flex items-end gap-3">
-                    <div>
-                      <div className="text-sm">Select month</div>
-                      <input type="month" className="border rounded px-2 py-2 w-[160px] text-sm" defaultValue={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} />
+            {!isAdmin ? (
+              <div className="card-soft flex flex-col items-center justify-center p-12 text-center bg-gray-50 border-dashed border-2">
+                <div className="text-4xl mb-4">🔒</div>
+                <h3 className="text-xl font-medium text-gray-800 mb-2">Restricted Access</h3>
+                <p className="text-gray-600 max-w-sm">
+                  You do not have the necessary permissions to access the Approver module. 
+                  Please contact your administrator if you believe this is an error.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Approvals Section */}
+                {activeView === 'approvals-attendance-regularisation' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Approvals › <span className="font-medium">Attendance Regularisation</span></div>
+                    <div className="flex items-end gap-3">
+                      <div>
+                        <div className="text-sm">Select month</div>
+                        <input type="month" className="border rounded px-2 py-2 w-[160px] text-sm" defaultValue={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} />
+                      </div>
+                      <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
                     </div>
-                    <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Pending Approval (0)</button>
-                    <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved (0)</button>
-                    <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Rejected (0)</button>
-                    <button className="px-3 py-2 rounded border text-sm">All (0) ⟳</button>
-                  </div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no pending approvals for selected month.</div>
-                </div>
-              )}
-
-              {activeView === 'approvals-leave-od-wfh' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Approvals › <span className="font-medium">Leave/OD/WFH</span></div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">From Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date(new Date().getFullYear(), new Date().getMonth() - 3, 1).toISOString().slice(0, 10)} />
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Pending Approval (0)</button>
+                      <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved (0)</button>
+                      <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Rejected (0)</button>
+                      <button className="px-3 py-2 rounded border text-sm">All (0) ⟳</button>
                     </div>
-                    <div>
-                      <div className="text-sm">To Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date().toISOString().slice(0, 10)} />
+                    <div className="mt-8 text-gray-600 text-sm">There are no pending approvals for selected month.</div>
+                  </div>
+                )}
+
+                {activeView === 'approvals-leave-od-wfh' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Approvals › <span className="font-medium">Leave/OD/WFH</span></div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                      <div>
+                        <div className="text-sm">From Date</div>
+                        <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date(new Date().getFullYear(), new Date().getMonth() - 3, 1).toISOString().slice(0, 10)} />
+                      </div>
+                      <div>
+                        <div className="text-sm">To Date</div>
+                        <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date().toISOString().slice(0, 10)} />
+                      </div>
+                      <div>
+                        <div className="text-sm">Search On</div>
+                        <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
+                      </div>
+                      <div>
+                        <div className="text-sm">Search Text</div>
+                        <input className="border rounded px-2 py-2 w-full text-sm" />
+                      </div>
+                      <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
                     </div>
-                    <div>
-                      <div className="text-sm">Search On</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Pending Approval (0)</button>
+                      <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved (0)</button>
+                      <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Rejected (0)</button>
+                      <button className="px-3 py-2 rounded border text-sm">All (0) ⟳</button>
                     </div>
-                    <div>
-                      <div className="text-sm">Search Text</div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" />
+                    <div className="mt-8 text-gray-600 text-sm">There are no pending approvals for selected filters.</div>
+                  </div>
+                )}
+
+                {activeView === 'approvals-helpdesk' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Approvals › <span className="font-medium">HelpDesk</span></div>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">My Pending</button>
+                      <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Responded By Me</button>
+                      <button className="px-3 py-2 rounded bg-blue-600 text-white text-sm">ALL Pending</button>
+                      <button className="px-3 py-2 rounded bg-gray-500 text-white text-sm">Responded By ALL</button>
                     </div>
-                    <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
+                    <div className="mt-8 text-gray-600 text-sm">There are no pending approvals for selected filters.</div>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Pending Approval (0)</button>
-                    <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved (0)</button>
-                    <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Rejected (0)</button>
-                    <button className="px-3 py-2 rounded border text-sm">All (0) ⟳</button>
-                  </div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no pending approvals for selected filters.</div>
-                </div>
-              )}
+                )}
 
-              {activeView === 'approvals-helpdesk' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Approvals › <span className="font-medium">HelpDesk</span></div>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">My Pending</button>
-                    <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Responded By Me</button>
-                    <button className="px-3 py-2 rounded bg-blue-600 text-white text-sm">ALL Pending</button>
-                    <button className="px-3 py-2 rounded bg-gray-500 text-white text-sm">Responded By ALL</button>
-                  </div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no pending approvals for selected filters.</div>
-                </div>
-              )}
-
-              {activeView === 'approvals-work-on-holiday' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Approvals › <span className="font-medium">Work On Holiday</span></div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">From Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date(new Date().getFullYear(), new Date().getMonth() - 3, 1).toISOString().slice(0, 10)} />
+                {activeView === 'approvals-work-on-holiday' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Approvals › <span className="font-medium">Work On Holiday</span></div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                      <div>
+                        <div className="text-sm">From Date</div>
+                        <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date(new Date().getFullYear(), new Date().getMonth() - 3, 1).toISOString().slice(0, 10)} />
+                      </div>
+                      <div>
+                        <div className="text-sm">To Date</div>
+                        <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date().toISOString().slice(0, 10)} />
+                      </div>
+                      <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
                     </div>
-                    <div>
-                      <div className="text-sm">To Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date().toISOString().slice(0, 10)} />
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Pending Approval (0)</button>
+                      <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved (0)</button>
+                      <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Rejected (0)</button>
+                      <button className="px-3 py-2 rounded border text-sm">All (0) ⟳</button>
                     </div>
-                    <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
+                    <div className="mt-8 text-gray-600 text-sm">There are no pending approvals for selected filters.</div>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Pending Approval (0)</button>
-                    <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved (0)</button>
-                    <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Rejected (0)</button>
-                    <button className="px-3 py-2 rounded border text-sm">All (0) ⟳</button>
-                  </div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no pending approvals for selected filters.</div>
-                </div>
-              )}
+                )}
 
-              {activeView === 'approvals-resignations' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Approvals › <span className="font-medium">Resignations</span></div>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Pending Approval (0)</button>
-                    <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved (0)</button>
-                    <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Rejected (0)</button>
-                    <button className="px-3 py-2 rounded border text-sm">ALL (0) ⟳</button>
-                  </div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no resignation requests for selected filters.</div>
-                </div>
-              )}
-
-              {activeView === 'approvals-confirmation-review' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Approvals › <span className="font-medium">Confirmation Review</span></div>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Pending Approval (0)</button>
-                    <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved (0)</button>
-                    <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Rejected (0)</button>
-                    <button className="px-3 py-2 rounded border text-sm">ALL (0) ⟳</button>
-                  </div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no confirmation review request for selected filters.</div>
-                </div>
-              )}
-
-              {activeView === 'approvals-hod-attendance-regularisation' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Approvals › <span className="font-medium">HOD Attendance Regularisation</span></div>
-                  <div className="flex items-end gap-3">
-                    <div>
-                      <div className="text-sm">Select month</div>
-                      <input type="month" className="border rounded px-2 py-2 w-[160px] text-sm" defaultValue={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} />
+                {activeView === 'approvals-resignations' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Approvals › <span className="font-medium">Resignations</span></div>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Pending Approval (0)</button>
+                      <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved (0)</button>
+                      <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Rejected (0)</button>
+                      <button className="px-3 py-2 rounded border text-sm">ALL (0) ⟳</button>
                     </div>
-                    <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
+                    <div className="mt-8 text-gray-600 text-sm">There are no resignation requests for selected filters.</div>
                   </div>
-                  <div className="mt-4 text-gray-600 text-sm">There are no pending HOD approvals for selected month.</div>
-                </div>
-              )}
+                )}
 
-              {activeView === 'approvals-proxy-leave-application' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Approvals › <span className="font-medium">Proxy Leave Application</span></div>
-                  <div className="mt-4 text-gray-600 text-sm">No proxy leave application requests.</div>
-                </div>
-              )}
-
-              {/* HR Approvals Section */}
-              {activeView === 'hrapprovals-attendance-regularisation' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">HR Approvals › <span className="font-medium">Attendance Regularisation</span></div>
-                  <div className="flex items-end gap-3">
-                    <div>
-                      <div className="text-sm">Select month</div>
-                      <input type="month" className="border rounded px-2 py-2 w-[160px] text-sm" defaultValue={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} />
+                {activeView === 'approvals-confirmation-review' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Approvals › <span className="font-medium">Confirmation Review</span></div>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Pending Approval (0)</button>
+                      <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved (0)</button>
+                      <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Rejected (0)</button>
+                      <button className="px-3 py-2 rounded border text-sm">ALL (0) ⟳</button>
                     </div>
-                    <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
+                    <div className="mt-8 text-gray-600 text-sm">There are no confirmation review request for selected filters.</div>
                   </div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no pending HR approvals for selected month.</div>
-                </div>
-              )}
+                )}
 
-              {activeView === 'hrapprovals-resignations' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">HR Approvals › <span className="font-medium">Resignations</span></div>
-                  <div className="mt-4 text-gray-600 text-sm">There are no resignation requests for selected filters.</div>
-                </div>
-              )}
+                {activeView === 'approvals-hod-attendance-regularisation' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Approvals › <span className="font-medium">HOD Attendance Regularisation</span></div>
+                    <div className="flex items-end gap-3">
+                      <div>
+                        <div className="text-sm">Select month</div>
+                        <input type="month" className="border rounded px-2 py-2 w-[160px] text-sm" defaultValue={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} />
+                      </div>
+                      <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
+                    </div>
+                    <div className="mt-4 text-gray-600 text-sm">There are no pending HOD approvals for selected month.</div>
+                  </div>
+                )}
 
-              {activeView === 'hrapprovals-hr-confirmation-review' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">HR Approvals › <span className="font-medium">HR Confirmation Review</span></div>
-                  <div className="mt-4 text-gray-600 text-sm">There are no HR confirmation review request for selected filters.</div>
-                </div>
-              )}
+                {activeView === 'approvals-proxy-leave-application' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Approvals › <span className="font-medium">Proxy Leave Application</span></div>
+                    <div className="mt-4 text-gray-600 text-sm">No proxy leave application requests.</div>
+                  </div>
+                )}
 
-              {activeView === 'hrapprovals-work-on-holiday' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">HR Approvals › <span className="font-medium">Work On Holiday</span></div>
-                  <div className="mt-4 text-gray-600 text-sm">There are no Work On Holiday request for selected filters.</div>
-                </div>
-              )}
+                {/* HR Approvals Section */}
+                {activeView === 'hrapprovals-attendance-regularisation' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">HR Approvals › <span className="font-medium">Attendance Regularisation</span></div>
+                    <div className="flex items-end gap-3">
+                      <div>
+                        <div className="text-sm">Select month</div>
+                        <input type="month" className="border rounded px-2 py-2 w-[160px] text-sm" defaultValue={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} />
+                      </div>
+                      <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
+                    </div>
+                    <div className="mt-8 text-gray-600 text-sm">There are no pending HR approvals for selected month.</div>
+                  </div>
+                )}
 
-              {/* Finance Approval Section */}
-              {activeView === 'financeapproval-expense-requisition' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Finance Approval › <span className="font-medium">Expense Requisition</span></div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no request for selected filters.</div>
-                </div>
-              )}
+                {activeView === 'hrapprovals-resignations' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">HR Approvals › <span className="font-medium">Resignations</span></div>
+                    <div className="mt-4 text-gray-600 text-sm">There are no resignation requests for selected filters.</div>
+                  </div>
+                )}
 
-              {activeView === 'financeapproval-expense-claim' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Finance Approval › <span className="font-medium">Expense Claim</span></div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no request for selected filters.</div>
-                </div>
-              )}
+                {activeView === 'hrapprovals-hr-confirmation-review' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">HR Approvals › <span className="font-medium">HR Confirmation Review</span></div>
+                    <div className="mt-4 text-gray-600 text-sm">There are no HR confirmation review request for selected filters.</div>
+                  </div>
+                )}
 
-              {/* Claim Approval Section */}
-              {activeView === 'claimapproval-expense-claim' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Claim Approval › <span className="font-medium">Expense Claim</span></div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no expense claim requests.</div>
-                </div>
-              )}
+                {activeView === 'hrapprovals-work-on-holiday' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">HR Approvals › <span className="font-medium">Work On Holiday</span></div>
+                    <div className="mt-4 text-gray-600 text-sm">There are no Work On Holiday request for selected filters.</div>
+                  </div>
+                )}
 
-              {activeView === 'claimapproval-reimbursement' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Claim Approval › <span className="font-medium">Reimbursement</span></div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no reimbursement requests.</div>
-                </div>
-              )}
+                {/* Finance Approval Section */}
+                {activeView === 'financeapproval-expense-requisition' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Finance Approval › <span className="font-medium">Expense Requisition</span></div>
+                    <div className="mt-8 text-gray-600 text-sm">There are no request for selected filters.</div>
+                  </div>
+                )}
 
-              {activeView === 'claimapproval-expense-requisition' && (
-                <div className="card-soft">
-                  <div className="text-sm mb-4">Claim Approval › <span className="font-medium">Expense Requisition</span></div>
-                  <div className="mt-8 text-gray-600 text-sm">There are no request for selected filters.</div>
-                </div>
-              )}
-            </div>
+                {activeView === 'financeapproval-expense-claim' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Finance Approval › <span className="font-medium">Expense Claim</span></div>
+                    <div className="mt-8 text-gray-600 text-sm">There are no request for selected filters.</div>
+                  </div>
+                )}
+
+                {/* Claim Approval Section */}
+                {activeView === 'claimapproval-expense-claim' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Claim Approval › <span className="font-medium">Expense Claim</span></div>
+                    <div className="mt-8 text-gray-600 text-sm">There are no expense claim requests.</div>
+                  </div>
+                )}
+
+                {activeView === 'claimapproval-reimbursement' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Claim Approval › <span className="font-medium">Reimbursement</span></div>
+                    <div className="mt-8 text-gray-600 text-sm">There are no reimbursement requests.</div>
+                  </div>
+                )}
+
+                {activeView === 'claimapproval-expense-requisition' && (
+                  <div className="card-soft">
+                    <div className="text-sm mb-4">Claim Approval › <span className="font-medium">Expense Requisition</span></div>
+                    <div className="mt-8 text-gray-600 text-sm">There are no request for selected filters.</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

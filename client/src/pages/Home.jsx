@@ -1,7 +1,18 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useUserRole } from '../hooks/useUserRole';
 
 const Home = () => {
+  const { isAdmin } = useUserRole();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isAdmin) {
+      navigate('/employee-self-service', { replace: true });
+    }
+  }, [isAdmin, navigate]);
+
+  if (!isAdmin) return null;
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12">
       <div className="max-w-6xl mx-auto px-6">

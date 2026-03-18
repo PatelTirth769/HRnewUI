@@ -72,11 +72,16 @@ router.all('/:systemCode/*', async (req, res) => {
             res.setHeader('content-type', responseHeaders['content-type']);
         }
 
+        if (response.status >= 400) {
+            console.error(`ERP Proxy [${systemCode}] Error ${response.status} for ${targetUrl}:`, JSON.stringify(response.data, null, 2));
+        }
+
         res.status(response.status).json(response.data);
     } catch (err) {
         console.error('ERP Proxy Error:', err.message);
         res.status(502).json({ error: 'Proxy error', message: err.message });
     }
 });
+
 
 module.exports = router;

@@ -1,0 +1,11 @@
+Subject Code	Subject Name	Department	Semester	Credits
+CS101	Introduction to Computer Science	Computer Science	1	4
+CS102	Programming Fundamentals	Computer Science	1	3
+CS103	Data Structures	Computer Science	1	4
+CS104	Algorithms	Computer Science	1	3
+CS201	Database Systems	Computer Science	2	3
+CS202	Operating Systems	Computer Science	2	3
+CS203	Computer Networks	Computer Science	2	3
+CS204	Software Engineering	Computer Science	2	4
+CS301	Artificial Intelligence	Computer Science	3	4
+CS302	Machine Learning	Computer Science	3	4

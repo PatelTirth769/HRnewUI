@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Select, DatePicker, Button, notification, Row, Col, Table, Tag, Space, Modal } from 'antd';
+import { Form, Input, Select, DatePicker, Button, notification, Row, Col, Table, Tag, Space, Modal, Popconfirm } from 'antd';
+import { DeleteOutlined } from '@ant-design/icons';
 import API from '../../services/api';
 import dayjs from 'dayjs';
 
@@ -13,6 +14,8 @@ export default function ESSLeaveApplication({ employeeData }) {
     const [leaveTypes, setLeaveTypes] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [balance, setBalance] = useState(null);
+    const [checkingBalance, setCheckingBalance] = useState(false);
 
     useEffect(() => {
         if (employeeData?.name) {
@@ -35,16 +38,42 @@ export default function ESSLeaveApplication({ employeeData }) {
 
     const fetchLeaveTypes = async () => {
         try {
-            // Fetch leave types available for the employee through allocation
-            const res = await API.get(`/api/resource/Leave Allocation?fields=["leave_type"]&filters=[["employee","=","${employeeData.name}"],["docstatus","=","1"]]`);
-            const types = [...new Set(res.data.data.map(i => i.leave_type))];
-            setLeaveTypes(types);
+            // Fetch leave types directly. Employees usually have read access to "Leave Type" 
+            // but not always "Leave Allocation" depending on ERPNext permissions.
+            const res = await API.get(`/api/resource/Leave Type?fields=["name"]&limit_page_length=None`);
+            if (res.data && res.data.data) {
+                const types = res.data.data.map(i => i.name);
+                setLeaveTypes(types);
+            }
         } catch (err) {
             console.error(err);
         }
     };
+    
+    const fetchBalance = async (leaveType) => {
+        if (!leaveType || !employeeData?.name) return;
+        setCheckingBalance(true);
+        setBalance(null);
+        try {
+            const res = await API.get(`/api/resource/Leave Allocation?fields=["total_leaves_allocated","from_date","to_date"]&filters=[["employee","=","${employeeData.name}"],["leave_type","=","${leaveType}"],["docstatus","=","1"]]&limit_page_length=1`);
+            if (res.data.data && res.data.data.length > 0) {
+                setBalance(res.data.data[0]);
+            } else {
+                setBalance({ total_leaves_allocated: 0 });
+            }
+        } catch (err) {
+            console.warn("Could not fetch balance:", err);
+            setBalance('unknown'); 
+        } finally {
+            setCheckingBalance(false);
+        }
+    };
 
     const handleApply = async (values) => {
+        if (!employeeData?.name) {
+            notification.error({ message: "Employee data not loaded" });
+            return;
+        }
         setSubmitting(true);
         try {
             const payload = {
@@ -53,6 +82,8 @@ export default function ESSLeaveApplication({ employeeData }) {
                 from_date: values.dates[0].format('YYYY-MM-DD'),
                 to_date: values.dates[1].format('YYYY-MM-DD'),
                 description: values.description,
+                company: employeeData.company,
+                posting_date: dayjs().format('YYYY-MM-DD'),
                 doctype: "Leave Application"
             };
 
@@ -62,10 +93,41 @@ export default function ESSLeaveApplication({ employeeData }) {
             form.resetFields();
             fetchHistory();
         } catch (err) {
-            console.error(err);
-            notification.error({ message: "Failed to apply leave", description: err.response?.data?.message || err.message });
+            console.error("Save failed:", err);
+            let errMsg = "Failed to apply leave";
+            if (err.response?.data) {
+                const { _server_messages, message, exc } = err.response.data;
+                if (_server_messages) {
+                    try {
+                        const parsed = JSON.parse(_server_messages);
+                        errMsg = parsed.map(m => { 
+                            try { return JSON.parse(m).message; } catch { return m; } 
+                        }).join('\n');
+                    } catch { /* ignored */ }
+                } else if (message) {
+                    errMsg = typeof message === 'string' ? message : JSON.stringify(message);
+                } else if (exc) {
+                    errMsg = "Server Exception: Check backend logs";
+                }
+            }
+            notification.error({ 
+                message: "Leave Application Error", 
+                description: errMsg,
+                duration: 10
+            });
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleDelete = async (name) => {
+        try {
+            await API.delete(`/api/resource/Leave Application/${encodeURIComponent(name)}`);
+            notification.success({ message: "Leave application deleted successfully" });
+            fetchHistory();
+        } catch (err) {
+            console.error("Failed to delete leave application:", err);
+            notification.error({ message: "Failed to delete leave application", description: err.response?.data?.message || err.message });
         }
     };
 
@@ -78,6 +140,24 @@ export default function ESSLeaveApplication({ employeeData }) {
         { title: 'Status', dataIndex: 'status', key: 'status', render: (s) => (
             <Tag color={s === 'Approved' ? 'green' : s === 'Open' ? 'blue' : 'orange'}>{s}</Tag>
         )},
+        {
+            title: 'Action',
+            key: 'action',
+            render: (_, record) => (
+                record.status === 'Open' ? (
+                    <Popconfirm
+                        title="Delete this request?"
+                        description="Are you sure you want to delete this leave application?"
+                        onConfirm={() => handleDelete(record.name)}
+                        okText="Yes"
+                        cancelText="No"
+                        okButtonProps={{ danger: true }}
+                    >
+                        <Button type="text" danger icon={<DeleteOutlined />} size="small" />
+                    </Popconfirm>
+                ) : null
+            ),
+        },
     ];
 
     return (
@@ -112,10 +192,30 @@ export default function ESSLeaveApplication({ employeeData }) {
                     <Row gutter={16}>
                         <Col span={24}>
                             <Form.Item name="leave_type" label="Leave Type" rules={[{ required: true }]}>
-                                <Select placeholder="Select Leave Type">
+                                <Select placeholder="Select Leave Type" onChange={fetchBalance}>
                                     {leaveTypes.map(t => <Option key={t} value={t}>{t}</Option>)}
                                 </Select>
                             </Form.Item>
+
+                            {checkingBalance && <div className="text-xs text-gray-500 mb-2">Checking allocation...</div>}
+                            
+                            {balance === 'unknown' && (
+                                <div className="bg-orange-50 p-2 rounded text-orange-700 text-xs mb-4 border border-orange-100 italic">
+                                    Note: Please ensure an active "Leave Allocation" exists in ERPNext for this employee for the selected period.
+                                </div>
+                            )}
+
+                            {balance && balance.total_leaves_allocated === 0 && (
+                                <div className="bg-red-50 p-2 rounded text-red-700 text-xs mb-4 border border-red-100">
+                                    No active leave allocation found for this type. Application may fail.
+                                </div>
+                            )}
+
+                            {balance && balance.total_leaves_allocated > 0 && (
+                                <div className="bg-green-50 p-2 rounded text-green-700 text-xs mb-4 border border-green-100">
+                                    Active Allocation Found: {balance.total_leaves_allocated} days ({dayjs(balance.from_date).format('DD MMM YYYY')} - {dayjs(balance.to_date).format('DD MMM YYYY')})
+                                </div>
+                            )}
                         </Col>
                     </Row>
                     <Row gutter={16}>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useUserRole } from '../../hooks/useUserRole';
 import SimpleDonut from '../../components/charts/SimpleDonut';
 import EmployeeReportExport from '../../components/report/EmployeeReportExport.jsx';
 import API from '../../services/api';
@@ -25,8 +26,26 @@ import ESSAttendanceMonthly from './ESSAttendanceMonthly';
 import ESSAttendanceYearly from './ESSAttendanceYearly';
 import ESSAttendanceLeaveLedger from './ESSAttendanceLeaveLedger';
 import ESSAttendanceExtraWork from './ESSAttendanceExtraWork';
+import ESSAttendanceRegularise from './ESSAttendanceRegularise';
 import ESSLeaveApplication from './ESSLeaveApplication';
 import ESSActivityUpdate from './ESSActivityUpdate';
+import ESSWorkOnHoliday from './ESSWorkOnHoliday';
+import ESSHelpDesk from './ESSHelpDesk';
+import ESSResignationNote from './ESSResignationNote';
+import ESSLeaveEncashment from './ESSLeaveEncashment';
+import ESSConfirmationReview from './ESSConfirmationReview';
+import ESSProxyAttendance from './ESSProxyAttendance';
+import ESSLateComeReport from './ESSLateComeReport';
+import ESSEarlyGoReport from './ESSEarlyGoReport';
+import ESSWorkingHrReport from './ESSWorkingHrReport';
+import ESSLeaveAvailedRegister from './ESSLeaveAvailedRegister';
+import ESSProductivityReport from './ESSProductivityReport';
+import ESSLeaveYearlyRegister from './ESSLeaveYearlyRegister';
+import ESSEmployeeReports from './ESSEmployeeReports';
+import ESSSalarySlipListView from './ESSSalarySlipListView';
+import ESSGenericReport from './ESSGenericReport';
+import ESSChangeHomeImage from './ESSChangeHomeImage';
+import ESSEmployeeDashboard from './ESSEmployeeDashboard';
 
 
 
@@ -75,6 +94,7 @@ const EmployeeSelfService = () => {
     { key: 'onboarding', icon: '📦', label: 'Onboarding' },
   ];
   const [open, setOpen] = useState({ links: false, profile: false, myAttendance: false, teamAttendance: false });
+  const { isAdmin } = useUserRole();
   const [myEmpData, setMyEmpData] = useState(null);
   const [loadingMyEmp, setLoadingMyEmp] = useState(false);
   const [salarySlips, setSalarySlips] = useState([]);
@@ -174,6 +194,8 @@ const EmployeeSelfService = () => {
       'links-my-leave-report',
       'links-my-attendance-report',
       'links-my-activity-update',
+      // Home dashboard (for employee)
+      'ess-dashboard',
       // My Attendance views
       'myattendance-daily',
       'myattendance-monthly',
@@ -191,6 +213,30 @@ const EmployeeSelfService = () => {
       'profile-photo',
       'profile-documents',
       'profile-bank-account-details',
+      // Report views
+      'reports-late-come-report',
+      'reports-early-go-report',
+      'reports-working-hr-present-count-report',
+      'reports-leave-availed-register',
+      'reports-productivity-report',
+      'reports-leave-yearly-register',
+      'reports-employee-reports',
+      // Salary views
+      'salary-salary-slip',
+      'salary-tax-report',
+      'salary-annual-salary',
+      'salary-form16',
+      'salary-3a',
+      'salary-parity-report',
+      'salary-12a',
+      'salary-pf-challan',
+      'salary-salary-mis',
+      // Corp Info views
+      'corpinfo-employees-directory',
+      'corpinfo-holidays',
+      'corpinfo-professional-tax',
+      'corpinfo-income-tax',
+      'corpinfo-change-home-image',
     ];
 
     if (viewsNeedingEmpData.includes(activeView) && !myEmpData) {
@@ -227,11 +273,18 @@ const EmployeeSelfService = () => {
         <div className="flex gap-6">
           <aside className="w-64 shrink-0 left-0 top-0">
             <div className="card-soft p-0 overflow-hidden">
-          {sections.map((s) => (
-            <div key={s.key} className="border-b">
+          {sections.map((s) => {
+            const isRestricted = ['teamAttendance', 'hrViews', 'valueAdd', 'onboarding'].includes(s.key);
+            const shouldDisable = isRestricted && !isAdmin;
+            return (
+            <div key={s.key} className="border-b" style={shouldDisable ? { filter: 'blur(1px)', opacity: 0.6 } : {}}>
               <button
                 className={`w-full flex items-center justify-between px-3 py-3 text-left ${open[s.key]?'bg-gray-50':''}`}
-                onClick={() => s.children ? setOpen((o) => ({ ...o, [s.key]: !o[s.key] })) : navigate(base)}
+                disabled={shouldDisable}
+                onClick={() => {
+                  if (shouldDisable) return;
+                  s.children ? setOpen((o) => ({ ...o, [s.key]: !o[s.key] })) : navigate(base);
+                }}
               >
                 <span className="flex items-center gap-3">
                   <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-600 text-xs">{s.icon}</span>
@@ -243,7 +296,7 @@ const EmployeeSelfService = () => {
                   </svg>
                 )}
               </button>
-              {s.children && open[s.key] && (
+              {s.children && open[s.key] && !shouldDisable && (
                 <div className="px-4 pb-3">
                   {s.children.map((c) => {
                     const k = `${slug(s.key)}-${slug(c)}`;
@@ -261,12 +314,29 @@ const EmployeeSelfService = () => {
                 </div>
               )}
             </div>
-          ))}
+          )})}
             </div>
           </aside>
           <div className="flex-1">
-            <div className="text-2xl font-semibold text-gray-900 mb-4">{activeView==='ess-dashboard' ? 'HR Self Service' : ''}</div>
-            {activeView==='ess-dashboard' && (
+            <div className="text-2xl font-semibold text-gray-900 mb-4">{activeView==='ess-dashboard' ? (isAdmin ? 'HR Self Service' : '') : ''}</div>
+            
+            {(() => {
+              const restrictedRoutes = ['teamattendance', 'hrviews', 'valueadd', 'onboarding'];
+              if (restrictedRoutes.some(r => activeView.startsWith(r)) && !isAdmin) {
+                return (
+                  <div className="flex flex-col items-center justify-center p-12 text-center text-gray-500 bg-white rounded-lg shadow-sm border border-gray-100 mt-10">
+                    <div className="text-4xl mb-4">🔒</div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">Access Restricted</h3>
+                    <p>You need manager or HR permissions to view this section.</p>
+                  </div>
+                );
+              }
+              return (
+                <>
+            {activeView==='ess-dashboard' && !isAdmin && (
+              <ESSEmployeeDashboard employeeData={myEmpData} />
+            )}
+            {activeView==='ess-dashboard' && isAdmin && (
             <div style={{display: activeView==='ess-dashboard' ? 'block':'none'}}>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
@@ -908,21 +978,7 @@ const EmployeeSelfService = () => {
             {activeView==='request-attendance-regularise' && (
               <div className="card-soft">
                 <div className="text-sm mb-4">Request › <span className="font-medium">Attendance Regularise</span></div>
-                <div className="flex items-end gap-3">
-                  <div>
-                    <div className="text-sm">Select month</div>
-                    <input type="month" className="border rounded px-2 py-2 w-[160px] text-sm" defaultValue={`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`} />
-                  </div>
-                  <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button className="px-3 py-2 rounded bg-blue-500 text-white text-sm">Pending to submit</button>
-                  <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Submitted</button>
-                  <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved</button>
-                  <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Rejected/Cancelled</button>
-                  <button className="px-3 py-2 rounded bg-gray-400 text-white text-sm">Finalized</button>
-                </div>
-                <div className="mt-8 text-gray-600 text-sm">There are no detail for selected filters.</div>
+                <ESSAttendanceRegularise employeeData={myEmpData} />
               </div>
             )}
 
@@ -936,16 +992,7 @@ const EmployeeSelfService = () => {
             {activeView==='request-helpdesk' && (
               <div className="card-soft">
                 <div className="text-sm mb-4">Request › <span className="font-medium">HelpDesk</span></div>
-                <div className="flex flex-wrap gap-3">
-                  <button className="px-3 py-2 rounded bg-orange-500 text-white text-sm">New Request</button>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button className="px-3 py-2 rounded bg-blue-500 text-white text-sm">Pending to Submit</button>
-                  <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Submitted</button>
-                  <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Responded</button>
-                  <button className="px-3 py-2 rounded border text-sm">All ⟳</button>
-                </div>
-                <div className="mt-8 text-gray-600 text-sm flex items-center gap-2">Please click on refresh icon to view all request. <span className="inline-block px-2 py-1 border rounded">⟳</span></div>
+                <ESSHelpDesk employeeData={myEmpData} />
               </div>
             )}
 
@@ -1117,1299 +1164,145 @@ const EmployeeSelfService = () => {
               </div>
             )}
 
-            {activeView==='reports-late-come-report' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Report › <span className="font-medium">Late Come Report</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Company</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Working For</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Department</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Work Location</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Etype</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Entity</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>All</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Employee</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>ALL</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">To Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date().toISOString().slice(0,10)} />
-                    </div>
-                    <div>
-                      <div className="text-sm">Shift</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>All</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">From Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10)} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Ecode</div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" />
-                    </div>
-                    <div></div>
-                    <div>
-                      <div className="text-sm">Late By</div>
-                      <div className="flex items-center gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" name="lateBy" defaultChecked /> Policy</label><label className="flex items-center gap-2"><input type="radio" name="lateBy" /> Shift</label></div>
-                    </div>
-                    <div>
-                      <div className="text-sm">Sort By</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>Ecode</option></select>
-                      <div className="mt-2 flex items-center gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" name="lateComeSort" defaultChecked /> Asc</label><label className="flex items-center gap-2"><input type="radio" name="lateComeSort" /> Desc</label></div>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-3">
-                  <button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-green-600 text-white grid place-items-center">X</span></button>
-                  <button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-green-600 text-white grid place-items-center">X</span></button>
-                  <button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-red-600 text-white grid place-items-center">PDF</span></button>
-                </div>
-                <div className="mt-3 text-xs text-blue-700">Note: On "Policy" selection, report will get attendance data only if employee is late by the period greater than grace period allowed as per attendance policy.</div>
-              </div>
-            )}
 
-            {activeView==='reports-employee-reports' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Report › <span className="font-medium">Employee Reports</span></div>
-                <div className="flex items-center gap-3">
-                  <button className="px-4 py-2 bg-orange-500 text-white rounded text-sm" onClick={() => setReportOpen(true)}>Open Export</button>
-                </div>
-                <EmployeeReportExport reportOpen={reportOpen} exportData={employeeExportData} onClose={() => setReportOpen(false)} />
-              </div>
-            )}
-
-            {activeView==='reports-early-go-report' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Report › <span className="font-medium">Early Go Report</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Company</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Working For</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Department</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Work Location</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Etype</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Entity</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>All</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Employee</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>ALL</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">To Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date().toISOString().slice(0,10)} />
-                    </div>
-                    <div>
-                      <div className="text-sm">Shift</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>All</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">From Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10)} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Ecode</div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" />
-                    </div>
-                    <div></div>
-                    <div>
-                      <div className="text-sm">Early By</div>
-                      <div className="flex items-center gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" name="earlyBy" defaultChecked /> Policy</label><label className="flex items-center gap-2"><input type="radio" name="earlyBy" /> Shift</label></div>
-                    </div>
-                    <div>
-                      <div className="text-sm">Sort By</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>Ecode</option></select>
-                      <div className="mt-2 flex items-center gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" name="earlyGoSort" defaultChecked /> Asc</label><label className="flex items-center gap-2"><input type="radio" name="earlyGoSort" /> Desc</label></div>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-3">
-                  <button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-green-600 text-white grid place-items-center">X</span></button>
-                  <button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-green-600 text-white grid place-items-center">X</span></button>
-                  <button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-red-600 text-white grid place-items-center">PDF</span></button>
-                </div>
-                <div className="mt-3 text-xs text-blue-700">Note: On "Policy" selection, report will get attendance data only if employee is early by the period less than grace period allowed as per attendance policy.</div>
-              </div>
-            )}
-
-            {activeView==='reports-working-hr-present-count-report' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Report › <span className="font-medium">Working Hr/Present Count Report</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Company</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Working For</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Department</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Work Location</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Etype</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Entity</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>All</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Employee</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>ALL</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">To Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date().toISOString().slice(0,10)} />
-                    </div>
-                    <div>
-                      <div className="text-sm">Shift</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>All</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Select Period</div>
-                      <div className="flex items-center gap-3 text-sm flex-wrap">
-                        <label className="flex items-center gap-2"><input type="radio" name="wrkPeriod" defaultChecked /> Date Range</label>
-                        <label className="flex items-center gap-2"><input type="radio" name="wrkPeriod" /> Weekly</label>
-                        <label className="flex items-center gap-2"><input type="radio" name="wrkPeriod" /> Monthly</label>
-                        <label className="flex items-center gap-2"><input type="radio" name="wrkPeriod" /> CY</label>
-                        <label className="flex items-center gap-2"><input type="radio" name="wrkPeriod" /> FY</label>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm">From Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10)} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Whrs</div>
-                      <div className="flex items-center gap-2">
-                        <select className="border rounded px-2 py-2 text-sm"><option>&gt;</option><option>&lt;</option><option>=</option></select>
-                        <input className="border rounded px-2 py-2 w-24 text-sm" placeholder="Min" />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm">Sort By</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>Ecode</option></select>
-                      <div className="mt-2 flex items-center gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" name="wrkSort" defaultChecked /> Asc</label><label className="flex items-center gap-2"><input type="radio" name="wrkSort" /> Desc</label></div>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-3">
-                  <button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-green-600 text-white grid place-items-center">X</span></button>
-                  <button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-green-600 text-white grid place-items-center">X</span></button>
-                </div>
-              </div>
-            )}
-
-            {activeView==='reports-leave-availed-register' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Report › <span className="font-medium">Leave Availed Register</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Company</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Working For</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Department</div>
-                      <select multiple className="border rounded px-2 py-2 w-full text-sm select-arrow h-32"><option>Accounts (BOMBAIM)</option><option>Buying (BOMBAIM)</option><option>Buying/HR (BOMBAIM)</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Work Location</div>
-                      <select multiple className="border rounded px-2 py-2 w-full text-sm select-arrow h-32"><option>Kolkata Backend (BOMBAIM)</option><option>Kolkata Frontend (BOMBAIM)</option><option>Mum Backend (BOMBAIM)</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">From Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10)} />
-                    </div>
-                    <div>
-                      <div className="text-sm">To Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date().toISOString().slice(0,10)} />
-                    </div>
-                    <div>
-                      <div className="text-sm">ECode</div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" />
-                    </div>
-                    <div>
-                      <div className="text-sm">Employee</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>ALL</option></select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <div className="text-sm">Select Format</div>
-                      <div className="flex items-center gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" name="leaveRegFormat" defaultChecked /> EXCEL</label><label className="flex items-center gap-2"><input type="radio" name="leaveRegFormat" /> SAP</label><label className="flex items-center gap-2"><input type="radio" name="leaveRegFormat" /> PDF</label></div>
-                    </div>
-                    <div className="md:col-span-2">
-                      <div className="text-sm">Leave Type</div>
-                      <select multiple className="border rounded px-2 py-2 w-full text-sm h-32"><option>Absent / L.W.P</option><option>Casual Leave</option><option>Compensatory Off</option><option>Extra Working</option></select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Sort By</div>
-                      <div className="flex items-center gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" name="leaveRegSort" defaultChecked /> ECode</label><label className="flex items-center gap-2"><input type="radio" name="leaveRegSort" /> Leave Date</label></div>
-                      <div className="mt-3"><button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-green-600 text-white grid place-items-center">X</span></button></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeView==='reports-productivity-report' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Reports › <span className="font-medium">Productivity Report</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Company</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Working For</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Entity</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>ALL</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Work Order</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>ALL</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Department</div>
-                      <select multiple className="border rounded px-2 py-2 w-full text-sm select-arrow h-32"><option>Accounts (BOMBAIM)</option><option>Buying (BOMBAIM)</option><option>Buying/HR (BOMBAIM)</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Work Location</div>
-                      <select multiple className="border rounded px-2 py-2 w-full text-sm select-arrow h-32"><option>Kolkata Backend (BOMBAIM)</option><option>Kolkata Frontend (BOMBAIM)</option><option>Mum Backend (BOMBAIM)</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">From Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10)} />
-                    </div>
-                    <div>
-                      <div className="text-sm">To Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date().toISOString().slice(0,10)} />
-                    </div>
-                    <div>
-                      <div className="text-sm">ECode</div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" />
-                    </div>
-                    <div>
-                      <div className="text-sm">Employee</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>All</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Sort By</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>Ecode</option></select>
-                      <div className="mt-2 flex items-center gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" name="prodSort" defaultChecked /> Asc</label><label className="flex items-center gap-2"><input type="radio" name="prodSort" /> Desc</label></div>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-3">
-                  <button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-green-600 text-white grid place-items-center">X</span></button>
-                  <button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-orange-500 text-white grid place-items-center">?</span></button>
-                </div>
-              </div>
-            )}
-
-            {activeView==='reports-leave-yearly-register' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Reports › <span className="font-medium">Leave Yearly Register</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Company</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Working For</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Year</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>2025-26</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">To Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={`${new Date().getFullYear()}-12-31`} />
-                    </div>
-                    <div>
-                      <div className="text-sm">From Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={`${new Date().getFullYear()}-01-01`} />
-                    </div>
-                    <div className="md:col-span-2">
-                      <div className="text-sm">Leave Type</div>
-                      <select multiple className="border rounded px-2 py-2 w-full text-sm h-32"><option>Absent / L.W.P</option><option>Casual Leave</option><option>Compensatory Off</option><option>Extra Working</option></select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Sort By</div>
-                      <div className="flex items-center gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" name="leaveYearSort" defaultChecked /> ECode</label><label className="flex items-center gap-2"><input type="radio" name="leaveYearSort" /> Leave Date</label></div>
-                      <div className="mt-3"><button className="px-3 py-2 border rounded text-sm"><span className="inline-block w-7 h-7 bg-green-600 text-white grid place-items-center">X</span></button></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeView==='salary-salary-slip' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Salary › <span className="font-medium">Salary Slip</span></div>
-                <div className="rounded border p-4 bg-white">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div className="md:col-span-4 flex items-center gap-6 text-sm">
-                      <span>Search</span>
-                      <label className="flex items-center gap-2"><input type="radio" name="salarySlipSearch" defaultChecked /> Filter</label>
-                      <label className="flex items-center gap-2"><input type="radio" name="salarySlipSearch" /> Upload Ecode List</label>
-                      <label className="flex items-center gap-2"><input type="radio" name="salarySlipSearch" /> Upload External Salary Slips</label>
-                    </div>
-                    <div>
-                      <div className="text-sm">Company</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Working For</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Department</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Location</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Etype</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>ALL</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Entity</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>ALL</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Salary slip status</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>Published</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Month</div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" placeholder="Oct-2025" />
-                    </div>
-                    <div>
-                      <div className="text-sm">Employee</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                      <div className="text-xs text-gray-500 mt-1">Note: employee drop-down will refresh on month selection</div>
-                    </div>
-                    <div>
-                      <div className="text-sm">Ecode</div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" />
-                    </div>
-                    <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-6 text-sm">
-                  <label className="flex items-center gap-2"><input type="radio" name="salarySlipAction" defaultChecked /> Salary Slip</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="salarySlipAction" /> Export to zip</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="salarySlipAction" /> Send mail</label>
-                  <button className="px-4 py-2 bg-orange-500 text-white rounded text-sm">Export to Zip</button>
-                  <span className="text-xs">Note: max. file size allowed for export is 5 MB.</span>
-                </div>
-                <div className="mt-4 overflow-x-auto rounded border bg-white">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b bg-gray-50">
-                        <th className="px-3 py-2 text-left text-sm">Sr.No.</th>
-                        <th className="px-3 py-2 text-left text-sm">Ecode</th>
-                        <th className="px-3 py-2 text-left text-sm">Employee</th>
-                        <th className="px-3 py-2 text-left text-sm">Department</th>
-                        <th className="px-3 py-2 text-left text-sm">Location</th>
-                        <th className="px-3 py-2 text-left text-sm">Email</th>
-                        <th className="px-3 py-2 text-left text-sm">PDF</th>
-                        <th className="px-3 py-2 text-left text-sm">Mailed?</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[1,2,3,4,5].map((i)=>(
-                        <tr key={i} className="border-b">
-                          <td className="px-3 py-2">{i}</td>
-                          <td className="px-3 py-2">177</td>
-                          <td className="px-3 py-2">Employee {i}</td>
-                          <td className="px-3 py-2">Support</td>
-                          <td className="px-3 py-2">Kolkata Good earth</td>
-                          <td className="px-3 py-2">emp{i}@example.com</td>
-                          <td className="px-3 py-2">📄</td>
-                          <td className="px-3 py-2">□</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {activeView==='salary-tax-report' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Salary › <span className="font-medium">Tax Report</span></div>
-                <div className="rounded border p-4 bg-white">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div className="md:col-span-4 flex items-center gap-6 text-sm">
-                      <span>Search</span>
-                      <label className="flex items-center gap-2"><input type="radio" name="taxReportSearch" defaultChecked /> Filter</label>
-                      <label className="flex items-center gap-2"><input type="radio" name="taxReportSearch" /> Upload Ecode List</label>
-                    </div>
-                    <div className="md:col-span-4 flex items-center gap-6 text-sm">
-                      <span>Report Type</span>
-                      <label className="flex items-center gap-2"><input type="radio" name="taxReportType" defaultChecked /> With Investment</label>
-                      <label className="flex items-center gap-2"><input type="radio" name="taxReportType" /> Without Investment</label>
-                    </div>
-                    <div>
-                      <div className="text-sm">Select Month</div>
-                      <div className="flex items-center gap-2"><input className="border rounded px-2 py-2 w-full text-sm" placeholder="Oct-2025" /><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                    </div>
-                    <div>
-                      <div className="text-sm">Company</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Working For</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Department</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Work Location</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Etype</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–All–</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Entity</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–All–</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Employee</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–Select–</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Ecode</div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" />
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-6 text-sm">
-                  <label className="flex items-center gap-2"><input type="radio" name="taxReportAction" defaultChecked /> Salary Slip</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="taxReportAction" /> Export to zip</label>
-                  <label className="flex items-center gap-2"><input type="radio" name="taxReportAction" /> Send mail</label>
-                  <button className="px-4 py-2 bg-orange-500 text-white rounded text-sm">Export to Zip</button>
-                  <span className="text-xs">Note: max. file size allowed for export is 5 MB.</span>
-                </div>
-                <div className="mt-4 overflow-x-auto rounded border bg-white">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b bg-gray-50">
-                        <th className="px-3 py-2 text-left text-sm">Sr.No.</th>
-                        <th className="px-3 py-2 text-left text-sm">Ecode</th>
-                        <th className="px-3 py-2 text-left text-sm">Employee</th>
-                        <th className="px-3 py-2 text-left text-sm">Department</th>
-                        <th className="px-3 py-2 text-left text-sm">Location</th>
-                        <th className="px-3 py-2 text-left text-sm">Company Email</th>
-                        <th className="px-3 py-2 text-left text-sm">PDF</th>
-                        <th className="px-3 py-2 text-left text-sm">Excel</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[1,2,3,4,5,6,7,8,9,10].map((i)=>(
-                        <tr key={i} className="border-b">
-                          <td className="px-3 py-2">{i}</td>
-                          <td className="px-3 py-2">{i}</td>
-                          <td className="px-3 py-2">Employee {i} ( {i} )</td>
-                          <td className="px-3 py-2">Support</td>
-                          <td className="px-3 py-2">Kolkata Good earth</td>
-                          <td className="px-3 py-2">employee{i}@company.in</td>
-                          <td className="px-3 py-2">📄</td>
-                          <td className="px-3 py-2">📊</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                  </table>
-                </div>
-                <div className="mt-3 flex items-center gap-2 text-sm"><button className="px-3 py-1 rounded bg-orange-500 text-white">1</button><button className="px-3 py-1 rounded border">2</button><button className="px-3 py-1 rounded border">3</button><button className="px-3 py-1 rounded border">»</button></div>
-              </div>
-            )}
-
-            {activeView==='salary-annual-salary' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Salary Report › <span className="font-medium">Annual Salary</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Company</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Working For</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Department</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow" disabled><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Location</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow" disabled><option>– ALL –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Etype</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>ALL</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Entity</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>ALL</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Year</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>2025-26</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Employee</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–Select–</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Ecode</div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" />
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-2 text-xs text-gray-600">Note: LF & F notation mean salary linked to F&F</div>
-              </div>
-            )}
-
-            {activeView==='salary-form16' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Salary › <span className="font-medium">Form16</span></div>
-                <div className="rounded border p-4 bg-white">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div className="md:col-span-4 flex items-center gap-6 text-sm">
-                      <span>Search</span>
-                      <label className="flex items-center gap-2"><input type="radio" name="form16Search" defaultChecked /> Filter</label>
-                      <label className="flex items-center gap-2"><input type="radio" name="form16Search" /> Upload Ecode List</label>
-                    </div>
-                    <div>
-                      <div className="text-sm">Printable Date</div>
-                      <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={`${new Date().getFullYear()}-05-31`} />
-                    </div>
-                    <div>
-                      <div className="text-sm">Financial Year</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>2024-2025</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Auth. Signatory</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–Select–</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Company</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Search On</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–All–</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Tax Payable</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–Select–</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm"> </div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" />
-                    </div>
-                    <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeView==='salary-3a' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Salary Report › <span className="font-medium">3A</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Date</div>
-                    <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date().toISOString().slice(0,10)} />
-                  </div>
-                  <div>
-                    <div className="text-sm">Year</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>2024</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Auth. Signatory</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–Select–</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm"> </div>
-                    <input className="border rounded px-2 py-2 w-full text-sm bg-gray-100" disabled />
-                  </div>
-                  <div>
-                    <div className="text-sm">Search On</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–All–</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Company</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="text-sm">Search Text</div>
-                    <div className="flex items-center gap-2"><input className="border rounded px-2 py-2 w-full text-sm" /><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeView==='salary-parity-report' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Salary › <span className="font-medium">Parity Report</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Company</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Department</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Grade</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Working For</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Work Location</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                </div>
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Filter by</div>
-                    <div className="flex items-center gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" name="parityFilter" defaultChecked /> Grade</label><label className="flex items-center gap-2"><input type="radio" name="parityFilter" /> Position</label><label className="flex items-center gap-2"><input type="radio" name="parityFilter" /> Designation</label></div>
-                  </div>
-                  <div>
-                    <div className="text-sm">Filter by Employee joining status</div>
-                    <div className="flex items-center gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" name="parityJoin" defaultChecked /> Current Employee</label><label className="flex items-center gap-2"><input type="radio" name="parityJoin" /> Candidates in offer + Current Employees</label></div>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-sm"><span>No. of Record: 0</span><button className="px-2 py-1 border rounded"><span className="inline-block w-6 h-6 bg-green-600 text-white grid place-items-center">X</span></button></div>
-                <div className="mt-2 overflow-x-auto rounded border bg-white">
-                  <table className="min-w-full">
-                    <thead>
-                      <tr className="border-b bg-gray-50">
-                        <th className="px-3 py-2 text-left text-sm">Ecode</th>
-                        <th className="px-3 py-2 text-left text-sm">Employee</th>
-                        <th className="px-3 py-2 text-left text-sm">DOJ</th>
-                        <th className="px-3 py-2 text-left text-sm">Department</th>
-                        <th className="px-3 py-2 text-left text-sm">Position</th>
-                        <th className="px-3 py-2 text-left text-sm">Designation</th>
-                        <th className="px-3 py-2 text-left text-sm">Location</th>
-                        <th className="px-3 py-2 text-left text-sm">Qualification</th>
-                        <th className="px-3 py-2 text-left text-sm">Skills</th>
-                        <th className="px-3 py-2 text-left text-sm">Total Exp (Yrs/Mth)</th>
-                        <th className="px-3 py-2 text-left text-sm">CTC PA</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="px-3 py-6 text-center text-sm" colSpan={11}>No data</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {activeView==='salary-12a' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Salary Report › <span className="font-medium">12A</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Company <span className="text-red-600">*</span></div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">PF Series <span className="text-red-600">*</span></div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–Select–</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Salary Month <span className="text-red-600">*</span></div>
-                    <input className="border rounded px-2 py-2 w-full text-sm" placeholder="Oct-2025" />
-                  </div>
-                  <div>
-                    <div className="text-sm">Etype <span className="text-red-600">*</span></div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>Apprentice</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Auth. Signatory <span className="text-red-600">*</span></div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–Select–</option></select>
-                  </div>
-                  <div className="flex items-end"><button className="px-4 py-2 bg-orange-500 text-white rounded text-sm">View</button></div>
-                </div>
-              </div>
-            )}
-
-            {activeView==='salary-pf-challan' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Report › <span className="font-medium">PF Challan</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Company <span className="text-red-600">*</span></div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>BOMBAIM</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Salary Month <span className="text-red-600">*</span></div>
-                    <input className="border rounded px-2 py-2 w-full text-sm" placeholder="Oct-2025" />
-                  </div>
-                  <div>
-                    <div className="text-sm">Etype <span className="text-red-600">*</span></div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>Apprentice</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Auth. Signatory <span className="text-red-600">*</span></div>
-                    <div className="flex items-center gap-2"><select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>–Select–</option></select><input className="border rounded px-2 py-2 w-full text-sm" /></div>
-                  </div>
-                  <div className="flex items-end"><button className="px-4 py-2 bg-orange-500 text-white rounded text-sm">View</button></div>
-                </div>
-              </div>
-            )}
-
-            {activeView==='salary-salary-mis' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Salary › <span className="font-medium">Salary MIS Graph</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Company</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>BOMBAIM</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Financial Year</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>2025-2026</option><option>2024-2025</option></select>
-                  </div>
-                  <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                </div>
-                {['Net Salary Cost','Employee Count','Budgeted CTC','Budgeted Vs Actual CTC 2025-2026'].map((title,idx)=> (
-                  <div key={idx} className="mt-6 rounded border bg-white">
-                    <div className="flex items-center justify-between px-4 py-3 border-b">
-                      <div className="font-medium text-sm">{title}</div>
-                      <div className="flex items-center gap-2"><button className="px-2 py-1 border rounded text-xs">⚙️ Setting</button><button className="px-2 py-1 border rounded text-xs">≡</button></div>
-                    </div>
-                    <div className="p-6 text-gray-500 text-sm">Graph preview</div>
-                    <div className="px-4 pb-4 text-xs text-gray-500">Legend</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {activeView==='corpinfo-employees-directory' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Corp. Info. › <span className="font-medium">Employees Directory</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Employee</div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" />
-                    </div>
-                    <div>
-                      <div className="text-sm">Company</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Department</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Designation</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Blood Group</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="text-sm">Ecode</div>
-                      <input className="border rounded px-2 py-2 w-full text-sm" />
-                    </div>
-                    <div>
-                      <div className="text-sm">Working For</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Work Location</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div>
-                      <div className="text-sm">Manager</div>
-                      <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                    </div>
-                    <div className="md:col-span-2 flex items-center gap-3">
-                      <a className="text-sm text-blue-600" href="#">Clear Filters</a>
-                      <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
-                      <button className="px-3 py-2 border rounded text-sm">⬆</button>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="flex flex-wrap gap-2 text-xs text-gray-700">
-                    {Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZ').map((c)=> (
-                      <button key={c} className="px-2 py-1 rounded border">{c}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="mt-3 overflow-x-auto rounded border bg-white">
-                  <table className="min-w-full">
-                    <thead>
-                      <tr className="border-b bg-orange-100">
-                        <th className="px-3 py-2 text-left text-sm">Sr. No.</th>
-                        <th className="px-3 py-2 text-left text-sm">Employee Name</th>
-                        <th className="px-3 py-2 text-left text-sm">Ecode</th>
-                        <th className="px-3 py-2 text-left text-sm">Designation</th>
-                        <th className="px-3 py-2 text-left text-sm">Department</th>
-                        <th className="px-3 py-2 text-left text-sm">Location</th>
-                        <th className="px-3 py-2 text-left text-sm">Office Email</th>
-                        <th className="px-3 py-2 text-left text-sm">Blood G.</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map((i)=> (
-                        <tr key={i} className="border-b">
-                          <td className="px-3 py-2">{i}</td>
-                          <td className="px-3 py-2">Employee {i}</td>
-                          <td className="px-3 py-2">{100+i}</td>
-                          <td className="px-3 py-2">Designation</td>
-                          <td className="px-3 py-2">Department</td>
-                          <td className="px-3 py-2">Location</td>
-                          <td className="px-3 py-2">emp{i}@office.com</td>
-                          <td className="px-3 py-2">O+</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div className="p-3 flex items-center gap-2"><button className="px-2 py-1 rounded border">1</button><button className="px-2 py-1 rounded border">2</button><button className="px-2 py-1 rounded border">3</button><button className="px-2 py-1 rounded border">»</button></div>
-                </div>
-              </div>
-            )}
-
-            {activeView==='corpinfo-holidays' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Corp. Info. › <span className="font-medium">Holidays</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Company</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>BOMBAIM</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Work Location</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>Kolkata_Frontend</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Year</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>2025</option></select>
-                  </div>
-                  <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Past Holidays</button>
-                  <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Future Holidays</button>
-                  <button className="px-3 py-2 rounded bg-red-500 text-white text-sm">Optional Holidays</button>
-                </div>
-                <div className="mt-4 overflow-x-auto rounded border bg-white">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-orange-100 border-b">
-                        <th className="px-3 py-2 text-left text-sm">Sr. No.</th>
-                        <th className="px-3 py-2 text-left text-sm">Date</th>
-                        <th className="px-3 py-2 text-left text-sm">Day</th>
-                        <th className="px-3 py-2 text-left text-sm">Name</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[1,2,3,4].map((i)=> (
-                        <tr key={i} className="border-b">
-                          <td className="px-3 py-2">{i}</td>
-                          <td className="px-3 py-2">01-Jan-2025</td>
-                          <td className="px-3 py-2">Wednesday</td>
-                          <td className="px-3 py-2"><span className="px-2 py-1 rounded bg-orange-200 inline-block">Holiday {i}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {activeView==='corpinfo-professional-tax' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Corp. Info. › <span className="font-medium">Professional Tax</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Location</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select Location –</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Effective Since</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>2011</option></select>
-                  </div>
-                  <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                </div>
-              </div>
-            )}
-
-            {activeView==='corpinfo-income-tax' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Corp. Info. › <span className="font-medium">Income Tax</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Type</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>Male</option><option>Female</option><option>Senior Citizen</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Effective Since</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>2025</option></select>
-                  </div>
-                  <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                </div>
-                <div className="mt-4 overflow-x-auto rounded border bg-white">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b bg-orange-100">
-                        <th className="px-3 py-2 text-left text-sm">Lower Value</th>
-                        <th className="px-3 py-2 text-left text-sm">Upper Value</th>
-                        <th className="px-3 py-2 text-left text-sm">ITax %</th>
-                        <th className="px-3 py-2 text-left text-sm">Cess</th>
-                        <th className="px-3 py-2 text-left text-sm">Surcharge</th>
-                        <th className="px-3 py-2 text-left text-sm">Tax Regime</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[0,400001,800001,1200001,1600001].map((lv,idx)=> (
-                        <tr key={idx} className="border-b">
-                          <td className="px-3 py-2">{lv}</td>
-                          <td className="px-3 py-2">{lv+400000}</td>
-                          <td className="px-3 py-2">{idx*5}.00</td>
-                          <td className="px-3 py-2">4.00</td>
-                          <td className="px-3 py-2">{idx===3?10.00:0.00}</td>
-                          <td className="px-3 py-2">{idx<9?'New':'Old'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {activeView==='corpinfo-change-home-image' && (
-              <div className="card-soft">
-                <div className="text-sm mb-4">Corp. Info. › <span className="font-medium">Change Home Image</span></div>
-                <div className="rounded border bg-white p-6">
-                  <div className="border-2 border-dashed rounded w-full h-64 grid place-items-center overflow-hidden">
-                    <img alt="preview" src="https://via.placeholder.com/600x300" className="object-cover w-full h-full" />
-                  </div>
-                  <div className="mt-4 flex items-center gap-3">
-                    <label className="text-sm">Select Image:</label>
-                    <input type="file" accept=".jpg" className="border rounded px-2 py-2 text-sm" />
-                    <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">Delete</button>
-                  </div>
-                  <div className="mt-4 text-xs text-gray-700 space-y-1">
-                    <div>Note:</div>
-                    <div>1. Maximum image file size 100 KB.</div>
-                    <div>2. File type allowed to be uploaded is .jpg</div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {activeView==='request-work-on-holiday' && (
               <div className="card-soft">
                 <div className="text-sm mb-4">Request › <span className="font-medium">Work on Holiday</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Employee</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Ecode</div>
-                    <input className="border rounded px-2 py-2 w-full text-sm" />
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
-                    <button className="px-3 py-2 bg-green-600 text-white rounded text-sm">+ New Request</button>
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button className="px-3 py-2 rounded border text-sm">Pending</button>
-                  <button className="px-3 py-2 rounded border text-sm">Submitted</button>
-                  <button className="px-3 py-2 rounded border text-sm">Approved</button>
-                  <button className="px-3 py-2 rounded border text-sm">Rejected</button>
-                  <button className="px-3 py-2 rounded border text-sm">Cancelled</button>
-                  <button className="px-3 py-2 rounded border text-sm">All ⟳</button>
-                </div>
-                <div className="mt-8 text-gray-600 text-sm">No data found.</div>
+                <ESSWorkOnHoliday employeeData={myEmpData} />
               </div>
             )}
 
             {activeView==='request-resignation-note' && (
               <div className="card-soft">
                 <div className="text-sm mb-4">Request › <span className="font-medium">Resignation Note</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Employee</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Ecode</div>
-                    <input className="border rounded px-2 py-2 w-full text-sm" />
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button>
-                    <button className="px-3 py-2 bg-green-600 text-white rounded text-sm">+ New Request</button>
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button className="px-3 py-2 rounded border text-sm">Pending</button>
-                  <button className="px-3 py-2 rounded border text-sm">Submitted</button>
-                  <button className="px-3 py-2 rounded border text-sm">Approved</button>
-                  <button className="px-3 py-2 rounded border text-sm">Rejected</button>
-                  <button className="px-3 py-2 rounded border text-sm">Cancelled</button>
-                  <button className="px-3 py-2 rounded border text-sm">All ⟳</button>
-                </div>
-                <div className="mt-4 overflow-x-auto rounded border bg-white">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-orange-100 border-b">
-                        <th className="px-3 py-2 text-left text-sm">Sr.</th>
-                        <th className="px-3 py-2 text-left text-sm">Employee</th>
-                        <th className="px-3 py-2 text-left text-sm">ECode</th>
-                        <th className="px-3 py-2 text-left text-sm">Resignation Date</th>
-                        <th className="px-3 py-2 text-left text-sm">Reason</th>
-                        <th className="px-3 py-2 text-left text-sm">Status</th>
-                        <th className="px-3 py-2 text-left text-sm">Remarks</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="px-3 py-8 text-center text-sm" colSpan={7}>No data</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                <ESSResignationNote employeeData={myEmpData} />
               </div>
             )}
 
             {activeView==='request-leave-encashment' && (
               <div className="card-soft">
                 <div className="text-sm mb-4">Request › <span className="font-medium">Leave Encashment</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Employee</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Ecode</div>
-                    <input className="border rounded px-2 py-2 w-full text-sm" />
-                  </div>
-                  <div>
-                    <div className="text-sm">Year</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow">{Array.from({length:5}).map((_,i)=>{const y=new Date().getFullYear()-i;return <option key={y}>{y}</option>;})}</select>
-                  </div>
-                  <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button className="px-3 py-2 rounded border text-sm">Pending</button>
-                  <button className="px-3 py-2 rounded border text-sm">Submitted</button>
-                  <button className="px-3 py-2 rounded border text-sm">Approved</button>
-                  <button className="px-3 py-2 rounded border text-sm">Rejected</button>
-                  <button className="px-3 py-2 rounded border text-sm">Cancelled</button>
-                  <button className="px-3 py-2 rounded border text-sm">All ⟳</button>
-                </div>
-                <div className="mt-4 overflow-x-auto rounded border bg-white">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-orange-100 border-b">
-                        <th className="px-3 py-2 text-left text-sm">Sr.</th>
-                        <th className="px-3 py-2 text-left text-sm">Employee</th>
-                        <th className="px-3 py-2 text-left text-sm">ECode</th>
-                        <th className="px-3 py-2 text-left text-sm">Encashment Days</th>
-                        <th className="px-3 py-2 text-left text-sm">Amount</th>
-                        <th className="px-3 py-2 text-left text-sm">Status</th>
-                        <th className="px-3 py-2 text-left text-sm">Remarks</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="px-3 py-8 text-center text-sm" colSpan={7}>No data</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                <ESSLeaveEncashment employeeData={myEmpData} />
               </div>
             )}
 
             {activeView==='request-confirmation-review-entry' && (
               <div className="card-soft">
                 <div className="text-sm mb-4">Request › <span className="font-medium">Confirmation Review Entry</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">Employee</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Ecode</div>
-                    <input className="border rounded px-2 py-2 w-full text-sm" />
-                  </div>
-                  <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button className="px-3 py-2 rounded border text-sm">Pending</button>
-                  <button className="px-3 py-2 rounded border text-sm">Submitted</button>
-                  <button className="px-3 py-2 rounded border text-sm">Completed</button>
-                  <button className="px-3 py-2 rounded border text-sm">All ⟳</button>
-                </div>
-                <div className="mt-4 overflow-x-auto rounded border bg-white">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-orange-100 border-b">
-                        <th className="px-3 py-2 text-left text-sm">Sr.</th>
-                        <th className="px-3 py-2 text-left text-sm">Employee</th>
-                        <th className="px-3 py-2 text-left text-sm">Department</th>
-                        <th className="px-3 py-2 text-left text-sm">Designation</th>
-                        <th className="px-3 py-2 text-left text-sm">Status</th>
-                        <th className="px-3 py-2 text-left text-sm">Remarks</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="px-3 py-8 text-center text-sm" colSpan={6}>No data</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                <ESSConfirmationReview employeeData={myEmpData} />
               </div>
             )}
             {activeView==='request-proxyattendanceregularise' && (
               <div className="card-soft">
-                <div className="text-sm mb-4">Request › <span className="font-medium">ProxyAttendanceRegularise</span></div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div>
-                    <button className="px-3 py-2 rounded bg-orange-500 text-white text-sm">New Request</button>
-                  </div>
-                  <div>
-                    <div className="text-sm">Employee</div>
-                    <select className="border rounded px-2 py-2 w-full text-sm select-arrow"><option>– Select –</option></select>
-                  </div>
-                  <div>
-                    <div className="text-sm">Ecode</div>
-                    <input className="border rounded px-2 py-2 w-full text-sm" />
-                  </div>
-                </div>
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div>
-                    <div className="text-sm">From Date</div>
-                    <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10)} />
-                  </div>
-                  <div>
-                    <div className="text-sm">To Date</div>
-                    <input type="date" className="border rounded px-2 py-2 w-full text-sm" defaultValue={new Date().toISOString().slice(0,10)} />
-                  </div>
-                  <div className="flex items-end"><button className="px-3 py-2 bg-orange-500 text-white rounded text-sm">🔎</button></div>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button className="px-3 py-2 rounded bg-orange-400 text-white text-sm">Pending Approval</button>
-                  <button className="px-3 py-2 rounded bg-green-500 text-white text-sm">Approved</button>
-                  <button className="px-3 py-2 rounded border text-sm">ALL</button>
-                </div>
-                <div className="mt-4 overflow-x-auto rounded border bg-white">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-orange-100 border-b">
-                        <th className="px-3 py-2 text-left text-sm">Sr.</th>
-                        <th className="px-3 py-2 text-left text-sm">Employee</th>
-                        <th className="px-3 py-2 text-left text-sm">ECode</th>
-                        <th className="px-3 py-2 text-left text-sm">Date</th>
-                        <th className="px-3 py-2 text-left text-sm">In Time</th>
-                        <th className="px-3 py-2 text-left text-sm">Out Time</th>
-                        <th className="px-3 py-2 text-left text-sm">Shift</th>
-                        <th className="px-3 py-2 text-left text-sm">Type</th>
-                        <th className="px-3 py-2 text-left text-sm">Remarks</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="px-3 py-8 text-center text-sm" colSpan={9}>No data</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                <div className="text-sm mb-4">Request › <span className="font-medium">Proxy Attendance Regularise</span></div>
+                <ESSProxyAttendance employeeData={myEmpData} />
               </div>
             )}
+
+            {activeView==='reports-late-come-report' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Reports › <span className="font-medium">Late Come Report</span></div>
+                <ESSLateComeReport employeeData={myEmpData} />
+              </div>
+            )}
+
+            {activeView==='reports-early-go-report' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Reports › <span className="font-medium">Early Go Report</span></div>
+                <ESSEarlyGoReport employeeData={myEmpData} />
+              </div>
+            )}
+
+            {activeView==='reports-working-hr-present-count-report' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Reports › <span className="font-medium">Working Hr/Present Count Report</span></div>
+                <ESSWorkingHrReport employeeData={myEmpData} />
+              </div>
+            )}
+
+            {activeView==='reports-leave-availed-register' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Reports › <span className="font-medium">Leave Availed Register</span></div>
+                <ESSLeaveAvailedRegister employeeData={myEmpData} />
+              </div>
+            )}
+
+            {activeView==='reports-productivity-report' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Reports › <span className="font-medium">Productivity Report</span></div>
+                <ESSProductivityReport employeeData={myEmpData} />
+              </div>
+            )}
+
+            {activeView==='reports-leave-yearly-register' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Reports › <span className="font-medium">Leave Yearly Register</span></div>
+                <ESSLeaveYearlyRegister employeeData={myEmpData} />
+              </div>
+            )}
+
+            {activeView==='reports-employee-reports' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Reports › <span className="font-medium">Employee Reports</span></div>
+                <ESSEmployeeReports employeeData={myEmpData} />
+              </div>
+            )}
+
+            {activeView==='salary-salary-slip' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Salary › <span className="font-medium">Salary Slip</span></div>
+                <ESSSalarySlipListView employeeData={myEmpData} />
+              </div>
+            )}
+            
+            {activeView==='salary-tax-report' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Salary › <span className="font-medium">Tax Report</span></div>
+                <ESSTaxReport employeeData={myEmpData} />
+              </div>
+            )}
+
+            {activeView==='salary-annual-salary' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Salary › <span className="font-medium">Annual Salary</span></div>
+                <ESSAnnualSalary employeeData={myEmpData} />
+              </div>
+            )}
+            
+            {activeView==='salary-form16' && <ESSGenericReport employeeData={myEmpData} reportName="Form 16" />}
+            {activeView==='salary-3a' && <ESSGenericReport employeeData={myEmpData} reportName="PF 3A Report" />}
+            {activeView==='salary-parity-report' && <ESSGenericReport employeeData={myEmpData} reportName="Salary Parity" />}
+            {activeView==='salary-12a' && <ESSGenericReport employeeData={myEmpData} reportName="Form 12A" />}
+            {activeView==='salary-pf-challan' && <ESSGenericReport employeeData={myEmpData} reportName="PF Challan" />}
+            {activeView==='salary-salary-mis' && <ESSGenericReport employeeData={myEmpData} reportName="Salary MIS" />}
+
+            {activeView==='corpinfo-employees-directory' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Corp. Info. › <span className="font-medium">Employees Directory</span></div>
+                <ESSEmployeeReports employeeData={myEmpData} />
+              </div>
+            )}
+            
+            {activeView==='corpinfo-holidays' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Corp. Info. › <span className="font-medium">Holidays</span></div>
+                <ESSHolidayList employeeData={myEmpData} />
+              </div>
+            )}
+
+            {activeView==='corpinfo-professional-tax' && <ESSGenericReport employeeData={myEmpData} reportName="Professional Tax Computation" />}
+            {activeView==='corpinfo-income-tax' && <ESSGenericReport employeeData={myEmpData} reportName="Income Tax Computation" />}
+            
+            {activeView==='corpinfo-change-home-image' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Corp. Info. › <span className="font-medium">Change Home Image</span></div>
+                <ESSChangeHomeImage employeeData={myEmpData} />
+              </div>
+            )}
+            </>
+           );
+          })()}
           </div>
         </div>
       </div>
