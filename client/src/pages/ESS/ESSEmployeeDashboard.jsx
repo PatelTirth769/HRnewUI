@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 import API from '../../services/api';
+import ESSCheckInWidget from './ESSCheckInWidget';
 
 export default function ESSEmployeeDashboard({ employeeData }) {
     const [attendanceStats, setAttendanceStats] = useState({ present: 0, absent: 0, halfDay: 0, onLeave: 0, totalHours: 0 });
@@ -26,107 +27,72 @@ export default function ESSEmployeeDashboard({ employeeData }) {
             const fromDate = dayjs().startOf('month').format('YYYY-MM-DD');
             const toDate = dayjs().format('YYYY-MM-DD');
 
-            // 1. Try formal Attendance records first
-            const res = await API.get('/api/resource/Attendance', {
-                params: {
-                    fields: '["status","working_hours","attendance_date"]',
-                    filters: JSON.stringify([["employee","=",employeeData.name],["attendance_date",">=",fromDate],["attendance_date","<=",toDate]]),
-                    limit_page_length: 100
-                }
-            });
-            const records = res.data.data || [];
-
-            if (records.length > 0) {
-                // Formal attendance records exist — use them
-                let present=0,absent=0,halfDay=0,onLeave=0,totalHours=0;
-                records.forEach(r => {
-                    if(r.status==='Present') present++;
-                    else if(r.status==='Absent') absent++;
-                    else if(r.status==='Half Day') halfDay++;
-                    else if(r.status==='On Leave') onLeave++;
-                    totalHours += (parseFloat(r.working_hours)||0);
-                });
-                setAttendanceStats({ present, absent, halfDay, onLeave, totalHours: totalHours.toFixed(1) });
-                return;
-            }
-
-            // 2. Fallback: Check Employee Checkin records (punch in/out)
-            const fromTime = `${fromDate} 00:00:00`;
-            const toTime = `${toDate} 23:59:59`;
-
-            // Fetch checkins and holidays in parallel
-            const [checkinRes, holidayDates] = await Promise.all([
-                API.get('/api/resource/Employee Checkin', {
+            // 1. Fetch formal Attendance records and raw Checkins in parallel
+            const [attRes, checkinRes] = await Promise.all([
+                API.get('/api/resource/Attendance', {
                     params: {
-                        fields: '["time","log_type"]',
-                        filters: JSON.stringify([["employee","=",employeeData.name],["time",">=",fromTime],["time","<=",toTime]]),
-                        limit_page_length: 500,
-                        order_by: 'time asc'
+                        fields: '["status","working_hours","attendance_date"]',
+                        filters: JSON.stringify([["employee", "=", employeeData.name], ["attendance_date", ">=", fromDate], ["attendance_date", "<=", toDate]]),
+                        limit_page_length: 100
                     }
                 }),
-                // Fetch holiday list to exclude holidays from working days
-                (async () => {
-                    try {
-                        if (!employeeData.holiday_list) return new Set();
-                        const hRes = await API.get(`/api/resource/Holiday List/${encodeURIComponent(employeeData.holiday_list)}`);
-                        const holidays = hRes.data?.data?.holidays || [];
-                        return new Set(holidays.map(h => h.holiday_date));
-                    } catch(e) { return new Set(); }
-                })()
+                API.get('/api/resource/Employee Checkin', {
+                    params: {
+                        fields: '["time"]',
+                        filters: JSON.stringify([["employee", "=", employeeData.name], ["time", ">=", `${fromDate} 00:00:00`], ["time", "<=", `${toDate} 23:59:59`]]),
+                        limit_page_length: 1000,
+                        order_by: 'time asc'
+                    }
+                })
             ]);
 
+            const records = attRes.data.data || [];
             const checkins = checkinRes.data.data || [];
 
-            if (checkins.length > 0) {
-                // Count unique days with checkins as "Present"
-                const daysWithCheckins = new Set();
-                checkins.forEach(c => {
-                    const day = c.time ? c.time.split(' ')[0] : null;
-                    if (day) daysWithCheckins.add(day);
+            // 2. Process checkins to find daily durations
+            const dailyPunches = {};
+            checkins.forEach(c => {
+                const date = c.time.split(' ')[0];
+                if (!dailyPunches[date]) dailyPunches[date] = { first: c.time, last: c.time };
+                else dailyPunches[date].last = c.time;
+            });
+
+            let calculatedTotalHours = 0;
+            Object.values(dailyPunches).forEach(p => {
+                const diff = dayjs(p.last).diff(dayjs(p.first), 'hour', true);
+                calculatedTotalHours += diff;
+            });
+
+            // 3. Determine counts from Attendance records if they exist
+            if (records.length > 0) {
+                let present = 0, absent = 0, halfDay = 0, onLeave = 0, formalTotalHours = 0;
+                records.forEach(r => {
+                    if (r.status === 'Present') present++;
+                    else if (r.status === 'Absent') absent++;
+                    else if (r.status === 'Half Day') halfDay++;
+                    else if (r.status === 'On Leave') onLeave++;
+                    formalTotalHours += (parseFloat(r.working_hours) || 0);
                 });
 
-                // Calculate approximate hours from first-in to last-out per day
-                const dayCheckins = {};
-                checkins.forEach(c => {
-                    const day = c.time ? c.time.split(' ')[0] : null;
-                    if (!day) return;
-                    if (!dayCheckins[day]) dayCheckins[day] = [];
-                    dayCheckins[day].push(c.time);
-                });
-
-                let totalHours = 0;
-                Object.values(dayCheckins).forEach(times => {
-                    if (times.length >= 2) {
-                        const first = dayjs(times[0]);
-                        const last = dayjs(times[times.length - 1]);
-                        totalHours += last.diff(first, 'hour', true);
-                    }
-                });
-
-                // Count working days: exclude Sundays AND holidays
-                let totalWorkingDays = 0;
-                let d = dayjs().startOf('month');
-                const today = dayjs();
-                while (d.isBefore(today) || d.isSame(today, 'day')) {
-                    const dateStr = d.format('YYYY-MM-DD');
-                    const isSunday = d.day() === 0;
-                    const isHoliday = holidayDates.has(dateStr);
-                    if (!isSunday && !isHoliday) totalWorkingDays++;
-                    d = d.add(1, 'day');
-                }
-
-                const present = daysWithCheckins.size;
-                const absent = Math.max(0, totalWorkingDays - present);
-
+                // Use calculated hours if formal ones are missing
                 setAttendanceStats({
-                    present,
-                    absent,
+                    present, absent, halfDay, onLeave,
+                    totalHours: (formalTotalHours > 0 ? formalTotalHours : calculatedTotalHours).toFixed(1)
+                });
+            } else if (checkins.length > 0) {
+                // Fallback: If NO formal attendance records, use checkin days as "Present"
+                setAttendanceStats({
+                    present: Object.keys(dailyPunches).length,
+                    absent: 0,
                     halfDay: 0,
                     onLeave: 0,
-                    totalHours: totalHours.toFixed(1)
+                    totalHours: calculatedTotalHours.toFixed(1)
                 });
             }
-        } catch(err) { console.error("Attendance stats error:", err); }
+
+        } catch (err) {
+            console.error("Attendance stats error:", err);
+        }
     };
 
     const fetchLeaveBalances = async () => {
@@ -271,7 +237,7 @@ export default function ESSEmployeeDashboard({ employeeData }) {
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#6b7280', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.5px' }}>
                     Attendance · {monthName}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
                     {[
                         { label: 'Present', value: attendanceStats.present, bg: '#dcfce7', color: '#166534', icon: '✓' },
                         { label: 'Absent', value: attendanceStats.absent, bg: '#fee2e2', color: '#991b1b', icon: '✕' },
@@ -286,6 +252,11 @@ export default function ESSEmployeeDashboard({ employeeData }) {
                             </div>
                         </div>
                     ))}
+                    
+                    <ESSCheckInWidget 
+                        employeeData={employeeData} 
+                        onCheckinSuccess={loadDashboardData} 
+                    />
                 </div>
             </div>
 

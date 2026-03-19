@@ -17,75 +17,86 @@ export default function ESSAnnualSalary({ employeeData }) {
     }, [employeeData, fromDate, toDate]);
 
     const handleGenerate = async () => {
-        if (!employeeData?.name || !employeeData?.company) return;
+        if (!employeeData?.name) return;
         setLoading(true);
         try {
-            const filters = {
-                from_date: fromDate,
-                to_date: toDate,
-                company: employeeData.company,
-                employee: employeeData.name,
-                docstatus: "Submitted",
-            };
+            const filters = [
+                ["employee", "=", employeeData.name],
+                ["start_date", ">=", fromDate],
+                ["end_date", "<=", toDate],
+                ["status", "!=", "Cancelled"]
+            ];
 
-            const res = await API.post('/api/method/frappe.desk.query_report.run', {
-                report_name: "Salary Register",
-                filters: filters
+            const res = await API.get('/api/resource/Salary Slip', {
+                params: {
+                    fields: '["name", "start_date", "end_date", "gross_pay", "total_deduction", "net_pay", "status"]',
+                    filters: JSON.stringify(filters),
+                    limit_page_length: 100,
+                    order_by: 'start_date desc'
+                }
             });
 
-            const reportData = res.data?.message || {};
-            const reportColumns = reportData.columns || [];
-            const reportResult = reportData.result || [];
-
-            const tableCols = reportColumns.map((col, i) => {
-                let fieldname, label, fieldtype;
-                if (typeof col === 'string') {
-                    const parts = col.split(':');
-                    fieldname = parts[0] || `col_${i}`;
-                    label = fieldname.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    fieldtype = parts[1] ? parts[1].split('/')[0] : 'Data';
-                } else {
-                    fieldname = col.fieldname || col.id || `col_${i}`;
-                    label = col.label || col.name || fieldname;
-                    fieldtype = col.fieldtype || 'Data';
+            const slips = res.data?.data || [];
+            
+            const tableCols = [
+                {
+                    title: 'Slip ID',
+                    dataIndex: 'name',
+                    key: 'name',
+                    render: (text) => <span className="font-medium text-blue-600">{text}</span>
+                },
+                {
+                    title: 'From Date',
+                    dataIndex: 'start_date',
+                    key: 'start_date',
+                    render: (date) => dayjs(date).format('DD MMM YYYY')
+                },
+                {
+                    title: 'To Date',
+                    dataIndex: 'end_date',
+                    key: 'end_date',
+                    render: (date) => dayjs(date).format('DD MMM YYYY')
+                },
+                {
+                    title: 'Gross Pay',
+                    dataIndex: 'gross_pay',
+                    key: 'gross_pay',
+                    align: 'right',
+                    render: (val) => (val || 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR' })
+                },
+                {
+                    title: 'Deductions',
+                    dataIndex: 'total_deduction',
+                    key: 'total_deduction',
+                    align: 'right',
+                    render: (val) => (val || 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR' })
+                },
+                {
+                    title: 'Net Pay',
+                    dataIndex: 'net_pay',
+                    key: 'net_pay',
+                    align: 'right',
+                    render: (val) => (val || 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR' })
+                },
+                {
+                    title: 'Status',
+                    dataIndex: 'status',
+                    key: 'status',
+                    render: (status) => {
+                        let colorClass = 'bg-gray-100 text-gray-800';
+                        if (status === 'Submitted') colorClass = 'bg-blue-100 text-blue-800';
+                        if (status === 'Draft') colorClass = 'bg-yellow-100 text-yellow-800';
+                        return <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${colorClass}`}>{status}</span>;
+                    }
                 }
-
-                const colDef = {
-                    title: label,
-                    dataIndex: fieldname,
-                    key: fieldname,
-                    ellipsis: true,
-                };
-
-                if (['Currency', 'Float', 'Int'].includes(fieldtype)) {
-                    colDef.align = 'right';
-                    colDef.render = (val) => {
-                        const num = parseFloat(val) || 0;
-                        return num.toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
-                    };
-                }
-                return colDef;
-            });
+            ];
 
             setColumns(tableCols);
-
-            const rows = reportResult.map((row, idx) => {
-                let rowObj = { key: idx };
-                if (Array.isArray(row)) {
-                    reportColumns.forEach((col, i) => {
-                        let fname = typeof col === 'string' ? col.split(':')[0] : (col.fieldname || col.id);
-                        rowObj[fname || `col_${i}`] = row[i];
-                    });
-                } else {
-                    rowObj = { ...row, key: idx };
-                }
-                return rowObj;
-            });
-
-            setData(rows);
+            setData(slips.map((s, idx) => ({ ...s, key: s.name || idx })));
+            
         } catch (error) {
             console.error(error);
-            notification.error({ message: "Failed to generate annual salary report" });
+            notification.error({ message: "Failed to load annual salary records" });
         } finally {
             setLoading(false);
         }
@@ -97,12 +108,12 @@ export default function ESSAnnualSalary({ employeeData }) {
                 <h2 className="text-lg font-semibold text-gray-800 m-0">My Annual Salary</h2>
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">From:</span>
-                        <input type="date" className="border rounded px-2 py-1 text-sm outline-none bg-gray-50" value={fromDate} onChange={e => setFromDate(e.target.value)} />
+                        <span className="text-xs text-gray-500 font-medium">From:</span>
+                        <input type="date" className="border rounded px-2 py-1 text-sm outline-none bg-gray-50 focus:ring-1 ring-orange-400" value={fromDate} onChange={e => setFromDate(e.target.value)} />
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">To:</span>
-                        <input type="date" className="border rounded px-2 py-1 text-sm outline-none bg-gray-50" value={toDate} onChange={e => setToDate(e.target.value)} />
+                        <span className="text-xs text-gray-500 font-medium">To:</span>
+                        <input type="date" className="border rounded px-2 py-1 text-sm outline-none bg-gray-50 focus:ring-1 ring-orange-400" value={toDate} onChange={e => setToDate(e.target.value)} />
                     </div>
                 </div>
             </div>
@@ -120,8 +131,9 @@ export default function ESSAnnualSalary({ employeeData }) {
             </div>
             
             <style dangerouslySetInnerHTML={{ __html: `
-                .ess-salary-table .ant-table-thead > tr > th { background: #f9fafb !important; font-size: 11px; color: #6b7280; font-weight: 600; }
-                .ess-salary-table .ant-table-cell { font-size: 13px; }
+                .ess-salary-table .ant-table-thead > tr > th { background: #f9fafb !important; font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em; }
+                .ess-salary-table .ant-table-cell { font-size: 13px; border-bottom: 1px solid #f3f4f6 !important; }
+                .ess-salary-table .ant-table-row:hover .ant-table-cell { background: #fffcf9 !important; }
             `}} />
         </div>
     );

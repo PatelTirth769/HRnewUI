@@ -12,44 +12,53 @@ export default function ESSLeaveYearlyRegister({ employeeData }) {
 
     useEffect(() => {
         if (employeeData?.name) fetchData();
-    }, [employeeData]);
+    }, [employeeData, year]);
 
     const fetchData = async () => {
         setLoading(true);
         try {
             const fromDate = `${year}-01-01`;
             const toDate = `${year}-12-31`;
+            let allocations = [];
+            let applications = [];
 
-            // Fetch leave allocations for the year
-            const allocRes = await API.get(`/api/resource/Leave Allocation`, {
-                params: {
-                    fields: JSON.stringify(["name","leave_type","total_leaves_allocated","new_leaves_allocated","unused_leaves","from_date","to_date"]),
-                    filters: JSON.stringify([
-                        ["employee","=",employeeData.name],
-                        ["docstatus","=",1],
-                        ["from_date",">=",fromDate],
-                        ["to_date","<=",toDate]
-                    ]),
-                    limit_page_length: "None"
-                }
-            });
+            // 1. Fetch Leave Applications (Historical)
+            try {
+                const appRes = await API.get(`/api/resource/Leave Application`, {
+                    params: {
+                        fields: JSON.stringify(["leave_type", "total_leave_days", "status"]),
+                        filters: JSON.stringify([
+                            ["employee", "=", employeeData.name],
+                            ["from_date", ">=", fromDate],
+                            ["to_date", "<=", toDate],
+                            ["status", "=", "Approved"]
+                        ]),
+                        limit_page_length: "None"
+                    }
+                });
+                applications = appRes.data.data || [];
+            } catch (err) {
+                console.warn("Leave Application fetch failed:", err);
+            }
 
-            // Fetch leave applications for the year
-            const appRes = await API.get(`/api/resource/Leave Application`, {
-                params: {
-                    fields: JSON.stringify(["leave_type","total_leave_days","status"]),
-                    filters: JSON.stringify([
-                        ["employee","=",employeeData.name],
-                        ["from_date",">=",fromDate],
-                        ["to_date","<=",toDate],
-                        ["status","=","Approved"]
-                    ]),
-                    limit_page_length: "None"
-                }
-            });
-
-            const allocations = allocRes.data.data || [];
-            const applications = appRes.data.data || [];
+            // 2. Fetch Leave Allocations (Balances)
+            try {
+                const allocRes = await API.get(`/api/resource/Leave Allocation`, {
+                    params: {
+                        fields: JSON.stringify(["name", "leave_type", "total_leaves_allocated", "new_leaves_allocated", "unused_leaves", "from_date", "to_date"]),
+                        filters: JSON.stringify([
+                            ["employee", "=", employeeData.name],
+                            ["docstatus", "=", 1],
+                            ["from_date", ">=", fromDate],
+                            ["to_date", "<=", toDate]
+                        ]),
+                        limit_page_length: "None"
+                    }
+                });
+                allocations = allocRes.data.data || [];
+            } catch (err) {
+                console.warn("Leave Allocation access denied or failed:", err);
+            }
 
             // Group availed by leave type
             const availedByType = {};
@@ -58,11 +67,25 @@ export default function ESSLeaveYearlyRegister({ employeeData }) {
             });
 
             // Merge data
-            const merged = allocations.map(alloc => ({
-                ...alloc,
-                availed: availedByType[alloc.leave_type] || 0,
-                balance: (alloc.total_leaves_allocated || 0) - (availedByType[alloc.leave_type] || 0),
-            }));
+            let merged = [];
+            if (allocations.length > 0) {
+                merged = allocations.map(alloc => ({
+                    ...alloc,
+                    availed: availedByType[alloc.leave_type] || 0,
+                    balance: (alloc.total_leaves_allocated || 0) - (availedByType[alloc.leave_type] || 0),
+                }));
+            } else {
+                // Fallback: Show only what we found in applications
+                merged = Object.entries(availedByType).map(([type, total]) => ({
+                    leave_type: type,
+                    from_date: fromDate,
+                    to_date: toDate,
+                    total_leaves_allocated: '—',
+                    availed: total,
+                    balance: '—',
+                    name: `fallback-${type}`
+                }));
+            }
 
             setData(merged);
         } catch (err) {
@@ -82,13 +105,13 @@ export default function ESSLeaveYearlyRegister({ employeeData }) {
         { title: 'Allocated', dataIndex: 'total_leaves_allocated', key: 'total_leaves_allocated', align: 'right' },
         { title: 'Availed', dataIndex: 'availed', key: 'availed', align: 'right', render: (v) => <span className="text-orange-600 font-medium">{v}</span> },
         { title: 'Balance', dataIndex: 'balance', key: 'balance', align: 'right', render: (v) => (
-            <span className={`font-bold ${v > 0 ? 'text-green-600' : v < 0 ? 'text-red-600' : 'text-gray-600'}`}>{v}</span>
+            v === '—' ? '—' : <span className={`font-bold ${v > 0 ? 'text-green-600' : v < 0 ? 'text-red-600' : 'text-gray-600'}`}>{v}</span>
         )},
     ];
 
-    const totalAllocated = data.reduce((s, r) => s + (r.total_leaves_allocated || 0), 0);
+    const totalAllocated = data.reduce((s, r) => s + (typeof r.total_leaves_allocated === 'number' ? r.total_leaves_allocated : 0), 0);
     const totalAvailed = data.reduce((s, r) => s + (r.availed || 0), 0);
-    const totalBalance = data.reduce((s, r) => s + (r.balance || 0), 0);
+    const totalBalance = data.reduce((s, r) => s + (typeof r.balance === 'number' ? r.balance : 0), 0);
 
     return (
         <div className="space-y-4">
@@ -100,7 +123,7 @@ export default function ESSLeaveYearlyRegister({ employeeData }) {
             </div>
             <div className="grid grid-cols-3 gap-4 mb-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-blue-700">{totalAllocated}</div>
+                    <div className="text-xl font-bold text-blue-700">{totalAllocated || '—'}</div>
                     <div className="text-xs text-blue-600">Total Allocated</div>
                 </div>
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
@@ -108,7 +131,7 @@ export default function ESSLeaveYearlyRegister({ employeeData }) {
                     <div className="text-xs text-orange-600">Total Availed</div>
                 </div>
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-green-700">{totalBalance}</div>
+                    <div className="text-xl font-bold text-green-700">{totalBalance || '—'}</div>
                     <div className="text-xs text-green-600">Total Balance</div>
                 </div>
             </div>

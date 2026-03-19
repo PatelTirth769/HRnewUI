@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useUserRole } from '../../hooks/useUserRole';
 import { getBranding } from '../../config/branding';
+import { useAuth } from '../../context/auth';
 
 const employeeHiddenModules = new Set(['master', 'elcLetters', 'approvers']);
 
@@ -9,6 +10,7 @@ const Header = ({ onModuleClick }) => {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
   const branding = getBranding();
+  const [auth, setAuth] = useAuth();
 
   const [navLoading, setNavLoading] = useState(true);
   const [navData, setNavData] = useState({});
@@ -35,6 +37,16 @@ const Header = ({ onModuleClick }) => {
     localStorage.setItem('ui-theme', theme);
   }, [theme]);
 
+  const handleLogout = () => {
+    setAuth(null);
+    localStorage.removeItem('userToken');
+    localStorage.removeItem('apiToken');
+    localStorage.removeItem('isLogged');
+    localStorage.removeItem('user');
+    localStorage.removeItem('userData');
+    navigate('/login');
+  };
+
   return (
     <header className="bg-white px-4 py-2 flex justify-between items-center relative shadow-sm" >
       <Link
@@ -46,7 +58,7 @@ const Header = ({ onModuleClick }) => {
       </Link>
       <div className="flex items-center space-x-4 text-sm text-gray-700">
         {/* Dynamic module tabs loaded from database via ser backend */}
-        {!navLoading && Object.values(navData)
+        {isAdmin && !navLoading && Object.values(navData)
           .sort((a, b) => (a.order || 0) - (b.order || 0))
           .map((mod) => {
             if (!isAdmin && employeeHiddenModules.has(mod.moduleKey)) return null;
@@ -63,11 +75,14 @@ const Header = ({ onModuleClick }) => {
           })
         }
 
-        <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>
-        <Link to="/settings" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Settings</Link>
+        {isAdmin && <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>}
         <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Self Service</Link>
-        <Link to="/approver" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Approvers</Link>
-        <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Reports</Link>
+        {isAdmin && (
+          <>
+            <Link to="/approver" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Approvers</Link>
+            <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Reports</Link>
+          </>
+        )}
 
         <div className="relative">
           <button
@@ -94,6 +109,17 @@ const Header = ({ onModuleClick }) => {
             </div>
           )}
         </div>
+
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-md transition-colors border border-red-200 text-xs font-medium"
+          aria-label="Logout"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Logout
+        </button>
       </div >
     </header >
   );

@@ -359,6 +359,13 @@ export const moduleNavigation = {
                     { label: 'HR View Talent Acquisitions', path: '/needs/hr-view-talent-acquisitions' },
                 ],
             },
+            {
+                title: 'Settings',
+                icon: 'cog',
+                items: [
+                    { label: 'Settings', path: '/settings' },
+                ],
+            },
         ],
     },
     approvers: {
