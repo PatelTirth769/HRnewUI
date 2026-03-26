@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { notification } from 'antd';
 import API from '../../services/api';
 
 export default function SalaryStructure() {
     const navigate = useNavigate();
+    const location = useLocation();
     const [view, setView] = useState('list');
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -13,6 +14,9 @@ export default function SalaryStructure() {
     const [searchId, setSearchId] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
     const [filterActive, setFilterActive] = useState('');
+    const [filterCompany, setFilterCompany] = useState(new URLSearchParams(location.search).get('company') || '');
+    const [companies, setCompanies] = useState([]);
+    const [mastersLoaded, setMastersLoaded] = useState(false);
     const [formTab, setFormTab] = useState('details');
     const [connectionsOpen, setConnectionsOpen] = useState(true);
     const [connections, setConnections] = useState({ salary_structure_assignment: 0, salary_slip: 0, employee_grade: 0 });
@@ -44,7 +48,17 @@ export default function SalaryStructure() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await API.get('/api/resource/Salary Structure?fields=["name","company","is_active","docstatus","modified"]&limit_page_length=None&order_by=modified desc');
+            let url = '/api/resource/Salary Structure?fields=["name","company","is_active","docstatus","modified"]&limit_page_length=None&order_by=modified desc';
+            
+            let filters = [];
+            if (searchId) filters.push(`["name","like","%${searchId}%"]`);
+            if (filterCompany) filters.push(`["company","=","${filterCompany}"]`);
+            
+            if (filters.length > 0) {
+                url += `&filters=[${filters.join(',')}]`;
+            }
+
+            const res = await API.get(url);
             if (res.data.data) setData(res.data.data);
         } catch (err) {
             console.error('Fetch list failed:', err);
@@ -52,7 +66,26 @@ export default function SalaryStructure() {
         } finally { setLoading(false); }
     };
 
-    useEffect(() => { fetchData(); }, []);
+    const fetchMasters = async () => {
+        if (mastersLoaded) return;
+        try {
+            const res = await API.get('/api/resource/Company?fields=["name"]&limit_page_length=None');
+            setCompanies(res.data.data.map(c => c.name));
+            setMastersLoaded(true);
+        } catch (err) {
+            console.error('Fetch masters failed:', err);
+        }
+    };
+
+    useEffect(() => { 
+        if (view === 'list') {
+            fetchData(); 
+        }
+    }, [view, filterCompany, searchId]);
+
+    useEffect(() => { 
+        fetchMasters();
+    }, []);
 
     // ─── FETCH SINGLE ─────────────────────────────────────────────
     const fetchSingle = async (name) => {
@@ -122,10 +155,11 @@ export default function SalaryStructure() {
         if (filterStatus && getStatusLabel(d) !== filterStatus) return false;
         if (filterActive === 'Yes' && d.is_active !== 'Yes') return false;
         if (filterActive === 'No' && d.is_active !== 'No') return false;
+        if (filterCompany && d.company !== filterCompany) return false;
         return true;
     });
-    const hasActiveFilters = searchId || filterStatus || filterActive;
-    const clearFilters = () => { setSearchId(''); setFilterStatus(''); setFilterActive(''); };
+    const hasActiveFilters = searchId || filterStatus || filterActive || filterCompany;
+    const clearFilters = () => { setSearchId(''); setFilterStatus(''); setFilterActive(''); setFilterCompany(''); fetchData(); };
 
     // ─── ACTIONS ──────────────────────────────────────────────────
     const handleNew = () => {
@@ -686,6 +720,11 @@ export default function SalaryStructure() {
             <div className="flex items-center gap-3 mb-4 flex-wrap">
                 <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-48"
                     placeholder="ID" value={searchId} onChange={(e) => setSearchId(e.target.value)} />
+                <select className="border border-gray-300 rounded px-3 py-2 text-sm w-48"
+                    value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)}>
+                    <option value="">Company</option>
+                    {companies.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
                 <select className="border border-gray-300 rounded px-3 py-2 text-sm"
                     value={filterActive} onChange={(e) => setFilterActive(e.target.value)}>
                     <option value="">Is Active</option>

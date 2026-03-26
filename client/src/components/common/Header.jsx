@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useUserRole } from '../../hooks/useUserRole';
 import { getBranding } from '../../config/branding';
 import { useAuth } from '../../context/auth';
+import { FiLogOut } from 'react-icons/fi';
 
 const employeeHiddenModules = new Set(['master', 'elcLetters', 'approvers']);
 
@@ -69,7 +70,7 @@ const Header = ({ onModuleClick }) => {
                 className="cursor-pointer hover:text-blue-600"
                 onClick={() => onModuleClick(mod.moduleKey)}
               >
-                {mod.title}
+                {mod.title === 'ERP Payroll' ? 'Payroll' : mod.title}
               </div>
             );
           })
@@ -110,16 +111,13 @@ const Header = ({ onModuleClick }) => {
           )}
         </div>
 
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-md transition-colors border border-red-200 text-xs font-medium"
-          aria-label="Logout"
+        <div 
+          className="cursor-pointer hover:text-red-600 transition-colors flex items-center justify-center p-1" 
+          onClick={handleLogout} 
+          title="Log Out"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Logout
-        </button>
+          <FiLogOut size={18} />
+        </div>
       </div >
     </header >
   );

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { notification } from 'antd';
 import API from '../../services/api';
 import { useUserRole } from '../../hooks/useUserRole';
 
 export default function JobOpening() {
+    const location = useLocation();
     const { isAdmin } = useUserRole();
     const [view, setView] = useState('list');
     const [data, setData] = useState([]);
@@ -97,7 +99,20 @@ export default function JobOpening() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await API.get('/api/resource/Job Opening?fields=["*"]&limit_page_length=None&order_by=modified desc');
+            const queryParams = new URLSearchParams(location.search);
+            const filterCompany = queryParams.get('company');
+            const filterStatus = queryParams.get('status');
+
+            let filters = [];
+            if (filterCompany) filters.push(["company", "=", filterCompany]);
+            if (filterStatus) filters.push(["status", "=", filterStatus]);
+
+            let url = '/api/resource/Job Opening?fields=["*"]&limit_page_length=None&order_by=modified desc';
+            if (filters.length > 0) {
+                url += `&filters=${encodeURIComponent(JSON.stringify(filters))}`;
+            }
+
+            const res = await API.get(url);
             setData(res.data?.data || []);
         } catch (err) {
             console.error('Fetch failed:', err);
@@ -107,7 +122,7 @@ export default function JobOpening() {
 
     useEffect(() => {
         if (view === 'list') fetchData();
-    }, [view]);
+    }, [view, location.search]);
 
     // ─── FETCH SINGLE ────────────────────────────────────────────
     const fetchSingle = async (name) => {

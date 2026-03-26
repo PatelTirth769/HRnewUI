@@ -113,7 +113,7 @@ const SalarySlip = () => {
     const [searchId, setSearchId] = useState('');
     const [filterEmployee, setFilterEmployee] = useState(location.state?.filterEmployee && !location.state?.openForm ? location.state.filterEmployee : '');
     const [filterEmployeeName, setFilterEmployeeName] = useState('');
-    const [filterCompany, setFilterCompany] = useState('');
+    const [filterCompany, setFilterCompany] = useState(queryParams.get('company') || '');
     const [filterDepartment, setFilterDepartment] = useState('');
     const [filterBranch, setFilterBranch] = useState('');
 
@@ -197,7 +197,12 @@ const SalarySlip = () => {
     };
 
     useEffect(() => {
-        fetchData();
+        if (view === 'list') {
+            fetchData();
+        }
+    }, [view, filterCompany, searchId, filterEmployee, filterStructure, filterPayrollEntry]);
+
+    useEffect(() => {
         fetchMasters();
     }, []);
 

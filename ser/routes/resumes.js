@@ -5,7 +5,9 @@ const path = require('path');
 const fs = require('fs');
 const AdmZip = require('adm-zip');
 const ResumeParser = require('../resume-parser/src');
-const Resume = require('../models/Resume');
+const { db } = require('../firebase');
+
+const formatDoc = (doc) => ({ _id: doc.id, ...doc.data() });
 
 // Paths
 const tempUploadsDir = path.join(__dirname, '../temp_uploads');
@@ -34,7 +36,6 @@ const upload = multer({
 });
 
 // @route   POST /api/resumes/bulk-upload
-// @desc    Upload a zip file containing resumes, extract, parse, save to DB
 router.post('/bulk-upload', upload.single('zipFile'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, error: 'No zip file uploaded' });
@@ -44,7 +45,6 @@ router.post('/bulk-upload', upload.single('zipFile'), async (req, res) => {
     const extractDir = path.join(tempUploadsDir, `extract_${Date.now()}`);
 
     try {
-        // Extract Zip
         const zip = new AdmZip(zipPath);
         zip.extractAllTo(extractDir, true);
 
@@ -53,34 +53,29 @@ router.post('/bulk-upload', upload.single('zipFile'), async (req, res) => {
         let failedCount = 0;
         let errors = [];
 
-        // Allowed document types for parser
         const allowedTypes = ['.pdf', '.doc', '.docx', '.txt'];
 
-        // Process each extracted file
         for (const fileName of extractedFiles) {
             const ext = path.extname(fileName).toLowerCase();
             const filePath = path.join(extractDir, fileName);
             const isDir = fs.lstatSync(filePath).isDirectory();
 
             if (isDir || !allowedTypes.includes(ext)) {
-                continue; // Skip folders and unsupported files
+                continue; 
             }
 
             try {
-                // 1. Move file to permanent storage
                 const permanentFileName = `${Date.now()}_${fileName}`;
                 const permanentPath = path.join(permanentUploadsDir, permanentFileName);
                 fs.copyFileSync(filePath, permanentPath);
 
-                // 2. Parse File using existing ResumeParser
                 const resumeParser = new ResumeParser(permanentPath);
                 const result = await resumeParser.parseToJSON();
                 const parsedData = result.parts || {};
 
-                // Normalize parser output which might be string or array
                 const normalizeSkills = (skillsData) => {
-                    if (Array.isArray(skillsData)) return skillsData.map(s => String(s).trim());
-                    if (typeof skillsData === 'string') return skillsData.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+                    if (Array.isArray(skillsData)) return skillsData.map(s => String(s).trim().toLowerCase());
+                    if (typeof skillsData === 'string') return skillsData.split(/[\n,]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
                     return [];
                 };
 
@@ -113,12 +108,11 @@ router.post('/bulk-upload', upload.single('zipFile'), async (req, res) => {
                     return [];
                 };
 
-                // 3. Save to MongoDB
-                const newResume = new Resume({
+                const newResume = {
                     name: parsedData.name || 'Unknown Candidate',
-                    email: parsedData.email,
-                    phone: parsedData.phone,
-                    objective: parsedData.objective || parsedData.summary,
+                    email: parsedData.email || null,
+                    phone: parsedData.phone || null,
+                    objective: parsedData.objective || parsedData.summary || null,
                     skills: normalizeSkills(parsedData.skills),
                     experience: normalizeExperience(parsedData.experience),
                     education: normalizeEducation(parsedData.education),
@@ -126,10 +120,11 @@ router.post('/bulk-upload', upload.single('zipFile'), async (req, res) => {
                     rawText: result.text || '',
                     fileUrl: `/resumes/files/${permanentFileName}`,
                     fileName: fileName,
-                    status: 'Parsed'
-                });
+                    status: 'Parsed',
+                    uploadedAt: new Date().toISOString()
+                };
 
-                await newResume.save();
+                await db.collection('resumes').add(newResume);
                 successCount++;
 
             } catch (err) {
@@ -139,7 +134,6 @@ router.post('/bulk-upload', upload.single('zipFile'), async (req, res) => {
             }
         }
 
-        // Cleanup temp zip and extracted dir
         try { fs.unlinkSync(zipPath); } catch (e) { }
         try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch (e) { }
 
@@ -155,7 +149,6 @@ router.post('/bulk-upload', upload.single('zipFile'), async (req, res) => {
         });
 
     } catch (err) {
-        // Cleanup on primary failure
         try { fs.unlinkSync(zipPath); } catch (e) { }
         try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch (e) { }
 
@@ -165,39 +158,62 @@ router.post('/bulk-upload', upload.single('zipFile'), async (req, res) => {
 });
 
 // @route   GET /api/resumes
-// @desc    Get all resumes with optional filtering and text searching
 router.get('/', async (req, res) => {
     try {
         const { search, skills, page = 1, limit = 20 } = req.query;
-        let query = {};
-
-        // Keyword Search (Raw Text, Name, Title, etc.)
-        if (search) {
-            query.$text = { $search: search };
-        }
-
-        // Specific Skills matching (Example: ?skills=React,Node.js)
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        
+        let queryRef = db.collection('resumes');
+        
+        // Very basic Firestore 'all skills' simulation
+        // Firebase doesn't support $all natively. For simple array-contains, we can at least filter by the first skill in the DB if skills array is sent.
+        let requestedSkills = [];
         if (skills) {
-            const skillsArray = skills.split(',').map(s => new RegExp(s.trim(), 'i'));
-            query.skills = { $all: skillsArray }; // Requires ALL specified skills
+            requestedSkills = skills.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+            if (requestedSkills.length > 0) {
+                queryRef = queryRef.where('skills', 'array-contains', requestedSkills[0]);
+            }
         }
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const snapshot = await queryRef.get();
+        let resumes = snapshot.docs.map(formatDoc);
 
-        const resumes = await Resume.find(query)
-            .sort({ uploadedAt: -1 }) // Newest first
-            .skip(skip)
-            .limit(parseInt(limit));
+        // Sort in memory to avoid missing uploadedAt fields dropping documents
+        resumes.sort((a, b) => {
+            const dateA = new Date(a.uploadedAt || a.createdAt || a.updatedAt || 0).getTime();
+            const dateB = new Date(b.uploadedAt || b.createdAt || b.updatedAt || 0).getTime();
+            return dateB - dateA;
+        });
 
-        const total = await Resume.countDocuments(query);
+        // Memory filtration for complex queries
+        if (requestedSkills.length > 1) {
+            resumes = resumes.filter(resume => {
+                const rs = resume.skills || [];
+                return requestedSkills.every(reqSkill => rs.includes(reqSkill));
+            });
+        }
+
+        if (search) {
+            const searchLower = search.toLowerCase();
+            resumes = resumes.filter(r => 
+                (r.name && r.name.toLowerCase().includes(searchLower)) ||
+                (r.rawText && r.rawText.toLowerCase().includes(searchLower)) ||
+                (r.objective && r.objective.toLowerCase().includes(searchLower))
+            );
+        }
+
+        const total = resumes.length;
+        const skip = (pageNum - 1) * limitNum;
+        const paginated = resumes.slice(skip, skip + limitNum);
 
         res.status(200).json({
             success: true,
-            count: resumes.length,
+            count: paginated.length,
             total,
-            page: parseInt(page),
-            pages: Math.ceil(total / limit),
-            data: resumes
+            page: pageNum,
+            pages: Math.ceil(total / limitNum),
+            data: paginated
         });
 
     } catch (err) {
@@ -207,25 +223,27 @@ router.get('/', async (req, res) => {
 });
 
 // @route   POST /api/resumes
-// @desc    Create a new resume manualmente
 router.post('/', async (req, res) => {
     try {
         const { name, email, phone, objective, skills, experience, education, profiles } = req.body;
 
-        const resume = new Resume({
+        const newResume = {
             name: name || 'Manual Entry',
-            email,
-            phone,
-            objective,
+            email: email || null,
+            phone: phone || null,
+            objective: objective || null,
             skills: Array.isArray(skills) ? skills : [],
             experience: Array.isArray(experience) ? experience : [],
             education: Array.isArray(education) ? education : [],
             profiles: Array.isArray(profiles) ? profiles : [],
-            status: 'Parsed'
-        });
+            status: 'Parsed',
+            uploadedAt: new Date().toISOString()
+        };
 
-        await resume.save();
-        res.status(201).json({ success: true, data: resume });
+        const docRef = await db.collection('resumes').add(newResume);
+        const doc = await docRef.get();
+        
+        res.status(201).json({ success: true, data: formatDoc(doc) });
     } catch (err) {
         console.error('Create resume error:', err);
         res.status(500).json({ success: false, error: 'Failed to create resume.' });
@@ -233,14 +251,13 @@ router.post('/', async (req, res) => {
 });
 
 // @route   GET /api/resumes/:id
-// @desc    Get single resume
 router.get('/:id', async (req, res) => {
     try {
-        const resume = await Resume.findById(req.params.id);
-        if (!resume) {
+        const doc = await db.collection('resumes').doc(req.params.id).get();
+        if (!doc.exists) {
             return res.status(404).json({ success: false, error: 'Resume not found' });
         }
-        res.status(200).json({ success: true, data: resume });
+        res.status(200).json({ success: true, data: formatDoc(doc) });
     } catch (err) {
         console.error('Fetch single resume error:', err);
         res.status(500).json({ success: false, error: 'Failed to fetch resume.' });
@@ -248,27 +265,17 @@ router.get('/:id', async (req, res) => {
 });
 
 // @route   PUT /api/resumes/:id
-// @desc    Update a resume
 router.put('/:id', async (req, res) => {
     try {
-        const { name, email, phone, objective, skills, experience, education, profiles } = req.body;
-
-        let resume = await Resume.findById(req.params.id);
-        if (!resume) {
+        const docRef = db.collection('resumes').doc(req.params.id);
+        const doc = await docRef.get();
+        if (!doc.exists) {
             return res.status(404).json({ success: false, error: 'Resume not found' });
         }
 
-        if (name !== undefined) resume.name = name;
-        if (email !== undefined) resume.email = email;
-        if (phone !== undefined) resume.phone = phone;
-        if (objective !== undefined) resume.objective = objective;
-        if (Array.isArray(skills)) resume.skills = skills;
-        if (Array.isArray(experience)) resume.experience = experience;
-        if (Array.isArray(education)) resume.education = education;
-        if (Array.isArray(profiles)) resume.profiles = profiles;
-
-        await resume.save();
-        res.status(200).json({ success: true, data: resume });
+        await docRef.update(req.body);
+        const updated = await docRef.get();
+        res.status(200).json({ success: true, data: formatDoc(updated) });
     } catch (err) {
         console.error('Update resume error:', err);
         res.status(500).json({ success: false, error: 'Failed to update resume.' });
@@ -276,32 +283,24 @@ router.put('/:id', async (req, res) => {
 });
 
 // @route   DELETE /api/resumes/:id
-// @desc    Delete a resume
 router.delete('/:id', async (req, res) => {
     try {
-        const resume = await Resume.findById(req.params.id);
-        if (!resume) {
+        const docRef = db.collection('resumes').doc(req.params.id);
+        const doc = await docRef.get();
+        if (!doc.exists) {
             return res.status(404).json({ success: false, error: 'Resume not found' });
         }
 
-        // Optional: Delete associated file
-        if (resume.fileUrl) {
-            // fileUrl is like /resumes/files/123_resume.docx
-            // permanentUploadsDir is ser/uploads/resumes
-            // So we need to map /resumes/files/ to ser/uploads/resumes
-            const fileName = path.basename(resume.fileUrl);
+        const resumeData = doc.data();
+        if (resumeData.fileUrl) {
+            const fileName = path.basename(resumeData.fileUrl);
             const filePath = path.join(__dirname, '../uploads/resumes', fileName);
-
             if (fs.existsSync(filePath)) {
-                try {
-                    fs.unlinkSync(filePath);
-                } catch (e) {
-                    console.error('Failed to delete file:', e);
-                }
+                try { fs.unlinkSync(filePath); } catch (e) { }
             }
         }
 
-        await Resume.findByIdAndDelete(req.params.id);
+        await docRef.delete();
         res.status(200).json({ success: true, message: 'Resume deleted successfully' });
     } catch (err) {
         console.error('Delete resume error:', err);

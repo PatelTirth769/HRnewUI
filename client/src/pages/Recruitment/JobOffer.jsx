@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { notification } from 'antd';
 import API from '../../services/api';
 
 export default function JobOffer() {
+    const location = useLocation();
     const [view, setView] = useState('list'); // 'list' | 'form' | 'print'
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -80,8 +82,34 @@ export default function JobOffer() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await API.get('/api/resource/Job Offer?fields=["*"]&limit_page_length=None&order_by=modified desc');
-            setData(res.data?.data || []);
+            const queryParams = new URLSearchParams(location.search);
+            const filterCompany = queryParams.get('company');
+            const filterStatus = queryParams.get('status');
+            const filterTime = queryParams.get('timeFilter');
+
+            let filters = [];
+            if (filterCompany) filters.push(["company", "=", filterCompany]);
+            if (filterStatus) filters.push(["status", "=", filterStatus]);
+
+            let url = '/api/resource/Job Offer?fields=["name","applicant_name","job_applicant","status","designation","company","creation","modified"]&limit_page_length=None&order_by=modified desc';
+            if (filters.length > 0) {
+                url += `&filters=${encodeURIComponent(JSON.stringify(filters))}`;
+            }
+
+            const res = await API.get(url);
+            let offers = res.data?.data || [];
+
+            if (filterTime === 'this_month') {
+                const now = new Date();
+                const targetPrefix = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+                offers = offers.filter(o => {
+                    const dateStr = o.creation;
+                    if (!dateStr) return false;
+                    return dateStr.startsWith(targetPrefix);
+                });
+            }
+
+            setData(offers);
         } catch (err) {
             console.error('Fetch failed:', err);
             notification.error({ message: 'Failed to load Job Offers' });
@@ -90,7 +118,7 @@ export default function JobOffer() {
 
     useEffect(() => {
         if (view === 'list') fetchData();
-    }, [view]);
+    }, [view, location.search]);
 
     // ─── FETCH SINGLE ────────────────────────────────────────────
     const fetchSingle = async (name) => {

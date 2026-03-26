@@ -161,6 +161,7 @@ import InterviewFeedback from './pages/Recruitment/InterviewFeedback';
 import AppointmentLetterTemplate from './pages/Recruitment/AppointmentLetterTemplate';
 import AppointmentLetter from './pages/Recruitment/AppointmentLetter';
 import RecruitmentAnalytics from './pages/Recruitment/RecruitmentAnalytics';
+import RecruitmentDashboard from './pages/Recruitment/RecruitmentDashboard';
 import RecruitmentSettings from './pages/Recruitment/RecruitmentSettings';
 import HRModule from './pages/HR/HRModule';
 import RecruitmentModule from './pages/HR/RecruitmentModule';
@@ -168,6 +169,22 @@ import PerformanceModule from './pages/HR/PerformanceModule';
 import ShiftAttendanceModule from './pages/HR/ShiftAttendanceModule';
 import LeaveModule from './pages/HR/LeaveModule';
 import HRDashboard from './pages/HR/HRDashboard';
+import ERPPayrollDashboard from './pages/ERPPayroll/ERPPayrollDashboard';
+import AssetList from './pages/Assets/AssetList';
+import AssetForm from './pages/Assets/AssetForm';
+import Location from './pages/Assets/Location';
+import AssetCategory from './pages/Assets/AssetCategory';
+import AssetMovement from './pages/Assets/AssetMovement';
+import AssetMaintenanceTeam from './pages/Assets/AssetMaintenanceTeam';
+import AssetMaintenance from './pages/Assets/AssetMaintenance';
+import AssetMaintenanceLog from './pages/Assets/AssetMaintenanceLog';
+import AssetValueAdjustment from './pages/Assets/AssetValueAdjustment';
+import AssetRepair from './pages/Assets/AssetRepair';
+import AssetCapitalization from './pages/Assets/AssetCapitalization';
+import AssetDepreciationLedger from './pages/Assets/AssetDepreciationLedger';
+import AssetDepreciationsBalances from './pages/Assets/AssetDepreciationsBalances';
+import AssetMaintenanceReport from './pages/Assets/AssetMaintenanceReport';
+import AssetActivityReport from './pages/Assets/AssetActivityReport';
 
 const RootRedirect = () => {
   const { isAdmin } = useUserRole();
@@ -189,6 +206,12 @@ function App() {
     setIsSidebarOpen(true);
     if (moduleKey === 'hr') {
         navigate('/hr-dashboard');
+    } else if (moduleKey === 'recruitment') {
+        navigate('/recruitment-dashboard');
+    } else if (moduleKey === 'erpPayroll' || moduleKey === 'payroll') {
+        navigate('/payroll-dashboard');
+    } else if (moduleKey === 'assets') {
+        navigate('/assets/asset');
     }
   };
 
@@ -402,9 +425,29 @@ function App() {
                 <Route path="/recruitment/appointment-letter-template" element={<AppointmentLetterTemplate />} />
                 <Route path="/recruitment/appointment-letter" element={<AppointmentLetter />} />
                 <Route path="/recruitment/recruitment-analytics" element={<RecruitmentAnalytics />} />
+                <Route path="/recruitment-dashboard" element={<RecruitmentDashboard />} />
                 <Route path="/recruitment/settings" element={<RecruitmentSettings />} />
                 <Route path="/hr" element={<HRModule />} />
                 <Route path="/hr-dashboard" element={<HRDashboard />} />
+                <Route path="/payroll-dashboard" element={<ERPPayrollDashboard />} />
+
+                {/* Assets */}
+                <Route path="/assets/asset" element={<AssetList />} />
+                <Route path="/assets/asset/new" element={<AssetForm />} />
+                <Route path="/assets/asset/edit/:id" element={<AssetForm />} />
+                <Route path="/assets/asset-movement" element={<AssetMovement />} />
+                <Route path="/assets/asset-capitalization" element={<AssetCapitalization />} />
+                <Route path="/assets/asset-value-adjustment" element={<AssetValueAdjustment />} />
+                <Route path="/assets/asset-repair" element={<AssetRepair />} />
+                <Route path="/assets/asset-maintenance-team" element={<AssetMaintenanceTeam />} />
+                <Route path="/assets/asset-maintenance" element={<AssetMaintenance />} />
+                <Route path="/assets/asset-maintenance-log" element={<AssetMaintenanceLog />} />
+                <Route path="/assets/location" element={<Location />} />
+                <Route path="/assets/asset-category" element={<AssetCategory />} />
+                <Route path="/assets/report/asset-depreciation-ledger" element={<AssetDepreciationLedger />} />
+                <Route path="/assets/report/asset-depreciations-balances" element={<AssetDepreciationsBalances />} />
+                <Route path="/assets/report/asset-maintenance" element={<AssetMaintenanceReport />} />
+                <Route path="/assets/report/asset-activity" element={<AssetActivityReport />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />

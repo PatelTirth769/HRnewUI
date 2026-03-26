@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Input, Card, Tag, Button, Space, Drawer, Typography, Empty, Pagination, Modal, Form, message, Popconfirm, Select, Divider } from 'antd';
 import { SearchOutlined, FilterOutlined, EyeOutlined, MailOutlined, PhoneOutlined, EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
-import api from '../../services/api';
+import axios from 'axios';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -35,7 +35,7 @@ export default function ResumeDatabase() {
             if (search) url += `&search=${encodeURIComponent(search)}`;
             if (skillFilter) url += `&skills=${encodeURIComponent(skillFilter)}`;
 
-            const { data } = await api.get(url);
+            const { data } = await axios.get(url, { withCredentials: true });
             if (data.success) {
                 setResumes(data.data);
                 setTotal(data.total);
@@ -84,7 +84,7 @@ export default function ResumeDatabase() {
 
     const handleDelete = async (id) => {
         try {
-            const { data } = await api.delete(`/local-api/api/resumes/${id}`);
+            const { data } = await axios.delete(`/local-api/api/resumes/${id}`, { withCredentials: true });
             if (data.success) {
                 message.success('Resume deleted successfully');
                 fetchResumes();
@@ -105,7 +105,7 @@ export default function ResumeDatabase() {
 
             const method = isEdit ? 'put' : 'post';
 
-            const { data } = await api[method](url, values);
+            const { data } = await axios[method](url, values, { withCredentials: true });
 
             if (data.success) {
                 message.success(`Resume ${isEdit ? 'updated' : 'created'} successfully`);

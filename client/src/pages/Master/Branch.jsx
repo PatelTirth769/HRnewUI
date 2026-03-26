@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import API from '../../services/api';
+import axios from 'axios';
 
 const InputField = ({ label, value, required = false, onChange, type = "text", disabled = false }) => (
     <div>
@@ -27,7 +28,9 @@ export default function Branch() {
     const [saving, setSaving] = useState(false);
 
     const defaultForm = {
-        branch: ''
+        branch: '',
+        latitude: '',
+        longitude: ''
     };
     const [formData, setFormData] = useState({ ...defaultForm });
 
@@ -63,7 +66,15 @@ export default function Branch() {
         try {
             const res = await API.get(`/api/resource/Branch/${encodeURIComponent(name)}`);
             if (res.data.data) {
-                setFormData({ ...defaultForm, ...res.data.data });
+                let initialData = res.data.data;
+                try {
+                    const confRes = await axios.get(`/local-api/attendance-configs/${encodeURIComponent(name)}`);
+                    if (confRes.data.data) {
+                        initialData.latitude = confRes.data.data.latitude || '';
+                        initialData.longitude = confRes.data.data.longitude || '';
+                    }
+                } catch(e) { console.error('No config found', e) }
+                setFormData({ ...defaultForm, ...initialData });
             }
         } catch (err) {
             console.error('Fetch single failed:', err);
@@ -102,10 +113,22 @@ export default function Branch() {
 
             if (editingRecord) {
                 await API.put(`/api/resource/Branch/${encodeURIComponent(editingRecord.name)}`, payload);
+                const branchValue = formData.branch || formData.name;
+                await axios.post('/local-api/attendance-configs', { 
+                    branchName: branchValue, 
+                    latitude: formData.latitude, 
+                    longitude: formData.longitude 
+                });
                 notification.success({ message: `"${editingRecord.name}" updated successfully!` });
             } else {
                 const res = await API.post('/api/resource/Branch', payload);
-                notification.success({ message: `"${res.data?.data?.name || res.data?.data?.branch || 'Record'}" created successfully!` });
+                const branchValue = res.data?.data?.name || res.data?.data?.branch || formData.branch || formData.name;
+                await axios.post('/local-api/attendance-configs', { 
+                    branchName: branchValue, 
+                    latitude: formData.latitude, 
+                    longitude: formData.longitude 
+                });
+                notification.success({ message: `"${branchValue}" created successfully!` });
             }
             setView('list');
             fetchData();
@@ -181,6 +204,18 @@ export default function Branch() {
                                     required
                                     disabled={!!editingRecord}
                                 />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <InputField
+                                        label="Latitude"
+                                        value={formData.latitude}
+                                        onChange={(v) => updateField('latitude', v)}
+                                    />
+                                    <InputField
+                                        label="Longitude"
+                                        value={formData.longitude}
+                                        onChange={(v) => updateField('longitude', v)}
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>

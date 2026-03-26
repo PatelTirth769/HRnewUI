@@ -46,6 +46,9 @@ import ESSSalarySlipListView from './ESSSalarySlipListView';
 import ESSGenericReport from './ESSGenericReport';
 import ESSChangeHomeImage from './ESSChangeHomeImage';
 import ESSEmployeeDashboard from './ESSEmployeeDashboard';
+import ESSOnboarding from './ESSOnboarding';
+import ESSOnboardingTemplate from './ESSOnboardingTemplate';
+import ESSExpenseClaim from './ESSExpenseClaim';
 
 
 
@@ -75,7 +78,7 @@ const EmployeeSelfService = () => {
     { key: 'request', icon: '📝', label: 'Request', children: [
       'Attendance Regularise', 'Leave/OD/WFH', 'HelpDesk', 'Work on Holiday', 'Resignation Note', 'Leave Encashment', 'Confirmation Review Entry', 'ProxyAttendanceRegularise'
     ] },
-    { key: 'myClaims', icon: '📝', label: 'My Claims' },
+    { key: 'myClaims', icon: '📝', label: 'My Claims', children: ['Expense Claim'] },
 
     { key: 'hrViews', icon: '👁️', label: 'HR Views', children: [
       'Expense Claim', 'HelpDesk', 'Expense Requisition', 'Confirmation Register'
@@ -91,9 +94,9 @@ const EmployeeSelfService = () => {
     ] },
     { key: 'valueAdd', icon: '🧩', label: 'Value Add' },
     { key: 'employeeBenefit', icon: '🎁', label: 'Employee Benefit' },
-    { key: 'onboarding', icon: '📦', label: 'Onboarding' },
+    { key: 'onboarding', icon: '📦', label: 'Onboarding', children: ['Onboarding', 'Template'] },
   ];
-  const [open, setOpen] = useState({ links: false, profile: false, myAttendance: false, teamAttendance: false });
+  const [open, setOpen] = useState({ links: false, profile: false, myAttendance: false, teamAttendance: false, myClaims: false });
   const { isAdmin } = useUserRole();
   const [myEmpData, setMyEmpData] = useState(null);
   const [loadingMyEmp, setLoadingMyEmp] = useState(false);
@@ -236,7 +239,8 @@ const EmployeeSelfService = () => {
       'corpinfo-holidays',
       'corpinfo-professional-tax',
       'corpinfo-income-tax',
-      'corpinfo-change-home-image',
+      'myclaims-expense-claim',
+      'onboarding-onboarding',
     ];
 
     if (viewsNeedingEmpData.includes(activeView) && !myEmpData) {
@@ -989,6 +993,13 @@ const EmployeeSelfService = () => {
               </div>
             )}
 
+            {activeView==='myclaims-expense-claim' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">My Claims › <span className="font-medium">Expense Claim</span></div>
+                <ESSExpenseClaim employeeData={myEmpData} />
+              </div>
+            )}
+
             {activeView==='request-helpdesk' && (
               <div className="card-soft">
                 <div className="text-sm mb-4">Request › <span className="font-medium">HelpDesk</span></div>
@@ -1197,6 +1208,20 @@ const EmployeeSelfService = () => {
               <div className="card-soft">
                 <div className="text-sm mb-4">Request › <span className="font-medium">Proxy Attendance Regularise</span></div>
                 <ESSProxyAttendance employeeData={myEmpData} />
+              </div>
+            )}
+
+            {activeView==='onboarding-onboarding' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Onboarding › <span className="font-medium">Onboarding</span></div>
+                <ESSOnboarding employeeData={myEmpData} />
+              </div>
+            )}
+
+            {activeView==='onboarding-template' && (
+              <div className="card-soft">
+                <div className="text-sm mb-4">Onboarding › <span className="font-medium">Template</span></div>
+                <ESSOnboardingTemplate />
               </div>
             )}
 

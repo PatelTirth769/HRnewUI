@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import API from '../../services/api';
 
 // --- Helpers ---
@@ -63,6 +63,7 @@ const TaxExemptionDeclaration = () => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const location = useLocation();
 
     // Master Data
     const [employees, setEmployees] = useState([]);
@@ -77,7 +78,7 @@ const TaxExemptionDeclaration = () => {
     // Filters
     const [searchId, setSearchId] = useState('');
     const [filterEmployee, setFilterEmployee] = useState('');
-    const [filterCompany, setFilterCompany] = useState('');
+    const [filterCompany, setFilterCompany] = useState(new URLSearchParams(location.search).get('company') || '');
 
     const defaultForm = {
         name: '',
@@ -140,7 +141,11 @@ const TaxExemptionDeclaration = () => {
     useEffect(() => {
         if (view === 'list') {
             fetchData();
-        } else {
+        }
+    }, [view, filterCompany, searchId, filterEmployee]);
+
+    useEffect(() => {
+        if (view === 'form') {
             fetchMasters();
         }
     }, [view]);

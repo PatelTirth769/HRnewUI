@@ -65,8 +65,10 @@ const CheckInLocationModal = ({ isOpen, onClose, employeeId, logType, onSuccess 
             await API.post('/api/resource/Employee Checkin', checkinData);
             onSuccess();
         } catch (err) {
-            console.error(err);
-            setError(err.response?.data?.message || 'Failed to submit check-in record.');
+            console.error("Check-in Error from Server:", err.response?.data || err.message);
+            const errMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to submit check-in record.';
+            setError(errMsg);
+            window.alert(`Check-in Blocked:\n\n${errMsg}`);
             setLoading(false);
         }
     };
@@ -113,6 +115,12 @@ const CheckInLocationModal = ({ isOpen, onClose, employeeId, logType, onSuccess 
                     {location && `Latitude: ${location.latitude.toFixed(5)}°, Longitude: ${location.longitude.toFixed(5)}°`}
                     {loading && !location && !error && "Detecting location..."}
                 </div>
+
+                {error && (
+                    <div style={{ background: '#fef2f2', border: '1px solid #f87171', color: '#ef4444', padding: '12px', borderRadius: '8px', fontSize: '14px', textAlign: 'center', fontWeight: '500' }}>
+                        ⚠️ {error}
+                    </div>
+                )}
 
                 {location ? (
                     <div style={{ height: 200, borderRadius: 12, overflow: 'hidden', border: '1px solid #e2e8f0' }}>

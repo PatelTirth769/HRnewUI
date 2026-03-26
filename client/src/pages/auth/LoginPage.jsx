@@ -24,14 +24,37 @@ const LoginPage = () => {
   const [accessToken, setAccessToken] = useState('');
   const [profile, setProfile] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [discoveredRole, setDiscoveredRole] = useState(null);
+  const emailInputValue = Form.useWatch('email', form);
+
+  // Discover role as user types or on blur
+  useEffect(() => {
+    const fetchDiscoveredRole = async () => {
+      const identifier = (emailInputValue || '').trim();
+      if (!identifier || identifier.length < 3) {
+        setDiscoveredRole(null);
+        return;
+      }
+      try {
+        const identifier = (emailInputValue || '').trim();
+        const res = await axios.get(`/local-api/local/users/get-role/${encodeURIComponent(identifier)}`);
+        setDiscoveredRole(res.data?.role);
+      } catch (err) {
+        setDiscoveredRole(null);
+      }
+    };
+    
+    const timeoutId = setTimeout(fetchDiscoveredRole, 500); // 500ms debounce
+    return () => clearTimeout(timeoutId);
+  }, [emailInputValue]);
 
   // Systems state
   const [systems, setSystems] = useState([]);
   const [selectedSystem, setSelectedSystem] = useState(null);
   const [loadingSystems, setLoadingSystems] = useState(true);
 
-  const emailInputValue = Form.useWatch('email', form);
-  const isAdministratorLogin = (emailInputValue || '').toLowerCase().includes('administrator');
+  const emailLower = (emailInputValue || '').toLowerCase();
+  const isAdministratorLogin = emailLower.includes('administrator') || emailLower.includes('lingayasvidyapeeth.edu.in');
 
   const apiAuthenticate = async () => {
     const data = {
@@ -108,6 +131,7 @@ const LoginPage = () => {
       });
 
       if (response.data.message === 'Logged In') {
+        const mongoRole = response.data.mongo_role;
         // Fetch actual ERPNext roles for this user
         let isHRAdmin = false;
         try {
@@ -128,16 +152,19 @@ const LoginPage = () => {
 
         notification.success({
           message: 'Login Successful',
-          description: `Welcome back, ${response.data.full_name}`,
+          description: `Welcome back, ${response.data.full_name}${mongoRole ? `. Your local role is: ${mongoRole}` : ''}`,
         });
 
         // Store basic user info 
         localStorage.setItem('isLogged', 'true');
         localStorage.setItem('user', values.email);
         localStorage.setItem('userToken', 'session-active');
-        localStorage.setItem('userRole', 'admin');
+        localStorage.setItem('userRole', mongoRole || 'Employee');
         localStorage.setItem('userIsHRAdmin', isHRAdmin ? 'true' : 'false');
         localStorage.setItem('activeSystem', selectedSystem);
+        if (mongoRole) {
+          localStorage.setItem('mongoRole', mongoRole);
+        }
 
         // Find the selected system name for display
         const sys = systems.find(s => s.code === selectedSystem);
@@ -243,6 +270,11 @@ const LoginPage = () => {
                   border: '1px solid #e0e0e0',
                 }}
               />
+              {discoveredRole && (
+                <div style={{ marginTop: '4px', fontSize: '12px', color: '#10b981', fontWeight: '500' }}>
+                  Role: {discoveredRole}
+                </div>
+              )}
             </Form.Item>
             <Form.Item
               label="Password"

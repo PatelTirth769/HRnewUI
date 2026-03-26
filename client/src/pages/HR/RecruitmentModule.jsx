@@ -39,12 +39,19 @@ export default function RecruitmentModule() {
         {
             title: 'Reports',
             items: [
+                { label: 'Recruitment Dashboard', path: '/recruitment-dashboard' },
                 { label: 'Recruitment Analytics', path: '/recruitment/recruitment-analytics' },
             ],
         },
     ];
 
     const employeeSections = [
+        {
+            title: 'Dashboards',
+            items: [
+                { label: 'Recruitment Dashboard', path: '/recruitment-dashboard' },
+            ],
+        },
         {
             title: 'Jobs',
             items: [

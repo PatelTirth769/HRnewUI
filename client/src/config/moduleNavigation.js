@@ -414,4 +414,41 @@ export const moduleNavigation = {
             },
         ],
     },
+    assets: {
+        title: 'Assets',
+        sections: [
+            {
+                title: 'Assets',
+                icon: 'database',
+                items: [
+                    { label: 'Asset', path: '/assets/asset' },
+                    { label: 'Asset Movement', path: '/assets/asset-movement' },
+                    { label: 'Asset Category', path: '/assets/asset-category' },
+                    { label: 'Location', path: '/assets/location' },
+                ],
+            },
+            {
+                title: 'Maintenance',
+                icon: 'cog',
+                items: [
+                    { label: 'Asset Maintenance Team', path: '/assets/asset-maintenance-team' },
+                    { label: 'Asset Maintenance', path: '/assets/asset-maintenance' },
+                    { label: 'Asset Maintenance Log', path: '/assets/asset-maintenance-log' },
+                    { label: 'Asset Value Adjustment', path: '/assets/asset-value-adjustment' },
+                    { label: 'Asset Repair', path: '/assets/asset-repair' },
+                    { label: 'Asset Capitalization', path: '/assets/asset-capitalization' },
+                ],
+            },
+            {
+                title: 'Reports',
+                icon: 'chart-bar',
+                items: [
+                    { label: 'Asset Depreciation Ledger', path: '/assets/report/asset-depreciation-ledger' },
+                    { label: 'Asset Depreciations and Balances', path: '/assets/report/asset-depreciations-balances' },
+                    { label: 'Asset Maintenance Report', path: '/assets/report/asset-maintenance' },
+                    { label: 'Asset Activity Report', path: '/assets/report/asset-activity' },
+                ],
+            },
+        ],
+    },
 };

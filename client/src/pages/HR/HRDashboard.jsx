@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Row, Col, Typography, Spin, Alert, Dropdown, Popover, Select, Button, Space } from 'antd';
+import { Card, Row, Col, Typography, Spin, Alert, Dropdown, Popover, Select, Button, Space, Modal, notification } from 'antd';
 import { Bar, Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -28,10 +28,33 @@ const HRDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
+    const [companies, setCompanies] = useState([]);
+    const [selectedFilters, setSelectedFilters] = useState({
+        Status: 'Active',
+        Company: 'Preeshe Consultant' // Default based on existing code, will update
+    });
+    const [tempFilters, setTempFilters] = useState({ ...selectedFilters });
 
-    const fetchDashboardData = () => {
+    const fetchCompanies = () => {
+        const systemCode = localStorage.getItem('activeSystem') || 'preeshe';
+        fetch(`/local-api/erp-proxy/${systemCode}/api/resource/Company?fields=["name"]`)
+            .then(res => res.json())
+            .then(resData => {
+                if (resData.data && resData.data.length > 0) {
+                    const firstCompany = resData.data[0].name;
+                    setCompanies(resData.data.map(c => c.name));
+                    setSelectedFilters(prev => ({ ...prev, Company: firstCompany }));
+                    setTempFilters(prev => ({ ...prev, Company: firstCompany }));
+                }
+            })
+            .catch(err => console.error("Error fetching companies:", err));
+    };
+
+    const fetchDashboardData = (filters = selectedFilters) => {
         setLoading(true);
-        fetch('/local-api/hr-dashboard')
+        const systemCode = localStorage.getItem('activeSystem') || 'preeshe';
+        const queryParams = new URLSearchParams({ ...filters, systemCode }).toString();
+        fetch(`/local-api/hr-dashboard?${queryParams}`)
             .then(res => {
                 if (!res.ok) throw new Error("Failed to fetch dashboard data");
                 return res.json();
@@ -44,12 +67,22 @@ const HRDashboard = () => {
                 console.error("Error fetching HR Dashboard data:", err);
                 setError(err.message);
                 setLoading(false);
+                notification.error({
+                    message: 'Dashboard Error',
+                    description: err.message
+                });
             });
     };
 
     useEffect(() => {
-        fetchDashboardData();
+        fetchCompanies();
     }, []);
+
+    useEffect(() => {
+        if (selectedFilters.Company && companies.length > 0) {
+            fetchDashboardData(selectedFilters);
+        }
+    }, [selectedFilters]);
 
     if (loading && !data) return <div className="p-8 flex justify-center"><Spin size="large" /></div>;
     if (error) return <div className="p-8"><Alert message="Error" description={error} type="error" showIcon /></div>;
@@ -62,38 +95,73 @@ const HRDashboard = () => {
         { key: 'edit', label: 'Edit' },
     ];
 
+    const handleApplyFilters = () => {
+        setSelectedFilters({ ...tempFilters });
+        notification.success({
+            message: 'Filters Applied',
+            description: `Showing data for ${tempFilters.Company}`,
+            placement: 'bottomRight',
+            duration: 2
+        });
+    };
+
     const filterContent = (
-        <div style={{ width: '380px', padding: '4px' }}>
-            <Row gutter={[8, 8]} align="middle" className="mb-3">
-                <Col span={7}><Select value="Status" style={{ width: '100%' }} disabled /></Col>
-                <Col span={6}><Select value="Equals" style={{ width: '100%' }} disabled /></Col>
-                <Col span={9}>
-                    <Select defaultValue="Active" style={{ width: '100%' }}>
+        <div style={{ width: '420px', padding: '12px' }}>
+            <div className="flex justify-between items-center mb-4 pb-2 border-b">
+                <Text strong>Set Filters for Employees by Age</Text>
+                <span className="text-gray-400 cursor-pointer">×</span>
+            </div>
+            
+            <Row gutter={[8, 12]} align="middle" className="mb-3">
+                <Col span={6}><Text size="small">Status</Text></Col>
+                <Col span={6}><Select value="Equals" style={{ width: '100%', fontSize: '12px' }} disabled /></Col>
+                <Col span={10}>
+                    <Select 
+                        value={tempFilters.Status} 
+                        style={{ width: '100%' }}
+                        onChange={(val) => setTempFilters(prev => ({ ...prev, Status: val }))}
+                    >
                         <Select.Option value="Active">Active</Select.Option>
                         <Select.Option value="Inactive">Inactive</Select.Option>
                     </Select>
                 </Col>
                 <Col span={2} className="text-center">
-                    <span className="text-gray-400 hover:text-red-500 cursor-pointer text-lg font-bold" onClick={() => {}}>×</span>
+                    <span className="text-gray-300 hover:text-red-500 cursor-pointer text-lg">×</span>
                 </Col>
             </Row>
-            <Row gutter={[8, 8]} align="middle" className="mb-4">
-                <Col span={7}><Select value="Company" style={{ width: '100%' }} disabled /></Col>
-                <Col span={6}><Select value="Equals" style={{ width: '100%' }} disabled /></Col>
-                <Col span={9}>
-                    <Select defaultValue="Preeshe Consultant" style={{ width: '100%' }}>
-                        <Select.Option value="Preeshe Consultant">Preeshe Consultant</Select.Option>
+
+            <Row gutter={[8, 12]} align="middle" className="mb-4">
+                <Col span={6}><Text size="small">Company</Text></Col>
+                <Col span={6}><Select value="Equals" style={{ width: '100%', fontSize: '12px' }} disabled /></Col>
+                <Col span={10}>
+                    <Select 
+                        value={tempFilters.Company} 
+                        style={{ width: '100%' }}
+                        showSearch
+                        onChange={(val) => setTempFilters(prev => ({ ...prev, Company: val }))}
+                    >
+                        {companies.map(c => (
+                            <Select.Option key={c} value={c}>{c}</Select.Option>
+                        ))}
                     </Select>
                 </Col>
                 <Col span={2} className="text-center">
-                    <span className="text-gray-400 hover:text-red-500 cursor-pointer text-lg font-bold" onClick={() => {}}>×</span>
+                    <span className="text-gray-300 hover:text-red-500 cursor-pointer text-lg">×</span>
                 </Col>
             </Row>
+
             <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
-                <Button type="link" size="small" style={{ padding: 0, color: '#6b7280' }}>+ Add a Filter</Button>
+                <Button type="link" size="small" style={{ padding: 0, color: '#3b82f6', fontSize: '12px' }}>+ Add a Filter</Button>
                 <Space>
-                    <Button type="text" size="small" style={{ color: '#6b7280' }}>Clear Filters</Button>
-                    <Button type="primary" size="small" style={{ backgroundColor: '#111827', color: 'white' }}>Apply Filters</Button>
+                    <Button type="text" size="small" style={{ fontSize: '12px' }} onClick={() => setTempFilters({ Status: 'Active', Company: companies[0] || '' })}>Clear Filters</Button>
+                    <Button 
+                        type="primary" 
+                        size="small" 
+                        style={{ backgroundColor: '#111827', color: 'white', borderRadius: '4px', fontSize: '12px' }}
+                        onClick={handleApplyFilters}
+                    >
+                        Apply Filters
+                    </Button>
                 </Space>
             </div>
         </div>

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { notification } from 'antd';
 import API from '../../services/api';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 
 export default function JobApplicant() {
+    const location = useLocation();
     const [view, setView] = useState('list');
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -90,8 +92,41 @@ export default function JobApplicant() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await API.get('/api/resource/Job Applicant?fields=["*"]&limit_page_length=None&order_by=modified desc');
-            setData(res.data?.data || []);
+            const queryParams = new URLSearchParams(location.search);
+            const filterCompany = queryParams.get('company');
+            const filterStatus = queryParams.get('status');
+            const filterTime = queryParams.get('timeFilter');
+
+            const res = await API.get('/api/resource/Job Applicant?fields=["name","applicant_name","email_id","job_title","designation","status","creation","modified"]&limit_page_length=None&order_by=modified desc');
+            let applicants = res.data?.data || [];
+            console.log('[DEBUG] Total applicants fetched:', applicants.length, applicants.map(a => ({name: a.applicant_name, creation: a.creation, job_title: a.job_title})));
+
+            if (filterStatus) {
+                applicants = applicants.filter(a => a.status === filterStatus);
+                console.log('[DEBUG] After status filter:', applicants.length);
+            }
+
+            if (filterCompany) {
+                const joRes = await API.get(`/api/resource/Job Opening?filters=[["company","=","${filterCompany}"]]&fields=["name","job_title"]&limit_page_length=None`);
+                const validJobs = (joRes.data?.data || []).map(j => j.name);
+                console.log('[DEBUG] Valid Job Opening names for company:', validJobs);
+                console.log('[DEBUG] Applicant job_titles:', applicants.map(a => ({name: a.applicant_name, job_title: a.job_title})));
+                applicants = applicants.filter(a => a.job_title && validJobs.includes(a.job_title));
+                console.log('[DEBUG] After company filter:', applicants.length);
+            }
+
+            if (filterTime === 'this_month') {
+                const now = new Date();
+                const targetPrefix = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+                applicants = applicants.filter(a => {
+                    const dateStr = a.creation;
+                    if (!dateStr) return false;
+                    return dateStr.startsWith(targetPrefix);
+                });
+                console.log('[DEBUG] After time filter:', applicants.length);
+            }
+
+            setData(applicants);
         } catch (err) {
             console.error('Fetch failed:', err);
             notification.error({ message: 'Failed to load Job Applicants' });
@@ -100,7 +135,7 @@ export default function JobApplicant() {
 
     useEffect(() => {
         if (view === 'list') fetchData();
-    }, [view]);
+    }, [view, location.search]);
 
     // ─── FETCH SINGLE ────────────────────────────────────────────
     const fetchSingle = async (name) => {
