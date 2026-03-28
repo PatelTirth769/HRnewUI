@@ -12,6 +12,7 @@ const fallbackModules = [
 	{ moduleKey: 'shiftAttendance', title: 'Shift & Attendance', order: 7, adminOnly: false },
 	{ moduleKey: 'leave', title: 'Leave', order: 8, adminOnly: false },
 	{ moduleKey: 'assets', title: 'Assets', order: 9, adminOnly: false },
+	{ moduleKey: 'accounting', title: 'Accounting', order: 10, adminOnly: false },
 ];
 
 function mergeWithDefaults(modules) {

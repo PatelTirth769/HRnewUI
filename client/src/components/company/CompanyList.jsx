@@ -1,15 +1,26 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Spin } from 'antd';
 
 const CompanyList = ({ companies, onNewCompany, onCompanySelect, loading }) => {
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="bg-white rounded-lg shadow-lg">
         <div className="p-6 border-b bg-gray-50 rounded-t-lg">
           <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Company Management</h1>
-              <p className="text-gray-600 mt-1">Manage your company master data</p>
+            <div className="flex items-center">
+              <button 
+                onClick={() => navigate(-1)} 
+                className="mr-4 p-2 bg-white border border-gray-200 rounded-md hover:bg-gray-50 text-gray-500 transition shadow-sm flex items-center justify-center"
+                title="Go Back"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Company Management</h1>
+                <p className="text-gray-600 mt-1">Manage your company master data</p>
+              </div>
             </div>
             <button
               onClick={onNewCompany}

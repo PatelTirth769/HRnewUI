@@ -15,6 +15,25 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 import Settings from './pages/Settings';
 import Reports from './pages/Reports';
+import ChartOfAccounts from './pages/Accounting/ChartOfAccounts';
+import AccountSettings from './pages/Accounting/AccountSettings';
+import FiscalYear from './pages/Accounting/FiscalYear';
+import AccountingDimension from './pages/Accounting/AccountingDimension';
+import FinanceBook from './pages/Accounting/FinanceBook';
+import AccountingPeriod from './pages/Accounting/AccountingPeriod';
+import PaymentTerm from './pages/Accounting/PaymentTerm';
+import ModeOfPayment from './pages/Accounting/ModeOfPayment';
+import SalesTaxesTemplate from './pages/Accounting/SalesTaxesTemplate';
+import PurchaseTaxesTemplate from './pages/Accounting/PurchaseTaxesTemplate';
+import ItemTaxTemplate from './pages/Accounting/ItemTaxTemplate';
+import TaxCategory from './pages/Accounting/TaxCategory';
+import TaxRule from './pages/Accounting/TaxRule';
+import TaxWithholdingCategory from './pages/Accounting/TaxWithholdingCategory';
+import LowerDeductionCertificate from './pages/Accounting/LowerDeductionCertificate';
+import PaymentEntry from './pages/Accounting/PaymentEntry';
+import JournalEntry from './pages/Accounting/JournalEntry';
+import JournalEntryTemplate from './pages/Accounting/JournalEntryTemplate';
+import TermsAndConditions from './pages/Accounting/TermsAndConditions';
 import LoginPage from './pages/auth/LoginPage.jsx';
 import Register from './pages/auth/Register.jsx';
 import DepartmentList from './pages/departments/DepartmentList';
@@ -267,6 +286,8 @@ function App() {
         navigate('/assets/asset');
     } else if (moduleKey === 'education') {
         navigate('/education/student');
+    } else if (moduleKey === 'accounting') {
+        navigate('/accounting/company');
     }
   };
 
@@ -503,6 +524,29 @@ function App() {
                 <Route path="/assets/report/asset-depreciations-balances" element={<AssetDepreciationsBalances />} />
                 <Route path="/assets/report/asset-maintenance" element={<AssetMaintenanceReport />} />
                 <Route path="/assets/report/asset-activity" element={<AssetActivityReport />} />
+
+                {/* Accounting */}
+                <Route path="/accounting" element={<Navigate to="/accounting/company" replace />} />
+                <Route path="/accounting/company" element={<CompanyMaster />} />
+                <Route path="/accounting/chart-of-accounts" element={<ChartOfAccounts />} />
+                <Route path="/accounting/accounts-settings" element={<AccountSettings />} />
+                <Route path="/accounting/fiscal-year" element={<FiscalYear />} />
+                <Route path="/accounting/accounting-dimension" element={<AccountingDimension />} />
+                <Route path="/accounting/finance-book" element={<FinanceBook />} />
+                <Route path="/accounting/accounting-period" element={<AccountingPeriod />} />
+                <Route path="/accounting/payment-term" element={<PaymentTerm />} />
+                <Route path="/accounting/mode-of-payment" element={<ModeOfPayment />} />
+                <Route path="/accounting/sales-taxes-template" element={<SalesTaxesTemplate />} />
+                <Route path="/accounting/purchase-taxes-template" element={<PurchaseTaxesTemplate />} />
+                <Route path="/accounting/item-tax-template" element={<ItemTaxTemplate />} />
+                <Route path="/accounting/tax-category" element={<TaxCategory />} />
+                <Route path="/accounting/tax-rule" element={<TaxRule />} />
+                <Route path="/accounting/tax-withholding-category" element={<TaxWithholdingCategory />} />
+                <Route path="/accounting/lower-deduction-certificate" element={<LowerDeductionCertificate />} />
+                <Route path="/accounting/payment-entry" element={<PaymentEntry />} />
+                <Route path="/accounting/journal-entry" element={<JournalEntry />} />
+                <Route path="/accounting/journal-entry-template" element={<JournalEntryTemplate />} />
+                <Route path="/accounting/terms-and-conditions" element={<TermsAndConditions />} />
 
                 {/* Education */}
                 <Route path="/education" element={<Navigate to="/education/student" replace />} />

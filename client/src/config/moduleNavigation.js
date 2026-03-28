@@ -579,4 +579,47 @@ export const moduleNavigation = {
             },
         ],
     },
+    accounting: {
+        title: 'Accounting',
+        sections: [
+            {
+                title: 'Tax Masters',
+                icon: 'receipt-tax',
+                items: [
+                    { label: 'Sales Taxes and Charges Template', path: '/accounting/sales-taxes-template' },
+                    { label: 'Purchase Taxes and Charges Template', path: '/accounting/purchase-taxes-template' },
+                    { label: 'Item Tax Template', path: '/accounting/item-tax-template' },
+                    { label: 'Tax Category', path: '/accounting/tax-category' },
+                    { label: 'Tax Rule', path: '/accounting/tax-rule' },
+                    { label: 'Tax Withholding Category', path: '/accounting/tax-withholding-category' },
+                    { label: 'Lower Deduction Certificate', path: '/accounting/lower-deduction-certificate' },
+                ],
+            },
+            {
+                title: 'Accounting Masters',
+                icon: 'database',
+                items: [
+                    { label: 'Company', path: '/accounting/company' },
+                    { label: 'Chart of Accounts', path: '/accounting/chart-of-accounts' },
+                    { label: 'Fiscal Year', path: '/accounting/fiscal-year' },
+                    { label: 'Account Settings', path: '/accounting/accounts-settings' },
+                    { label: 'Accounting Dimension', path: '/accounting/accounting-dimension' },
+                    { label: 'Finance Book', path: '/accounting/finance-book' },
+                    { label: 'Accounting Period', path: '/accounting/accounting-period' },
+                    { label: 'Payment Term', path: '/accounting/payment-term' },
+                ],
+            },
+            {
+                title: 'Payments',
+                icon: 'collection',
+                items: [
+                    { label: 'Payment Entry', path: '/accounting/payment-entry' },
+                    { label: 'Journal Entry', path: '/accounting/journal-entry' },
+                    { label: 'Journal Entry Template', path: '/accounting/journal-entry-template' },
+                    { label: 'Terms and Conditions', path: '/accounting/terms-and-conditions' },
+                    { label: 'Mode of Payment', path: '/accounting/mode-of-payment' },
+                ],
+            },
+        ],
+    },
 };

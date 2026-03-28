@@ -57,7 +57,7 @@ const Header = ({ onModuleClick }) => {
         <img src={branding.headerLogo} alt={`${branding.displayName} logo`} className="h-10 w-auto object-contain" />
         {branding.showHeaderTitle ? branding.headerTitle : null}
       </Link>
-      <div className="flex items-center space-x-4 text-sm text-gray-700">
+      <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs xl:text-sm text-gray-700 justify-end">
         {/* Dynamic module tabs loaded from database via ser backend */}
         {isAdmin && !navLoading && Object.values(navData)
           .sort((a, b) => (a.order || 0) - (b.order || 0))
@@ -67,7 +67,7 @@ const Header = ({ onModuleClick }) => {
             return (
               <div
                 key={mod.moduleKey}
-                className="cursor-pointer hover:text-blue-600"
+                className="cursor-pointer hover:text-blue-600 truncate"
                 onClick={() => onModuleClick(mod.moduleKey)}
               >
                 {mod.title === 'ERP Payroll' ? 'Payroll' : mod.title}
@@ -76,19 +76,23 @@ const Header = ({ onModuleClick }) => {
           })
         }
 
-        {isAdmin && <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>}
-        {isAdmin && <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors">Education</div>}
-        <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Self Service</Link>
-        {(isAdmin || isInventory) && (
-          <div onClick={() => onModuleClick('assets')} className="cursor-pointer hover:text-blue-600 transition-colors">Assets</div>
+        {isAdmin && <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate">Dashboard</Link>}
+        {isAdmin && <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Education</div>}
+        <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate">Self Service</Link>
+        {!isAdmin && isInventory && (
+          <div onClick={() => onModuleClick('assets')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Assets</div>
         )}
-        {(isAdmin || isAccounts) && (
-          <div onClick={() => onModuleClick('erpPayroll')} className="cursor-pointer hover:text-blue-600 transition-colors">Payroll</div>
+        {!isAdmin && isAccounts && (
+          <>
+            <div onClick={() => onModuleClick('erpPayroll')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Payroll</div>
+            <div onClick={() => onModuleClick('accounting')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Accounting</div>
+          </>
         )}
         {isAdmin && (
           <>
-            <Link to="/approver" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Approvers</Link>
-            <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Reports</Link>
+            <Link to="/approver" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate">Approvers</Link>
+            <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate">Reports</Link>
+            <div onClick={() => onModuleClick('accounting')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Accounting</div>
           </>
         )}
 
