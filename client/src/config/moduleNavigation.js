@@ -451,4 +451,132 @@ export const moduleNavigation = {
             },
         ],
     },
+    education: {
+        title: 'Education',
+        sections: [
+            {
+                title: 'Master',
+                icon: 'database',
+                items: [
+                    { label: 'Program', path: '/education/program' },
+                    { label: 'Course', path: '/education/course' },
+                    { label: 'Topic', path: '/education/topic' },
+                    { label: 'Room', path: '/education/room' },
+                ],
+            },
+            {
+                title: 'CONTENT MASTER',
+                icon: 'file-text',
+                items: [
+                    { label: 'Article', path: '/education/article' },
+                    { label: 'Video', path: '/education/video' },
+                    { label: 'Quiz', path: '/education/quiz' },
+                ],
+            },
+            {
+                title: 'Student and Instructor',
+                icon: 'user-group',
+                items: [
+                    { label: 'Student', path: '/education/student' },
+                    { label: 'Student Group', path: '/education/student-group' },
+                    { label: 'Student Log', path: '/education/student-log' },
+                    { label: 'Instructor', path: '/education/instructor' },
+                    { label: 'Guardian', path: '/education/guardian' },
+                ],
+            },
+            {
+                title: 'ADMISSION',
+                icon: 'academic-cap',
+                items: [
+                    { label: 'Student Admission', path: '/education/student-admission' },
+                    { label: 'Student Applicant', path: '/education/student-applicant' },
+                    { label: 'Program Enrollment', path: '/education/program-enrollment' },
+                    { label: 'Course Enrollment', path: '/education/course-enrollment' },
+                ],
+            },
+            {
+                title: 'Schedule',
+                icon: 'calendar',
+                items: [
+                    { label: 'Course Schedule', path: '/education/course-schedule' },
+                    { label: 'Course Scheduling Tool', path: '/education/course-scheduling-tool' },
+                ],
+            },
+            {
+                title: 'ATTENDANCE',
+                icon: 'check-badge',
+                items: [
+                    { label: 'Student Attendance', path: '/education/student-attendance' },
+                    { label: 'Student Leave Application', path: '/education/student-leave-application' },
+                    { label: 'Student Monthly Attendance Sheet', path: '/education/student-monthly-attendance-sheet' },
+                    { label: 'Absent Student Report', path: '/education/absent-student-report' },
+                    { label: 'Student Batch-Wise Attendance', path: '/education/student-batch-wise-attendance' },
+                    { label: 'Course Enrollment', path: '/education/course-enrollment' },
+                    { label: 'Course Activity', path: '/education/course-activity' },
+                    { label: 'Quiz Activity', path: '/education/quiz-activity' },
+                ],
+            },
+            {
+                title: 'ASSESSMENT',
+                items: [
+                    { label: 'Assessment Plan', path: '/education/assessment-plan' },
+                    { label: 'Assessment Group', path: '/education/assessment-group' },
+                    { label: 'Assessment Result', path: '/education/assessment-result' },
+                    { label: 'Assessment Criteria', path: '/education/assessment-criteria' },
+                ],
+            },
+            {
+                title: 'Assessment Reports',
+                icon: 'presentation-chart-line',
+                items: [
+                    { label: 'Course wise Assessment Report', path: '/education/course-wise-assessment-report' },
+                    { label: 'Final Assessment Grades', path: '/education/final-assessment-grades' },
+                    { label: 'Assessment Plan Status', path: '/education/assessment-plan-status' },
+                    { label: 'Student Report Generation Tool', path: '/education/student-report-generation-tool' },
+                ],
+            },
+            {
+                title: 'Tools',
+                icon: 'view-grid-add',
+                items: [
+                    { label: 'Student Attendance Tool', path: '/education/student-attendance-tool' },
+                    { label: 'Assessment Result Tool', path: '/education/assessment-result-tool' },
+                    { label: 'Student Group Creation Tool', path: '/education/student-group-creation-tool' },
+                    { label: 'Program Enrollment Tool', path: '/education/program-enrollment-tool' },
+                    { label: 'Course Scheduling Tool', path: '/education/course-scheduling-tool' },
+                ],
+            },
+            {
+                title: 'Other Reports',
+                icon: 'document-text',
+                items: [
+                    { label: 'Student and Guardian Contact Details', path: '/education/student-and-guardian-contact-details-report' },
+                ],
+            },
+            {
+                title: 'FEES',
+                icon: 'banknotes',
+                items: [
+                    { label: 'Fee Structure', path: '/education/fee-structure' },
+                    { label: 'Fee Category', path: '/education/fee-category' },
+                    { label: 'Fee Schedule', path: '/education/fee-schedule' },
+                    { label: 'Fees', path: '/education/fees' },
+                    { label: 'Student Fee Collection', path: '/education/student-fee-collection' },
+                    { label: 'Program wise Fee Collection', path: '/education/program-wise-fee-collection' },
+                ],
+            },
+            {
+                title: 'SETTINGS',
+                icon: 'cog',
+                items: [
+                    { label: 'Education Settings', path: '/education/settings' },
+                    { label: 'Student Category', path: '/education/student-category' },
+                    { label: 'Student Batch Name', path: '/education/student-batch-name' },
+                    { label: 'Grading Scale', path: '/education/grading-scale' },
+                    { label: 'Academic Year', path: '/education/academic-year' },
+                    { label: 'Academic Term', path: '/education/academic-term' },
+                ],
+            },
+        ],
+    },
 };

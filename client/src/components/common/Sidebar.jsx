@@ -208,6 +208,7 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                                                         key={item.label}
                                                         onClick={() => {
                                                             navigate(item.path);
+                                                            onClose();
                                                         }}
                                                         className={`
                             group relative ml-4 mr-3 my-1 px-4 py-2.5 text-[13px] font-medium cursor-pointer rounded-lg transition-all duration-200

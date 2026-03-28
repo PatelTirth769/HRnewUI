@@ -186,6 +186,59 @@ import AssetDepreciationsBalances from './pages/Assets/AssetDepreciationsBalance
 import AssetMaintenanceReport from './pages/Assets/AssetMaintenanceReport';
 import AssetActivityReport from './pages/Assets/AssetActivityReport';
 
+// Education Module
+import Student from './pages/Education/Student';
+import StudentGroup from './pages/Education/StudentGroup';
+import StudentLog from './pages/Education/StudentLog';
+import Program from './pages/Education/Program';
+import Course from './pages/Education/Course';
+import Topic from './pages/Education/Topic';
+import Room from './pages/Education/Room';
+import Instructor from './pages/Education/Instructor';
+import Guardian from './pages/Education/Guardian';
+import StudentApplicant from './pages/Education/StudentApplicant';
+import StudentAdmission from './pages/Education/StudentAdmission';
+import ProgramEnrollment from './pages/Education/ProgramEnrollment';
+import CourseEnrollment from './pages/Education/CourseEnrollment';
+import FeeStructure from './pages/Education/FeeStructure';
+import FeeCategory from './pages/Education/FeeCategory';
+import FeeSchedule from './pages/Education/FeeSchedule';
+import Fees from './pages/Education/Fees';
+import StudentFeeCollection from './pages/Education/StudentFeeCollection';
+import ProgramWiseFeeCollection from './pages/Education/ProgramWiseFeeCollection';
+import CourseSchedule from './pages/Education/CourseSchedule';
+// CourseSchedulingTool moved down to standardized tools section
+import StudentAttendance from './pages/Education/StudentAttendance';
+import StudentLeaveApplication from './pages/Education/StudentLeaveApplication';
+import StudentMonthlyAttendanceSheet from './pages/Education/StudentMonthlyAttendanceSheet';
+import AbsentStudentReport from './pages/Education/AbsentStudentReport';
+import StudentBatchWiseAttendance from './pages/Education/StudentBatchWiseAttendance';
+import CourseActivity from './pages/Education/CourseActivity';
+import QuizActivity from './pages/Education/QuizActivity';
+import AssessmentPlan from './pages/Education/AssessmentPlan';
+import AssessmentGroup from './pages/Education/AssessmentGroup';
+import AssessmentResult from './pages/Education/AssessmentResult';
+import AssessmentCriteria from './pages/Education/AssessmentCriteria';
+import CourseWiseAssessmentReport from './pages/Education/CourseWiseAssessmentReport';
+import FinalAssessmentGrades from './pages/Education/FinalAssessmentGrades';
+import AssessmentPlanStatus from './pages/Education/AssessmentPlanStatus';
+import StudentReportGenerationTool from './pages/Education/StudentReportGenerationTool';
+import StudentAttendanceTool from './pages/Education/StudentAttendanceTool';
+import AssessmentResultTool from './pages/Education/AssessmentResultTool';
+import StudentGroupCreationTool from './pages/Education/StudentGroupCreationTool';
+import ProgramEnrollmentTool from './pages/Education/ProgramEnrollmentTool';
+import CourseSchedulingTool from './pages/Education/CourseSchedulingTool';
+import StudentAndGuardianContactDetailsReport from './pages/Education/StudentAndGuardianContactDetailsReport';
+import Article from './pages/Education/Article';
+import Video from './pages/Education/Video';
+import Quiz from './pages/Education/Quiz';
+import EducationSettings from './pages/Education/EducationSettings';
+import StudentCategory from './pages/Education/StudentCategory';
+import StudentBatchName from './pages/Education/StudentBatchName';
+import GradingScale from './pages/Education/GradingScale';
+import AcademicYear from './pages/Education/AcademicYear';
+import AcademicTerm from './pages/Education/AcademicTerm';
+
 const RootRedirect = () => {
   const { isAdmin } = useUserRole();
   return <Navigate to={isAdmin ? "/home" : "/employee-self-service"} replace />;
@@ -212,6 +265,8 @@ function App() {
         navigate('/payroll-dashboard');
     } else if (moduleKey === 'assets') {
         navigate('/assets/asset');
+    } else if (moduleKey === 'education') {
+        navigate('/education/student');
     }
   };
 
@@ -448,10 +503,65 @@ function App() {
                 <Route path="/assets/report/asset-depreciations-balances" element={<AssetDepreciationsBalances />} />
                 <Route path="/assets/report/asset-maintenance" element={<AssetMaintenanceReport />} />
                 <Route path="/assets/report/asset-activity" element={<AssetActivityReport />} />
+
+                {/* Education */}
+                <Route path="/education" element={<Navigate to="/education/student" replace />} />
+                <Route path="/education/student" element={<Student />} />
+                <Route path="/education/student-group" element={<StudentGroup />} />
+                <Route path="/education/student-log" element={<StudentLog />} />
+                <Route path="/education/program" element={<Program />} />
+                <Route path="/education/course" element={<Course />} />
+                <Route path="/education/topic" element={<Topic />} />
+                <Route path="/education/room" element={<Room />} />
+                <Route path="/education/student-category" element={<StudentCategory />} />
+                <Route path="/education/student-batch-name" element={<StudentBatchName />} />
+                <Route path="/education/grading-scale" element={<GradingScale />} />
+                <Route path="/education/academic-year" element={<AcademicYear />} />
+                <Route path="/education/academic-term" element={<AcademicTerm />} />
+                <Route path="/education/article" element={<Article />} />
+                <Route path="/education/video" element={<Video />} />
+                <Route path="/education/quiz" element={<Quiz />} />
+                <Route path="/education/settings" element={<EducationSettings />} />
+                <Route path="/education/instructor" element={<Instructor />} />
+                <Route path="/education/guardian" element={<Guardian />} />
+                <Route path="/education/student-applicant" element={<StudentApplicant />} />
+                <Route path="/education/student-admission" element={<StudentAdmission />} />
+                <Route path="/education/program-enrollment" element={<ProgramEnrollment />} />
+                <Route path="/education/course-enrollment" element={<CourseEnrollment />} />
+                <Route path="/education/fee-structure" element={<FeeStructure />} />
+                <Route path="/education/fee-category" element={<FeeCategory />} />
+                <Route path="/education/fee-schedule" element={<FeeSchedule />} />
+                <Route path="/education/fees" element={<Fees />} />
+                <Route path="/education/student-fee-collection" element={<StudentFeeCollection />} />
+                <Route path="/education/program-wise-fee-collection" element={<ProgramWiseFeeCollection />} />
+                <Route path="/education/course-schedule" element={<CourseSchedule />} />
+                <Route path="/education/course-scheduling-tool" element={<CourseSchedulingTool />} />
+                <Route path="/education/student-attendance" element={<StudentAttendance />} />
+                <Route path="/education/student-leave-application" element={<StudentLeaveApplication />} />
+                <Route path="/education/student-monthly-attendance-sheet" element={<StudentMonthlyAttendanceSheet />} />
+                <Route path="/education/absent-student-report" element={<AbsentStudentReport />} />
+                <Route path="/education/student-batch-wise-attendance" element={<StudentBatchWiseAttendance />} />
+                <Route path="/education/course-activity" element={<CourseActivity />} />
+                <Route path="/education/quiz-activity" element={<QuizActivity />} />
+                <Route path="/education/assessment-plan" element={<AssessmentPlan />} />
+                <Route path="/education/assessment-group" element={<AssessmentGroup />} />
+                <Route path="/education/assessment-result" element={<AssessmentResult />} />
+                <Route path="/education/assessment-criteria" element={<AssessmentCriteria />} />
+                <Route path="/education/course-wise-assessment-report" element={<CourseWiseAssessmentReport />} />
+                <Route path="/education/final-assessment-grades" element={<FinalAssessmentGrades />} />
+                <Route path="/education/assessment-plan-status" element={<AssessmentPlanStatus />} />
+                <Route path="/education/student-report-generation-tool" element={<StudentReportGenerationTool />} />
+                <Route path="/education/student-attendance-tool" element={<StudentAttendanceTool />} />
+                <Route path="/education/assessment-result-tool" element={<AssessmentResultTool />} />
+                <Route path="/education/student-group-creation-tool" element={<StudentGroupCreationTool />} />
+                <Route path="/education/program-enrollment-tool" element={<ProgramEnrollmentTool />} />
+                <Route path="/education/course-scheduling-tool" element={<CourseSchedulingTool />} />
+                <Route path="/education/student-and-guardian-contact-details-report" element={<StudentAndGuardianContactDetailsReport />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
+            {/* Route verification active */}
           </div>
         </main>
       </div>

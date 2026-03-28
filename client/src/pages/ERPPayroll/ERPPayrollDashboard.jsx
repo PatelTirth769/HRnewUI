@@ -166,7 +166,6 @@ const ERPPayrollDashboard = () => {
                         title="TOTAL SALARY STRUCTURE" 
                         value={data.totalSalaryStructure} 
                         isLoading={loading}
-                        subtext="Live from ERPNext" 
                     />
                 </div>
                 <div onClick={() => handleCardClick('/erp-payroll/employee-incentive')} className="cursor-pointer">

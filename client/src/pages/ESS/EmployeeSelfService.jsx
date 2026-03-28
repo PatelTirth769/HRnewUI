@@ -128,21 +128,47 @@ const EmployeeSelfService = () => {
         return;
       }
 
-      // 2. Fetch employee id for the logged in user
-      const empListRes = await API.get(`/api/resource/Employee?fields=["name"]&filters=[["user_id","=","${userId}"]]&limit_page_length=1`);
-      const empId = empListRes.data?.data?.[0]?.name;
-      if (!empId) {
-        return;
+      let empId = null;
+      let empDoc = null;
+
+      try {
+        // 2. Try fetching employee id using normal user session
+        const empListRes = await API.get(`/api/resource/Employee?fields=["name"]&filters=[["user_id","=","${userId}"]]&limit_page_length=1`);
+        empId = empListRes.data?.data?.[0]?.name;
+        
+        if (empId) {
+          // 3. Fetch full Employee document
+          const empDocRes = await API.get(`/api/resource/Employee/${encodeURIComponent(empId)}`);
+          empDoc = empDocRes.data?.data;
+        }
+      } catch (e) {
+        console.warn("Normal Employee fetch failed or restricted, trying fallback...");
       }
 
-      // 3. Fetch full Employee document so all profile tabs can render available details
-      const empDocRes = await API.get(`/api/resource/Employee/${encodeURIComponent(empId)}`);
-      const empDoc = empDocRes.data?.data;
+      // 4. Fallback: If normal fetch failed or returned nothing (e.g. for Inventory/Accounts roles without Employee read access)
+      if (!empDoc) {
+        try {
+          // Import axios directly for the fallback call since it might need to hit the local server directly
+          // Using API is fine if it points to /local-api/erp-proxy/systemCode
+          // The new route is at /api/employee-by-user/:email
+          
+          const systemCode = localStorage.getItem('activeSystem') || '';
+          // Make direct call to local backend fallback route
+          const fallbackRes = await API.get(`/api/employee-by-user/${encodeURIComponent(userId)}`, {
+             baseURL: '/local-api', // override proxy baseURL to hit our local express route
+             headers: { 'x-system-code': systemCode }
+          });
+          empDoc = fallbackRes.data;
+        } catch (fallbackErr) {
+          console.error("Admin fallback Employee fetch also failed", fallbackErr);
+        }
+      }
+
       if (empDoc) {
         setMyEmpData(empDoc);
       }
     } catch (e) {
-      console.error("Failed to fetch my employee data", e);
+      console.error("Unexpected error in fetchMyEmpDetails", e);
     } finally {
       setLoadingMyEmp(false);
     }

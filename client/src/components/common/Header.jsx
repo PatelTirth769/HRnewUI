@@ -9,7 +9,7 @@ const employeeHiddenModules = new Set(['master', 'elcLetters', 'approvers']);
 
 const Header = ({ onModuleClick }) => {
   const navigate = useNavigate();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, isInventory, isAccounts } = useUserRole();
   const branding = getBranding();
   const [auth, setAuth] = useAuth();
 
@@ -51,7 +51,7 @@ const Header = ({ onModuleClick }) => {
   return (
     <header className="bg-white px-4 py-2 flex justify-between items-center relative shadow-sm" >
       <Link
-        to="/home"
+        to={isAdmin ? "/home" : "/employee-self-service"}
         className={`no-underline text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors flex items-center ${branding.showHeaderTitle ? 'gap-2' : ''}`}
       >
         <img src={branding.headerLogo} alt={`${branding.displayName} logo`} className="h-10 w-auto object-contain" />
@@ -77,7 +77,14 @@ const Header = ({ onModuleClick }) => {
         }
 
         {isAdmin && <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Dashboard</Link>}
+        {isAdmin && <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors">Education</div>}
         <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Self Service</Link>
+        {(isAdmin || isInventory) && (
+          <div onClick={() => onModuleClick('assets')} className="cursor-pointer hover:text-blue-600 transition-colors">Assets</div>
+        )}
+        {(isAdmin || isAccounts) && (
+          <div onClick={() => onModuleClick('erpPayroll')} className="cursor-pointer hover:text-blue-600 transition-colors">Payroll</div>
+        )}
         {isAdmin && (
           <>
             <Link to="/approver" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors">Approvers</Link>

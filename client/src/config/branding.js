@@ -12,7 +12,7 @@ const BRANDING_BY_CODE = {
     headerLogo: defaultLogo,
     sidebarLogo: defaultLogo,
     salarySlipLogo: defaultLogo,
-    showHeaderTitle: true,
+    showHeaderTitle: false,
     headerTitle: 'Dash Board',
   },
   lingayas: {

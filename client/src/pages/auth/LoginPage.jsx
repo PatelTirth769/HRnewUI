@@ -54,7 +54,7 @@ const LoginPage = () => {
   const [loadingSystems, setLoadingSystems] = useState(true);
 
   const emailLower = (emailInputValue || '').toLowerCase();
-  const isAdministratorLogin = emailLower.includes('administrator') || emailLower.includes('lingayasvidyapeeth.edu.in');
+  const isAdministratorLogin = emailLower.includes('administrator');
 
   const apiAuthenticate = async () => {
     const data = {
@@ -120,8 +120,23 @@ const LoginPage = () => {
 
     setLoading(true);
 
+    // For non-administrator (employee) logins, auto-detect the system based on email
+    let systemToUse = selectedSystem;
+    if (!isAdministratorLogin) {
+      const email = (values.email || '').toLowerCase();
+      if (email.includes('lingayasvidyapeeth.edu.in')) {
+        // Find the Lingayas system
+        const lingayasSystem = systems.find(s => s.name.toLowerCase().includes('lingayas') || s.code.toLowerCase().includes('lingayas'));
+        if (lingayasSystem) systemToUse = lingayasSystem.code;
+      } else {
+        // Default to Preeshe
+        const preesheSystem = systems.find(s => s.code.toLowerCase() === 'preeshe');
+        if (preesheSystem) systemToUse = preesheSystem.code;
+      }
+    }
+
     // Set active system in api.js so all calls route through the proxy
-    setActiveSystem(selectedSystem);
+    setActiveSystem(systemToUse);
 
     try {
       // ERPNext Login Endpoint (routed through proxy)
@@ -142,9 +157,12 @@ const LoginPage = () => {
           console.log("PARSED ROLES ARRAY:", roles);
 
           // User is HR Admin if they have any of these roles
-          const adminRoles = ['HR Manager', 'HR User', 'System Manager', 'Administrator'];
-          isHRAdmin = roles.some(r => adminRoles.includes(r));
-          console.log("IS HR ADMIN EVALUATED TO:", isHRAdmin);
+          const adminRoles = ['HR Manager', 'HR User', 'System Manager', 'Administrator', 'HR'];
+          
+          // Check both ERPNext roles AND the mongoRole deduced by our proxy
+          isHRAdmin = roles.some(r => adminRoles.includes(r)) || adminRoles.includes(mongoRole);
+          
+          console.log("IS HR ADMIN EVALUATED TO:", isHRAdmin, "(based on roles:", roles, "and mongoRole:", mongoRole, ")");
         } catch (roleErr) {
           console.error('Could not fetch User doctype:', roleErr);
           isHRAdmin = false;
@@ -161,18 +179,18 @@ const LoginPage = () => {
         localStorage.setItem('userToken', 'session-active');
         localStorage.setItem('userRole', mongoRole || 'Employee');
         localStorage.setItem('userIsHRAdmin', isHRAdmin ? 'true' : 'false');
-        localStorage.setItem('activeSystem', selectedSystem);
+        localStorage.setItem('activeSystem', systemToUse);
         if (mongoRole) {
           localStorage.setItem('mongoRole', mongoRole);
         }
 
         // Find the selected system name for display
-        const sys = systems.find(s => s.code === selectedSystem);
+        const sys = systems.find(s => s.code === systemToUse);
         if (sys) {
           localStorage.setItem('activeSystemName', sys.name);
         }
 
-        if ((selectedSystem || '').toLowerCase() === 'schooler') {
+        if ((systemToUse || '').toLowerCase() === 'schooler') {
           // Open Schooler frontend when Schooler is selected at login.
           window.location.href = SCHOOLER_APP_URL;
           return;

@@ -44,6 +44,7 @@ app.use('/recruitment-settings', require('./routes/recruitmentSettings'));
 app.use('/local/users', require('./routes/users'));
 app.use('/users', require('./routes/users'));
 app.use('/attendance-configs', require('./routes/attendanceConfigs'));
+app.use('/api', require('./routes/employeeRoutes'));
 
 const PORT = process.env.PORT || 3636;
 const useMongo = String(process.env.USE_MONGO || '').toLowerCase() === 'true';
