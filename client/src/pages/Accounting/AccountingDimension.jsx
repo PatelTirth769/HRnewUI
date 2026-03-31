@@ -6,6 +6,7 @@ import API from '../../services/api';
 const emptyForm = () => ({
     reference_doctype: '',
     label: '',
+    dimension_name: '',
     dimension_defaults: [], // Child table
 });
 
@@ -58,7 +59,7 @@ const AccountingDimension = () => {
     const fetchMetadata = async () => {
         try {
             const [compRes, dtRes] = await Promise.all([
-                API.get('/api/resource/Company?fields=["name"]'),
+                API.get('/api/resource/Company?fields=["name"]&limit_page_length=None'),
                 API.get('/api/resource/DocType?fields=["name"]&filters=[["istable","=",0]]&limit_page_length=None'),
             ]);
             setCompanies((compRes.data.data || []).map(c => c.name));
@@ -76,6 +77,7 @@ const AccountingDimension = () => {
             setForm({
                 reference_doctype: d.reference_doctype || '',
                 label: d.label || '',
+                dimension_name: d.dimension_name || '',
                 dimension_defaults: (d.dimension_defaults || []).map(row => ({ 
                     company: row.company, 
                     default_dimension: row.default_dimension,
@@ -138,6 +140,7 @@ const AccountingDimension = () => {
                 notification.success({ message: 'Dimension created.' });
             }
             setView('list');
+            fetchDimensions();
         } catch (err) {
             console.error('Save error:', err);
             notification.error({ message: 'Save Failed', description: err.response?.data?._server_messages || err.message });
@@ -152,13 +155,15 @@ const AccountingDimension = () => {
             await API.delete(`/api/resource/Accounting Dimension/${encodeURIComponent(editingRecord)}`);
             notification.success({ message: 'Dimension deleted.' });
             setView('list');
+            fetchDimensions();
         } catch (err) {
             notification.error({ message: 'Delete Failed', description: err.message });
         }
     };
 
-    const inputStyle = "w-full border border-gray-200 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 disabled:bg-gray-50";
-    const labelStyle = "block text-[13px] text-gray-500 mb-1";
+    // --- Standard UI Styles ---
+    const inputStyle = "w-full border border-gray-200 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 disabled:bg-gray-50 shadow-sm transition-all";
+    const labelStyle = "block text-[13px] text-gray-500 mb-2 font-medium";
 
     if (view === 'list') {
         const filtered = dimensions.filter(d => {
@@ -169,30 +174,21 @@ const AccountingDimension = () => {
         return (
             <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
-                    <div className="flex items-center">
-                        <button 
-                            onClick={() => navigate(-1)} 
-                            className="mr-3 p-2 bg-white border border-gray-200 rounded-md hover:bg-gray-50 text-gray-500 transition shadow-sm flex items-center justify-center"
-                            title="Go Back"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
-                        </button>
-                        <h1 className="text-2xl font-semibold text-gray-800">Accounting Dimensions</h1>
-                    </div>
+                    <h1 className="text-2xl font-semibold text-gray-800">Accounting Dimensions</h1>
                     <div className="flex gap-2">
-                        <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 transition px-5" onClick={fetchDimensions} disabled={loadingList}>
-                             Refresh
+                        <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 flex items-center gap-2 transition" onClick={fetchDimensions} disabled={loadingList}>
+                            {loadingList ? '⟳ Loading...' : '⟳ Refresh'}
                         </button>
-                        <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium" onClick={() => { setEditingRecord(null); setView('form'); }}>
+                        <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium shadow-sm" onClick={() => { setEditingRecord(null); setView('form'); }}>
                             + Add Dimension
                         </button>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-80" placeholder="Search Dimension..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-96 shadow-sm focus:ring-1 focus:ring-blue-400 focus:outline-none placeholder:italic" placeholder="Search Label or Reference Doctype..." value={search} onChange={(e) => setSearch(e.target.value)} />
                     {search && (
-                        <button className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1" onClick={() => setSearch('')}>
+                        <button className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1 font-medium" onClick={() => setSearch('')}>
                             ✕ Clear Filters
                         </button>
                     )}
@@ -200,29 +196,29 @@ const AccountingDimension = () => {
 
                 <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 border-b">
+                        <thead className="bg-[#F9FAFB] border-b text-gray-600 font-semibold">
                             <tr>
-                                <th className="px-4 py-3 font-medium text-gray-600">Dimension Name</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">Reference DocType</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">Status</th>
+                                <th className="px-5 py-4 uppercase tracking-wider text-[11px]">Dimension Name</th>
+                                <th className="px-5 py-4 uppercase tracking-wider text-[11px]">Reference DocType</th>
+                                <th className="px-5 py-4 uppercase tracking-wider text-[11px]">Status</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-gray-100">
                             {loadingList ? (
-                                <tr><td colSpan="3" className="text-center py-10 text-gray-400 italic">Fetching dimensions...</td></tr>
+                                <tr><td colSpan="3" className="py-12 text-center text-gray-400 italic">Fetching from ERPNext...</td></tr>
                             ) : filtered.length === 0 ? (
-                                <tr><td colSpan="3" className="text-center py-16 text-gray-500">No Dimensions Found</td></tr>
+                                <tr><td colSpan="3" className="py-20 text-center text-gray-400 italic font-medium tracking-tight">No Dimensions defined yet</td></tr>
                             ) : (
                                 filtered.map((row) => (
-                                    <tr key={row.name} className="border-b hover:bg-gray-50 transition-colors">
-                                        <td className="px-4 py-3">
-                                            <button className="text-blue-600 hover:text-blue-800 font-bold block text-base" onClick={() => { setEditingRecord(row.name); setView('form'); }}>
+                                    <tr key={row.name} className="hover:bg-gray-50/50 transition-colors">
+                                        <td className="px-5 py-4">
+                                            <button className="text-blue-600 hover:text-blue-800 font-bold block text-sm" onClick={() => { setEditingRecord(row.name); setView('form'); }}>
                                                 {row.label || row.name}
                                             </button>
                                         </td>
-                                        <td className="px-4 py-3 text-gray-900 font-medium">{row.reference_doctype}</td>
-                                        <td className="px-4 py-3">
-                                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wide border ${
+                                        <td className="px-5 py-4 text-gray-900 font-medium text-xs">{row.reference_doctype}</td>
+                                        <td className="px-5 py-4">
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border ${
                                                 !row.disabled ? 'bg-[#DEF7EC] text-[#03543F] border-[#BCF0DA]' : 'bg-[#FDE2E2] text-[#9B1C1C] border-[#F8B4B4]'
                                             }`}>
                                                 {!row.disabled ? 'Active' : 'Disabled'}
@@ -238,20 +234,12 @@ const AccountingDimension = () => {
         );
     }
 
-    if (loadingForm) {
-        return (
-            <div className="p-6 max-w-5xl mx-auto flex justify-center py-20">
-                <Spinner tip="Loading dimension details..." />
-            </div>
-        );
-    }
-
     return (
-        <div className="p-6 max-w-6xl mx-auto pb-20">
-            {/* Header */}
+        <div className="p-6 max-w-5xl mx-auto pb-20 font-sans">
+            {/* Header matches Education modules */}
             <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-200">
                 <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold text-gray-900">
+                    <span className="text-xl font-bold text-gray-900 tracking-tight">
                         {editingRecord ? editingRecord : 'New Accounting Dimension'}
                     </span>
                     {!editingRecord && (
@@ -259,119 +247,119 @@ const AccountingDimension = () => {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <button className="p-2 border border-blue-400 bg-white text-blue-600 rounded-md hover:bg-blue-50 transition" onClick={() => setView('list')} title="Go Back">
+                    <button className="p-2 border border-blue-400 bg-white text-blue-600 rounded-md hover:bg-blue-50 transition shadow-sm" onClick={() => setView('list')} title="Go Back">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                     </button>
                     {editingRecord && (
                         <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition shadow-sm" onClick={handleDelete}>Delete</button>
                     )}
-                    <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving}>
+                    <button className="px-6 py-2 bg-gray-900 text-white rounded-md text-sm font-bold hover:bg-gray-800 transition shadow-lg shadow-gray-100 disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving || loadingForm}>
                         {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save'}
                     </button>
                 </div>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8">
-                <div className="space-y-10">
-                    <div className="grid grid-cols-2 gap-x-12 gap-y-6">
-                        <div className="col-span-2 md:col-span-1">
-                            <label className={labelStyle}>Reference Document Type *</label>
-                            <select className={inputStyle} value={form.reference_doctype} onChange={e => updateField('reference_doctype', e.target.value)}>
-                                <option value="">Select Reference DocType...</option>
-                                {doctypes.map(dt => <option key={dt} value={dt}>{dt}</option>)}
-                            </select>
-                        </div>
-                        <div className="col-span-2 md:col-span-1">
-                            <label className={labelStyle}>Dimension Name</label>
-                            <input className={inputStyle} value={form.label} onChange={e => updateField('label', e.target.value)} placeholder="e.g. Project, Cost Center" />
-                        </div>
-                    </div>
-
-                    {/* Dimension Defaults Child Table */}
-                    <div className="pt-8 border-t border-gray-100">
-                        <h3 className="font-semibold text-gray-800 text-sm mb-4 uppercase tracking-wider">Dimension Defaults</h3>
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden whitespace-nowrap overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead className="bg-gray-100 border-b">
-                                    <tr>
-                                        <th className="px-4 py-2 w-12 text-gray-400 font-medium text-center">No.</th>
-                                        <th className="px-4 py-2 text-gray-600 font-medium text-left">Company</th>
-                                        <th className="px-4 py-2 text-gray-600 font-medium text-left">Default Dimension</th>
-                                        <th className="px-4 py-2 text-gray-600 font-medium text-center">Mandatory For Balance Sheet</th>
-                                        <th className="px-4 py-2 text-gray-600 font-medium text-center">Mandatory For P&L Account</th>
-                                        <th className="px-4 py-2 w-16 text-center"></th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-100">
-                                    {form.dimension_defaults.length === 0 ? (
-                                        <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-400 italic">No Data - Add defaults below</td></tr>
-                                    ) : (
-                                        form.dimension_defaults.map((row, idx) => (
-                                            <tr key={idx}>
-                                                <td className="px-4 py-2 text-center text-gray-400 font-mono">{idx + 1}</td>
-                                                <td className="px-4 py-2">
-                                                    <select 
-                                                        className="w-full border border-gray-100 rounded px-2 py-1 text-sm bg-transparent" 
-                                                        value={row.company} 
-                                                        onChange={(e) => updateRow(idx, 'company', e.target.value)}
-                                                    >
-                                                        <option value="">Select Company...</option>
-                                                        {companies.map(c => <option key={c} value={c}>{c}</option>)}
-                                                    </select>
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <input 
-                                                        className="w-full border border-gray-100 rounded px-2 py-1 text-sm bg-transparent" 
-                                                        value={row.default_dimension} 
-                                                        onChange={(e) => updateRow(idx, 'default_dimension', e.target.value)}
-                                                        placeholder="Default Name..."
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2 text-center">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600"
-                                                        checked={!!row.mandatory_for_bs} 
-                                                        onChange={(e) => updateRow(idx, 'mandatory_for_bs', e.target.checked ? 1 : 0)}
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2 text-center">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600"
-                                                        checked={!!row.mandatory_for_pl} 
-                                                        onChange={(e) => updateRow(idx, 'mandatory_for_pl', e.target.checked ? 1 : 0)}
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2 text-center">
-                                                    <button className="text-red-400 hover:text-red-600 transition p-1" onClick={() => removeRow(idx)}>
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                            <div className="p-3 bg-gray-50 border-t border-gray-200">
-                                <button className="px-4 py-1.5 bg-white border border-gray-300 rounded text-[13px] font-medium text-gray-700 hover:bg-gray-100 transition shadow-sm" onClick={addRow}>
-                                    Add Row
-                                </button>
+                {loadingForm ? (
+                    <div className="py-20 text-center"><Spin tip="Loading dimension details..." /></div>
+                ) : (
+                    <div className="space-y-12">
+                        {/* Primary Fields */}
+                        <div className="grid grid-cols-2 gap-x-12 gap-y-6">
+                            <div>
+                                <label className={labelStyle}>Reference Document Type *</label>
+                                <select className={inputStyle} value={form.reference_doctype} onChange={e => updateField('reference_doctype', e.target.value)}>
+                                    <option value="">Select Reference DocType...</option>
+                                    {doctypes.map(dt => <option key={dt} value={dt}>{dt}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className={labelStyle}>Dimension Name</label>
+                                <input className={inputStyle} value={form.label} onChange={e => updateField('label', e.target.value)} placeholder="e.g. Project, Service Center" />
                             </div>
                         </div>
+
+                        {/* Dimension Defaults Child Table */}
+                        <div className="pt-8 border-t border-gray-100">
+                            <h3 className="font-bold text-gray-800 text-sm mb-6 uppercase tracking-wider">Dimension Defaults</h3>
+                            <div className="border border-gray-100 rounded-lg overflow-hidden shadow-sm">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-[#F9FAFB] border-b text-gray-600 font-semibold">
+                                        <tr>
+                                            <th className="px-4 py-3 w-16 text-center text-[10px] uppercase">No.</th>
+                                            <th className="px-4 py-3 text-[11px] uppercase tracking-tighter">Company</th>
+                                            <th className="px-4 py-3 text-[11px] uppercase tracking-tighter text-blue-600 italic">Default Dimension</th>
+                                            <th className="px-4 py-3 text-center text-[10px] uppercase max-w-[120px] leading-tight">Mandatory For Balance Sheet</th>
+                                            <th className="px-4 py-3 text-center text-[10px] uppercase max-w-[120px] leading-tight">Mandatory For Profit and Loss Account</th>
+                                            <th className="px-4 py-3 w-16"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {form.dimension_defaults.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="6" className="py-16 text-center text-gray-400 italic font-medium tracking-tight">
+                                                    <div className="flex flex-col items-center gap-3 opacity-60">
+                                                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                                        No Data
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            form.dimension_defaults.map((row, idx) => (
+                                                <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                                                    <td className="px-4 py-3 text-center text-gray-400 font-black text-xs">{idx + 1}</td>
+                                                    <td className="px-4 py-3">
+                                                        <select 
+                                                            className="w-full border border-gray-100 rounded px-2 py-1.5 text-sm bg-transparent font-medium" 
+                                                            value={row.company} 
+                                                            onChange={(e) => updateRow(idx, 'company', e.target.value)}
+                                                        >
+                                                            <option value="">Select Company...</option>
+                                                            {companies.map(c => <option key={c} value={c}>{c}</option>)}
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <input 
+                                                            className="w-full border border-blue-50 rounded px-3 py-1.5 text-sm bg-blue-50/10 focus:outline-none focus:border-blue-400 font-bold text-gray-700 shadow-inner" 
+                                                            value={row.default_dimension} 
+                                                            onChange={(e) => updateRow(idx, 'default_dimension', e.target.value)}
+                                                            placeholder="Value..."
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                            checked={!!row.mandatory_for_bs} 
+                                                            onChange={(e) => updateRow(idx, 'mandatory_for_bs', e.target.checked ? 1 : 0)}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                            checked={!!row.mandatory_for_pl} 
+                                                            onChange={(e) => updateRow(idx, 'mandatory_for_pl', e.target.checked ? 1 : 0)}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <button className="text-gray-200 hover:text-red-500 transition-colors font-bold text-base px-2" onClick={() => removeRow(idx)}>✕</button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button className="mt-4 px-4 py-1.5 bg-gray-50 border border-gray-100 text-gray-700 text-xs font-black rounded hover:bg-gray-100 transition shadow-sm uppercase tracking-widest" onClick={addRow}>
+                                + Add Row
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );
 };
-
-// Simple Spinner since I used it above
-const Spinner = ({ tip }) => (
-    <div className="flex flex-col items-center gap-4">
-        <Spin size="large" />
-        <p className="text-gray-400 italic text-sm">{tip}</p>
-    </div>
-);
 
 export default AccountingDimension;

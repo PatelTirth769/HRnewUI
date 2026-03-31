@@ -34,6 +34,15 @@ import PaymentEntry from './pages/Accounting/PaymentEntry';
 import JournalEntry from './pages/Accounting/JournalEntry';
 import JournalEntryTemplate from './pages/Accounting/JournalEntryTemplate';
 import TermsAndConditions from './pages/Accounting/TermsAndConditions';
+import CostCenter from './pages/Accounting/CostCenter';
+import Budget from './pages/Accounting/Budget';
+import BudgetVariations from './pages/Accounting/BudgetVariations';
+import CostCenterAllocation from './pages/Accounting/CostCenterAllocation';
+import MonthlyDistribution from './pages/Accounting/MonthlyDistribution';
+import Currency from './pages/Accounting/Currency';
+import CurrencyExchange from './pages/Accounting/CurrencyExchange';
+import ExchangeRateRevaluation from './pages/Accounting/ExchangeRateRevaluation';
+import Bank from './pages/Accounting/Bank';
 import LoginPage from './pages/auth/LoginPage.jsx';
 import Register from './pages/auth/Register.jsx';
 import DepartmentList from './pages/departments/DepartmentList';
@@ -547,6 +556,15 @@ function App() {
                 <Route path="/accounting/journal-entry" element={<JournalEntry />} />
                 <Route path="/accounting/journal-entry-template" element={<JournalEntryTemplate />} />
                 <Route path="/accounting/terms-and-conditions" element={<TermsAndConditions />} />
+                <Route path="/accounting/cost-center" element={<CostCenter />} />
+                <Route path="/accounting/budget" element={<Budget />} />
+                <Route path="/accounting/budget-variations" element={<BudgetVariations />} />
+                <Route path="/accounting/cost-center-allocation" element={<CostCenterAllocation />} />
+                <Route path="/accounting/monthly-distribution" element={<MonthlyDistribution />} />
+                <Route path="/accounting/currency" element={<Currency />} />
+                <Route path="/accounting/currency-exchange" element={<CurrencyExchange />} />
+                <Route path="/accounting/exchange-rate-revaluation" element={<ExchangeRateRevaluation />} />
+                <Route path="/accounting/bank" element={<Bank />} />
 
                 {/* Education */}
                 <Route path="/education" element={<Navigate to="/education/student" replace />} />

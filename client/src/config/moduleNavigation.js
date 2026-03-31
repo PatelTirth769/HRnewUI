@@ -620,6 +620,34 @@ export const moduleNavigation = {
                     { label: 'Mode of Payment', path: '/accounting/mode-of-payment' },
                 ],
             },
+            {
+                title: 'Cost Center and Budgeting',
+                icon: 'view-grid-add',
+                items: [
+                    { label: 'Cost Center', path: '/accounting/cost-center' },
+                    { label: 'Budget', path: '/accounting/budget' },
+                    { label: 'Budget Variations Report', path: '/accounting/budget-variations' },
+                    { label: 'Accounting Dimension', path: '/accounting/accounting-dimension' },
+                    { label: 'Cost Center Allocation', path: '/accounting/cost-center-allocation' },
+                    { label: 'Monthly Distribution', path: '/accounting/monthly-distribution' },
+                ],
+            },
+            {
+                title: 'Multi Currency',
+                icon: 'currency-dollar',
+                items: [
+                    { label: 'Currency', path: '/accounting/currency' },
+                    { label: 'Currency Exchange', path: '/accounting/currency-exchange' },
+                    { label: 'Exchange Rate Revaluation', path: '/accounting/exchange-rate-revaluation' },
+                ],
+            },
+            {
+                title: 'Banking',
+                icon: 'library',
+                items: [
+                    { label: 'Bank', path: '/accounting/bank' },
+                ],
+            },
         ],
     },
 };
