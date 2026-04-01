@@ -98,6 +98,86 @@ a:hover {
   color: var(--text);
 }
 
+/* Premium Navigation Dropdown */
+.nav-dropdown-group {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 4px;
+}
+
+.nav-dropdown-content {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  min-width: 180px;
+  background-color: var(--card-bg);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: 8px;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Glassmorphism effect for themes */
+[data-theme="corporate"] .nav-dropdown-content { background-color: rgba(255, 255, 255, 0.95); }
+[data-theme="minimal"] .nav-dropdown-content { background-color: rgba(248, 243, 255, 0.95); }
+[data-theme="warm"] .nav-dropdown-content { background-color: rgba(255, 247, 233, 0.95); }
+
+.nav-dropdown-group:hover .nav-dropdown-content {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.nav-dropdown-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nav-dropdown-item:hover {
+  background-color: var(--primary);
+  color: #ffffff !important;
+  transform: translateX(4px);
+}
+
+.nav-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.nav-dropdown-trigger:after {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid currentColor;
+  margin-top: 2px;
+  transition: transform 0.3s;
+}
+
+.nav-dropdown-group:hover .nav-dropdown-trigger:after {
+  transform: rotate(180deg);
+}
+
 .stat-good {
   color: #3f8600;
 }

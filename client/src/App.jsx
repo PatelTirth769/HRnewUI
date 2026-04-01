@@ -43,6 +43,7 @@ import Currency from './pages/Accounting/Currency';
 import CurrencyExchange from './pages/Accounting/CurrencyExchange';
 import ExchangeRateRevaluation from './pages/Accounting/ExchangeRateRevaluation';
 import Bank from './pages/Accounting/Bank';
+import Item from './pages/Accounting/Item';
 import LoginPage from './pages/auth/LoginPage.jsx';
 import Register from './pages/auth/Register.jsx';
 import DepartmentList from './pages/departments/DepartmentList';
@@ -267,6 +268,22 @@ import GradingScale from './pages/Education/GradingScale';
 import AcademicYear from './pages/Education/AcademicYear';
 import AcademicTerm from './pages/Education/AcademicTerm';
 
+// Selling Module
+import Customer from './pages/Selling/Customer';
+import Quotation from './pages/Selling/Quotation';
+import SalesOrder from './pages/Selling/SalesOrder';
+import SalesInvoice from './pages/Selling/SalesInvoice';
+import BlanketOrder from './pages/Selling/BlanketOrder';
+import SalesPartner from './pages/Selling/SalesPartner';
+import SalesPerson from './pages/Selling/SalesPerson';
+import POSProfile from './pages/Selling/POSProfile';
+import POSSettings from './pages/Selling/POSSettings';
+import LoyaltyProgram from './pages/Selling/LoyaltyProgram';
+import LoyaltyPointEntry from './pages/Selling/LoyaltyPointEntry';
+import ItemPrice from './pages/Accounting/ItemPrice';
+import PriceList from './pages/Accounting/PriceList';
+import ItemGroup from './pages/Accounting/ItemGroup';
+
 const RootRedirect = () => {
   const { isAdmin } = useUserRole();
   return <Navigate to={isAdmin ? "/home" : "/employee-self-service"} replace />;
@@ -297,6 +314,8 @@ function App() {
         navigate('/education/student');
     } else if (moduleKey === 'accounting') {
         navigate('/accounting/company');
+    } else if (moduleKey === 'selling') {
+        navigate('/selling/customer');
     }
   };
 
@@ -565,6 +584,7 @@ function App() {
                 <Route path="/accounting/currency-exchange" element={<CurrencyExchange />} />
                 <Route path="/accounting/exchange-rate-revaluation" element={<ExchangeRateRevaluation />} />
                 <Route path="/accounting/bank" element={<Bank />} />
+                <Route path="/accounting/item" element={<Item />} />
 
                 {/* Education */}
                 <Route path="/education" element={<Navigate to="/education/student" replace />} />
@@ -619,6 +639,24 @@ function App() {
                 <Route path="/education/program-enrollment-tool" element={<ProgramEnrollmentTool />} />
                 <Route path="/education/course-scheduling-tool" element={<CourseSchedulingTool />} />
                 <Route path="/education/student-and-guardian-contact-details-report" element={<StudentAndGuardianContactDetailsReport />} />
+
+                {/* Selling */}
+                <Route path="/selling" element={<Navigate to="/selling/customer" replace />} />
+                <Route path="/selling/customer" element={<Customer />} />
+                <Route path="/selling/quotation" element={<Quotation />} />
+                <Route path="/selling/sales-order" element={<SalesOrder />} />
+                <Route path="/selling/sales-invoice" element={<SalesInvoice />} />
+                <Route path="/selling/blanket-order" element={<BlanketOrder />} />
+                <Route path="/selling/sales-partner" element={<SalesPartner />} />
+                <Route path="/selling/sales-person" element={<SalesPerson />} />
+                <Route path="/selling/pos-profile" element={<POSProfile />} />
+                <Route path="/selling/pos-settings" element={<POSSettings />} />
+                <Route path="/selling/loyalty-program" element={<LoyaltyProgram />} />
+                <Route path="/selling/loyalty-point-entry" element={<LoyaltyPointEntry />} />
+                <Route path="/selling/item" element={<Item />} />
+                <Route path="/selling/item-price" element={<ItemPrice />} />
+                <Route path="/selling/price-list" element={<PriceList />} />
+                <Route path="/selling/item-group" element={<ItemGroup />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />

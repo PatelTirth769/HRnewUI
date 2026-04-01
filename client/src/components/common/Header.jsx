@@ -59,25 +59,93 @@ const Header = ({ onModuleClick }) => {
       </Link>
       <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs xl:text-sm text-gray-700 justify-end">
         {/* Dynamic module tabs loaded from database via ser backend */}
-        {isAdmin && !navLoading && Object.values(navData)
-          .sort((a, b) => (a.order || 0) - (b.order || 0))
-          .map((mod) => {
-            if (!isAdmin && employeeHiddenModules.has(mod.moduleKey)) return null;
-            if (mod.adminOnly && !isAdmin) return null;
-            return (
+        {isAdmin && !navLoading && (() => {
+          const HR_GROUP_KEYS = ['hr', 'recruitment', 'performance', 'shiftAttendance', 'leave'];
+          const allModules = Object.values(navData).sort((a, b) => (a.order || 0) - (b.order || 0));
+          
+          let hrFound = false;
+          return allModules.reduce((acc, mod) => {
+            if (!isAdmin && employeeHiddenModules.has(mod.moduleKey)) return acc;
+            if (mod.adminOnly && !isAdmin) return acc;
+
+            // If it's part of the HR group
+            if (HR_GROUP_KEYS.includes(mod.moduleKey)) {
+              if (mod.moduleKey === 'hr') {
+                hrFound = true;
+                const subModules = allModules.filter(m => HR_GROUP_KEYS.includes(m.moduleKey));
+                acc.push(
+                  <div key="hr-dropdown" className="nav-dropdown-group">
+                    <div 
+                      className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors"
+                      onClick={() => onModuleClick('hr')}
+                    >
+                      HR
+                    </div>
+                    <div className="nav-dropdown-content">
+                      {subModules.map(sub => (
+                        <div 
+                          key={sub.moduleKey} 
+                          className="nav-dropdown-item"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onModuleClick(sub.moduleKey);
+                          }}
+                        >
+                          {sub.title === 'ERP Payroll' ? 'Payroll' : sub.title}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              // Skip other HR group items as they are now in the dropdown
+              return acc;
+            }
+
+            // If it's the Master module
+            if (mod.moduleKey === 'master') {
+              acc.push(
+                <div key="master-dropdown" className="nav-dropdown-group">
+                  <div 
+                    className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors"
+                    onClick={() => onModuleClick('master')}
+                  >
+                    Master
+                  </div>
+                  <div className="nav-dropdown-content">
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('master'); }}>
+                      Master Data
+                    </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/dashboard'); }}>
+                      Dashboard
+                    </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/approver'); }}>
+                      Approvers
+                    </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/reports'); }}>
+                      Reports
+                    </div>
+                  </div>
+                </div>
+              );
+              return acc;
+            }
+
+            acc.push(
               <div
                 key={mod.moduleKey}
-                className="cursor-pointer hover:text-blue-600 truncate"
+                className="cursor-pointer hover:text-blue-600 truncate transition-colors"
                 onClick={() => onModuleClick(mod.moduleKey)}
               >
                 {mod.title === 'ERP Payroll' ? 'Payroll' : mod.title}
               </div>
             );
-          })
-        }
+            return acc;
+          }, []);
+        })()}
 
-        {isAdmin && <Link to="/dashboard" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate">Dashboard</Link>}
         {isAdmin && <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Education</div>}
+        {isAdmin && <div onClick={() => onModuleClick('selling')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Selling</div>}
         <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate">Self Service</Link>
         {!isAdmin && isInventory && (
           <div onClick={() => onModuleClick('assets')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Assets</div>
@@ -85,13 +153,6 @@ const Header = ({ onModuleClick }) => {
         {!isAdmin && isAccounts && (
           <>
             <div onClick={() => onModuleClick('erpPayroll')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Payroll</div>
-            <div onClick={() => onModuleClick('accounting')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Accounting</div>
-          </>
-        )}
-        {isAdmin && (
-          <>
-            <Link to="/approver" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate">Approvers</Link>
-            <Link to="/reports" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate">Reports</Link>
             <div onClick={() => onModuleClick('accounting')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Accounting</div>
           </>
         )}

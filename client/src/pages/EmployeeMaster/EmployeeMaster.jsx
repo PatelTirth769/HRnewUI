@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../services/api';
 import './EmployeeMaster.css';
-import { Select, Input, Row, Col, Space, Button } from 'antd';
+import { Select, Input, Row, Col, Space, Button, Pagination } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 
 const EmployeeMaster = () => {
@@ -260,29 +260,13 @@ const EmployeeMaster = () => {
             Showing {filteredEmployees.length > 0 ? startIndex + 1 : 0} to {Math.min(startIndex + itemsPerPage, filteredEmployees.length)} of {filteredEmployees.length} entries
           </div>
           <div className="pagination-controls">
-            <button
-              className="pagination-btn"
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <button
-                key={page}
-                className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
-                onClick={() => handlePageChange(page)}
-              >
-                {page}
-              </button>
-            ))}
-            <button
-              className="pagination-btn"
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages || totalPages === 0}
-            >
-              Next
-            </button>
+            <Pagination 
+              current={currentPage} 
+              pageSize={itemsPerPage} 
+              total={filteredEmployees.length} 
+              onChange={handlePageChange} 
+              showSizeChanger={false} 
+            />
           </div>
         </div>
       </div>

@@ -33,6 +33,15 @@ const BRANDING_BY_CODE = {
     showHeaderTitle: true,
     headerTitle: 'Schooler Dashboard',
   },
+  ecommerce: {
+    code: 'ecommerce',
+    displayName: 'Ecommerce',
+    headerLogo: defaultLogo,
+    sidebarLogo: defaultLogo,
+    salarySlipLogo: defaultLogo,
+    showHeaderTitle: false,
+    headerTitle: 'Ecommerce Dashboard',
+  },
 };
 
 export const getActiveBrandCode = () => {

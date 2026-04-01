@@ -647,7 +647,43 @@ export const moduleNavigation = {
                 items: [
                     { label: 'Bank', path: '/accounting/bank' },
                 ],
+            }
+        ],
+    },
+    selling: {
+        title: 'Selling',
+        sections: [
+            {
+                title: 'Selling',
+                icon: 'collection',
+                items: [
+                    { label: 'Customer', path: '/selling/customer' },
+                    { label: 'Quotation', path: '/selling/quotation' },
+                    { label: 'Sales Order', path: '/selling/sales-order' },
+                    { label: 'Sales Invoice', path: '/selling/sales-invoice' },
+                    { label: 'Blanket Order', path: '/selling/blanket-order' },
+                    { label: 'Sales Partner', path: '/selling/sales-partner' },
+                    { label: 'Sales Person', path: '/selling/sales-person' },
+                ],
             },
+            {
+                title: 'Point of Sale',
+                icon: 'shopping-cart',
+                items: [
+                    { label: 'Loyalty Program', path: '/selling/loyalty-program' },
+                    { label: 'Loyalty Point Entry', path: '/selling/loyalty-point-entry' },
+                ],
+            },
+            {
+                title: 'Items and Pricing',
+                icon: 'tag',
+                items: [
+                    { label: 'Item', path: '/selling/item' },
+                    { label: 'Item Price', path: '/selling/item-price' },
+                    { label: 'Price List', path: '/selling/price-list' },
+                    { label: 'Item Group', path: '/selling/item-group' }
+                ],
+            }
         ],
     },
 };
