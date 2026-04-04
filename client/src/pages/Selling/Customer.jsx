@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { notification, Spin, Tabs } from 'antd';
+import { notification, Spin, Tabs, Dropdown, Button, Space, Popconfirm } from 'antd';
+import { FiChevronDown, FiChevronLeft, FiChevronRight, FiPrinter, FiMoreHorizontal } from 'react-icons/fi';
 import API from '../../services/api';
 
 const Customer = () => {
@@ -635,28 +636,64 @@ const Customer = () => {
         }
     ];
 
+    const actionMenuItems = [
+        { key: 'placeholder1', label: 'Action 1' },
+        { key: 'placeholder2', label: 'Action 2' },
+    ];
+
+    const viewMenuItems = [
+        { key: 'view', label: 'View' },
+    ];
+
     return (
         <div className="p-6 max-w-6xl mx-auto pb-20">
-            <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-200">
-                <div className="flex items-center gap-2">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
+                <div className="flex items-center gap-3">
                     <span className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" /></svg>
                         {editingRecord ? formData.customer_name || editingRecord : 'New Customer'}
                     </span>
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider ${!formData.disabled ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                        {!formData.disabled ? 'Enabled' : 'Disabled'}
+                    </span>
                     {!editingRecord && (
-                        <span className="px-2 py-0.5 rounded text-[11px] uppercase tracking-wide bg-[#FCE8E8] text-[#E02424] font-medium border border-[#F8B4B4] ml-2">Not Saved</span>
+                        <span className="px-2 py-0.5 rounded text-[11px] uppercase tracking-wide bg-[#FCE8E8] text-[#E02424] font-medium border border-[#F8B4B4]">Not Saved</span>
                     )}
                 </div>
+                
                 <div className="flex items-center gap-2">
-                    <button className="px-5 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 font-medium transition shadow-sm" onClick={() => setView('list')}>
-                        Discard
+                    <Dropdown menu={{ items: viewMenuItems }} trigger={['click']}>
+                        <Button className="flex items-center gap-1 h-8 text-[13px] border-gray-300">
+                            View <FiChevronDown />
+                        </Button>
+                    </Dropdown>
+
+                    <Dropdown menu={{ items: actionMenuItems }} trigger={['click']}>
+                        <Button className="flex items-center gap-1 h-8 text-[13px] bg-gray-100 border-gray-300 font-medium">
+                            Actions <FiChevronDown />
+                        </Button>
+                    </Dropdown>
+
+                    <Button className="h-8 text-[13px] border-gray-300">Duplicate</Button>
+
+                    <Space.Compact>
+                        <Button icon={<FiChevronLeft />} className="h-8 w-8 flex items-center justify-center border-gray-300" />
+                        <Button icon={<FiChevronRight />} className="h-8 w-8 flex items-center justify-center border-gray-300" />
+                    </Space.Compact>
+
+                    <Button icon={<FiPrinter />} className="h-8 w-8 flex items-center justify-center border-gray-300" />
+                    <Button icon={<FiMoreHorizontal />} className="h-8 w-8 flex items-center justify-center border-gray-300" />
+
+                    <button className="px-5 py-1.5 bg-gray-900 text-white rounded text-sm font-bold hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2 ml-2" onClick={handleSave} disabled={saving}>
+                        {saving ? <span className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save'}
                     </button>
+                    
                     {editingRecord && (
-                        <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition shadow-sm" onClick={handleDelete}>Delete</button>
+                        <Popconfirm title="Delete this customer?" onConfirm={handleDelete}>
+                            <button className="p-1.5 text-gray-400 hover:text-red-500 transition-colors ml-1">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                        </Popconfirm>
                     )}
-                    <button className="px-6 py-2 bg-gray-900 text-white rounded-md text-sm font-bold hover:bg-gray-800 transition shadow-lg shadow-gray-100 disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving}>
-                        {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save'}
-                    </button>
                 </div>
             </div>
 

@@ -283,6 +283,15 @@ import LoyaltyPointEntry from './pages/Selling/LoyaltyPointEntry';
 import ItemPrice from './pages/Accounting/ItemPrice';
 import PriceList from './pages/Accounting/PriceList';
 import ItemGroup from './pages/Accounting/ItemGroup';
+import ProductBundle from './pages/Selling/ProductBundle';
+import PromotionalScheme from './pages/Selling/PromotionalScheme';
+import PricingRule from './pages/Selling/PricingRule';
+import ShippingRule from './pages/Selling/ShippingRule';
+import CouponCode from './pages/Selling/CouponCode';
+import WebsiteItem from './pages/Website/WebsiteItem';
+
+// Buying Module
+import PurchaseOrder from './pages/Buying/PurchaseOrder';
 
 const RootRedirect = () => {
   const { isAdmin } = useUserRole();
@@ -316,6 +325,8 @@ function App() {
         navigate('/accounting/company');
     } else if (moduleKey === 'selling') {
         navigate('/selling/customer');
+    } else if (moduleKey === 'buying') {
+        navigate('/buying/purchase-order');
     }
   };
 
@@ -657,6 +668,16 @@ function App() {
                 <Route path="/selling/item-price" element={<ItemPrice />} />
                 <Route path="/selling/price-list" element={<PriceList />} />
                 <Route path="/selling/item-group" element={<ItemGroup />} />
+                <Route path="/selling/product-bundle" element={<ProductBundle />} />
+                <Route path="/selling/promotional-scheme" element={<PromotionalScheme />} />
+                <Route path="/selling/pricing-rule" element={<PricingRule />} />
+                <Route path="/selling/shipping-rule" element={<ShippingRule />} />
+                <Route path="/selling/coupon-code" element={<CouponCode />} />
+                <Route path="/selling/website-item" element={<WebsiteItem />} />
+
+                {/* Buying */}
+                <Route path="/buying" element={<Navigate to="/buying/purchase-order" replace />} />
+                <Route path="/buying/purchase-order" element={<PurchaseOrder />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />

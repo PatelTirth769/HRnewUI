@@ -681,7 +681,24 @@ export const moduleNavigation = {
                     { label: 'Item', path: '/selling/item' },
                     { label: 'Item Price', path: '/selling/item-price' },
                     { label: 'Price List', path: '/selling/price-list' },
-                    { label: 'Item Group', path: '/selling/item-group' }
+                    { label: 'Item Group', path: '/selling/item-group' },
+                    { label: 'Product Bundle', path: '/selling/product-bundle' },
+                    { label: 'Promotional Scheme', path: '/selling/promotional-scheme' },
+                    { label: 'Pricing Rule', path: '/selling/pricing-rule' },
+                    { label: 'Shipping Rule', path: '/selling/shipping-rule' },
+                    { label: 'Coupon Code', path: '/selling/coupon-code' }
+                ],
+            }
+        ],
+    },
+    buying: {
+        title: 'Buying',
+        sections: [
+            {
+                title: 'Buying / Purchasing',
+                icon: 'shopping-cart',
+                items: [
+                    { label: 'Purchase Order', path: '/buying/purchase-order' },
                 ],
             }
         ],
