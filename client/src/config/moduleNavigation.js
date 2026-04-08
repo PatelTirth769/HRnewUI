@@ -661,6 +661,7 @@ export const moduleNavigation = {
                     { label: 'Quotation', path: '/selling/quotation' },
                     { label: 'Sales Order', path: '/selling/sales-order' },
                     { label: 'Sales Invoice', path: '/selling/sales-invoice' },
+                    { label: 'Pick List', path: '/stock/pick-list' },
                     { label: 'Blanket Order', path: '/selling/blanket-order' },
                     { label: 'Sales Partner', path: '/selling/sales-partner' },
                     { label: 'Sales Person', path: '/selling/sales-person' },
@@ -699,6 +700,56 @@ export const moduleNavigation = {
                 icon: 'shopping-cart',
                 items: [
                     { label: 'Purchase Order', path: '/buying/purchase-order' },
+                    { label: 'Purchase Receipt', path: '/stock/purchase-receipt' },
+                ],
+            }
+        ],
+    },
+    stock: {
+        title: 'Stock',
+        sections: [
+            {
+                title: 'Items Catalogue',
+                icon: 'collection',
+                items: [
+                    { label: 'Item', path: '/stock/item' },
+                    { label: 'Item Group', path: '/stock/item-group' },
+                    { label: 'Product Bundle', path: '/stock/product-bundle' },
+                    { label: 'Shipping Rule', path: '/stock/shipping-rule' },
+                    { label: 'Item Alternative', path: '/stock/item-alternative' },
+                    { label: 'Item Manufacturer', path: '/stock/item-manufacturer' },
+                ],
+            },
+            {
+                title: 'Stock Transactions',
+                icon: 'transaction',
+                items: [
+                    { label: 'Material Request', path: '/stock/material-request' },
+                    { label: 'Stock Entry', path: '/stock/stock-entry' },
+                    { label: 'Delivery Note', path: '/stock/delivery-note' },
+                    { label: 'Purchase Receipt', path: '/stock/purchase-receipt' },
+                    { label: 'Pick List', path: '/stock/pick-list' },
+                    { label: 'Delivery Trip', path: '/stock/delivery-trip' },
+                ],
+            },
+            {
+                title: 'Stock Reports',
+                icon: 'clipboard-list',
+                items: [
+                    { label: 'Stock Ledger', path: '/stock/stock-ledger' },
+                    { label: 'Stock Balance', path: '/stock/stock-balance' },
+                    { label: 'Stock Projected Qty', path: '/stock/stock-projected-qty' },
+                    { label: 'Stock Summary', path: '/stock/stock-summary' },
+                    { label: 'Stock Ageing', path: '/stock/stock-ageing' },
+                    { label: 'Item Price Stock', path: '/stock/item-price-stock' },
+                    { label: 'Warehouse Wise Stock Balance', path: '/stock/warehouse-wise-stock-balance' }
+                ],
+            },
+            {
+                title: 'Settings',
+                icon: 'cog',
+                items: [
+                    { label: 'Stock Settings', path: '/stock/stock-settings' },
                 ],
             }
         ],

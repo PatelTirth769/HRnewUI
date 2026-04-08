@@ -1,6 +1,7 @@
 import defaultLogo from '../assets/images/logo.png';
 import lingayasHeaderLogo from '../assets/images/lingayas_header.jpeg';
 import lingayasSidebarLogo from '../assets/images/lingayas_side.jpeg';
+import ecommerceLogo from '../assets/images/ecommerce_logo.png';
 
 // Change this one value to switch logo set globally.
 export const DEFAULT_BRAND_CODE = 'preeshe';
@@ -36,9 +37,9 @@ const BRANDING_BY_CODE = {
   ecommerce: {
     code: 'ecommerce',
     displayName: 'Ecommerce',
-    headerLogo: defaultLogo,
-    sidebarLogo: defaultLogo,
-    salarySlipLogo: defaultLogo,
+    headerLogo: ecommerceLogo,
+    sidebarLogo: ecommerceLogo,
+    salarySlipLogo: ecommerceLogo,
     showHeaderTitle: false,
     headerTitle: 'Ecommerce Dashboard',
   },

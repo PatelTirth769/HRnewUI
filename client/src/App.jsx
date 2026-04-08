@@ -43,7 +43,26 @@ import Currency from './pages/Accounting/Currency';
 import CurrencyExchange from './pages/Accounting/CurrencyExchange';
 import ExchangeRateRevaluation from './pages/Accounting/ExchangeRateRevaluation';
 import Bank from './pages/Accounting/Bank';
-import Item from './pages/Accounting/Item';
+import Item from './pages/Stock/Item';
+import ItemGroup from './pages/Stock/ItemGroup';
+import ProductBundle from './pages/Stock/ProductBundle';
+import ShippingRule from './pages/Stock/ShippingRule';
+import ItemAlternative from './pages/Stock/ItemAlternative';
+import ItemManufacturer from './pages/Stock/ItemManufacturer';
+import MaterialRequest from './pages/Stock/MaterialRequest';
+import StockEntry from './pages/Stock/StockEntry';
+import DeliveryNote from './pages/Stock/DeliveryNote';
+import PurchaseReceipt from './pages/Stock/PurchaseReceipt';
+import PickList from './pages/Stock/PickList';
+import DeliveryTrip from './pages/Stock/DeliveryTrip';
+import StockLedger from './pages/Stock/StockLedger';
+import StockBalance from './pages/Stock/StockBalance';
+import StockProjectedQty from './pages/Stock/StockProjectedQty';
+import StockSummary from './pages/Stock/StockSummary';
+import StockAgeing from './pages/Stock/StockAgeing';
+import ItemPriceStock from './pages/Stock/ItemPriceStock';
+import WarehouseWiseStock from './pages/Stock/WarehouseWiseStock';
+import StockSettings from './pages/Stock/StockSettings';
 import LoginPage from './pages/auth/LoginPage.jsx';
 import Register from './pages/auth/Register.jsx';
 import DepartmentList from './pages/departments/DepartmentList';
@@ -282,11 +301,8 @@ import LoyaltyProgram from './pages/Selling/LoyaltyProgram';
 import LoyaltyPointEntry from './pages/Selling/LoyaltyPointEntry';
 import ItemPrice from './pages/Accounting/ItemPrice';
 import PriceList from './pages/Accounting/PriceList';
-import ItemGroup from './pages/Accounting/ItemGroup';
-import ProductBundle from './pages/Selling/ProductBundle';
 import PromotionalScheme from './pages/Selling/PromotionalScheme';
 import PricingRule from './pages/Selling/PricingRule';
-import ShippingRule from './pages/Selling/ShippingRule';
 import CouponCode from './pages/Selling/CouponCode';
 import WebsiteItem from './pages/Website/WebsiteItem';
 
@@ -327,6 +343,8 @@ function App() {
         navigate('/selling/customer');
     } else if (moduleKey === 'buying') {
         navigate('/buying/purchase-order');
+    } else if (moduleKey === 'stock') {
+        navigate('/stock/item');
     }
   };
 
@@ -678,6 +696,26 @@ function App() {
                 {/* Buying */}
                 <Route path="/buying" element={<Navigate to="/buying/purchase-order" replace />} />
                 <Route path="/buying/purchase-order" element={<PurchaseOrder />} />
+                <Route path="/stock/item" element={<Item />} />
+                <Route path="/stock/item-group" element={<ItemGroup />} />
+                <Route path="/stock/product-bundle" element={<ProductBundle />} />
+                <Route path="/stock/shipping-rule" element={<ShippingRule />} />
+                <Route path="/stock/item-alternative" element={<ItemAlternative />} />
+                <Route path="/stock/item-manufacturer" element={<ItemManufacturer />} />
+                <Route path="/stock/material-request" element={<MaterialRequest />} />
+                <Route path="/stock/stock-entry" element={<StockEntry />} />
+                <Route path="/stock/delivery-note" element={<DeliveryNote />} />
+                <Route path="/stock/purchase-receipt" element={<PurchaseReceipt />} />
+                <Route path="/stock/pick-list" element={<PickList />} />
+                <Route path="/stock/delivery-trip" element={<DeliveryTrip />} />
+                <Route path="/stock/stock-ledger" element={<StockLedger />} />
+                <Route path="/stock/stock-balance" element={<StockBalance />} />
+                <Route path="/stock/stock-projected-qty" element={<StockProjectedQty />} />
+                <Route path="/stock/stock-summary" element={<StockSummary />} />
+                <Route path="/stock/stock-ageing" element={<StockAgeing />} />
+                <Route path="/stock/item-price-stock" element={<ItemPriceStock />} />
+                <Route path="/stock/warehouse-wise-stock-balance" element={<WarehouseWiseStock />} />
+                <Route path="/stock/stock-settings" element={<StockSettings />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />
