@@ -750,6 +750,12 @@ export const moduleNavigation = {
                 icon: 'cog',
                 items: [
                     { label: 'Stock Settings', path: '/stock/stock-settings' },
+                    { label: 'Warehouse', path: '/stock/warehouse' },
+                    { label: 'UOM', path: '/stock/uom' },
+                    { label: 'Brand', path: '/stock/brand' },
+                    { label: 'Item Attribute', path: '/stock/item-attribute' },
+                    { label: 'UOM Conversion Factor', path: '/stock/uom-conversion-factor' },
+                    { label: 'Item Variant Settings', path: '/stock/item-variant-settings' },
                 ],
             }
         ],

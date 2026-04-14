@@ -184,15 +184,34 @@ router.all('/:systemCode/*', async (req, res) => {
                             }
                         }
 
-                        // Fallback 2: Check module_profile
+                        // Fallback 2: Check module_profile or Role Profile
                         const moduleProfile = userRes.data?.data?.module_profile;
-                        console.log(`[Login Intercept] Final ERPNext Roles: ${erpRoles.join(', ')} | Profile: ${moduleProfile}`);
+                        const roleProfileName = userRes.data?.data?.role_profile_name || userRes.data?.data?.role_profile;
                         
+                        console.log(`[Login Intercept] Final ERPNext Roles: ${erpRoles.join(', ')} | Profile: ${moduleProfile} | Role Profile: ${roleProfileName}`);
+                        
+                        // Debugging snippet: log keys relating to roles/profiles just in case
+                        const roleKeys = Object.keys(userRes.data?.data || {}).filter(k => k.includes('role') || k.includes('profile'));
+                        try {
+                            require('fs').writeFileSync('debug_login_response.json', JSON.stringify({
+                                roleKeys,
+                                roleProfileName,
+                                moduleProfile,
+                                email
+                            }, null, 2));
+                        } catch(e) {}
+
                         // Determine if we got any meaningful data from ERPNext
-                        const gotMeaningfulData = erpRoles.length > 0 || (moduleProfile && moduleProfile !== 'Employee' && moduleProfile !== '');
+                        const gotMeaningfulData = erpRoles.length > 0 || (moduleProfile && moduleProfile !== 'Employee' && moduleProfile !== '') || roleProfileName;
                         
                         let updatedRole = null;
-                        if (erpRoles.includes('Administrator') || erpRoles.includes('System Manager')) {
+                        
+                        // Priority 1: Direct Role Profile assignment (e.g. CEO)
+                        if (roleProfileName) {
+                            updatedRole = roleProfileName;
+                        } 
+                        // Priority 2: Hardcoded mappings
+                        else if (erpRoles.includes('Administrator') || erpRoles.includes('System Manager')) {
                             updatedRole = 'Administrator';
                         } else if (erpRoles.includes('HR Manager') || erpRoles.includes('HR') || moduleProfile === 'HR') {
                             updatedRole = 'HR Manager';
@@ -213,9 +232,12 @@ router.all('/:systemCode/*', async (req, res) => {
                                 console.log(`[Login Intercept] Role mismatch. Existing: ${mongoRole}, New: ${updatedRole}. Updating Firebase...`);
                                 const querySnapshot = await db.collection('users').where('email', '==', email).limit(1).get();
                                 if (!querySnapshot.empty) {
-                                    await db.collection('users').doc(querySnapshot.docs[0].id).update({ role: updatedRole });
+                                    await db.collection('users').doc(querySnapshot.docs[0].id).update({ 
+                                        role: updatedRole,
+                                        system: systemCode 
+                                    });
                                     mongoRole = updatedRole;
-                                    console.log(`[Login Intercept] Firebase updated successfully to ${updatedRole}`);
+                                    console.log(`[Login Intercept] Firebase updated successfully to ${updatedRole} (System: ${systemCode})`);
                                 }
                             } else if (!updatedRole) {
                                 console.log(`[Login Intercept] No meaningful role data from ERPNext. Preserving existing Firebase role: ${mongoRole}`);
@@ -230,6 +252,7 @@ router.all('/:systemCode/*', async (req, res) => {
                                 email: email,
                                 username: email,
                                 role: roleToCreate,
+                                system: systemCode,
                                 status: 'active',
                                 password: 'linked-to-erpnext',
                                 createdAt: new Date().toISOString()

@@ -25,6 +25,7 @@ const LoginPage = () => {
   const [profile, setProfile] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [discoveredRole, setDiscoveredRole] = useState(null);
+  const [discoveredSystem, setDiscoveredSystem] = useState(null);
   const emailInputValue = Form.useWatch('email', form);
 
   // Discover role as user types or on blur
@@ -39,8 +40,10 @@ const LoginPage = () => {
         const identifier = (emailInputValue || '').trim();
         const res = await axios.get(`/local-api/local/users/get-role/${encodeURIComponent(identifier)}`);
         setDiscoveredRole(res.data?.role);
+        setDiscoveredSystem(res.data?.system);
       } catch (err) {
         setDiscoveredRole(null);
+        setDiscoveredSystem(null);
       }
     };
     
@@ -55,6 +58,18 @@ const LoginPage = () => {
 
   const emailLower = (emailInputValue || '').toLowerCase();
   const isAdministratorLogin = emailLower.includes('administrator');
+
+  // Determine the effective system for display and login
+  let systemForDisplay = discoveredSystem || (isAdministratorLogin ? selectedSystem : null);
+  if (!isAdministratorLogin && !discoveredSystem && emailLower) {
+    if (emailLower.includes('lingayasvidyapeeth.edu.in')) {
+      systemForDisplay = 'lingayas';
+    } else if (emailLower.includes('lingayasgroup.org')) {
+      systemForDisplay = 'ecommerce';
+    } else if (emailLower.length > 5) { // Only default to preeshe if they've typed enough
+      systemForDisplay = 'preeshe';
+    }
+  }
 
   const apiAuthenticate = async () => {
     const data = {
@@ -120,20 +135,8 @@ const LoginPage = () => {
 
     setLoading(true);
 
-    // For non-administrator (employee) logins, auto-detect the system based on email
-    let systemToUse = selectedSystem;
-    if (!isAdministratorLogin) {
-      const email = (values.email || '').toLowerCase();
-      if (email.includes('lingayasvidyapeeth.edu.in')) {
-        // Find the Lingayas system
-        const lingayasSystem = systems.find(s => s.name.toLowerCase().includes('lingayas') || s.code.toLowerCase().includes('lingayas'));
-        if (lingayasSystem) systemToUse = lingayasSystem.code;
-      } else {
-        // Default to Preeshe
-        const preesheSystem = systems.find(s => s.code.toLowerCase() === 'preeshe');
-        if (preesheSystem) systemToUse = preesheSystem.code;
-      }
-    }
+    // Use the system detected for display as the system to log into
+    const systemToUse = systemForDisplay;
 
     // Set active system in api.js so all calls route through the proxy
     setActiveSystem(systemToUse);
@@ -288,9 +291,9 @@ const LoginPage = () => {
                   border: '1px solid #e0e0e0',
                 }}
               />
-              {discoveredRole && (
+              {(discoveredRole || (!isAdministratorLogin && systemForDisplay)) && (
                 <div style={{ marginTop: '4px', fontSize: '12px', color: '#10b981', fontWeight: '500' }}>
-                  Role: {discoveredRole}
+                  System: {systems.find(s => s.code === systemForDisplay)?.name || 'Detected'} {discoveredRole ? `| Role: ${discoveredRole}` : ''}
                 </div>
               )}
             </Form.Item>

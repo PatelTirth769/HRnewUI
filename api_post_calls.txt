@@ -1,0 +1,243 @@
+﻿D:\preeshee Projects\HRnewUI-main\client\src\components\common\SalarySlipPreviewModal.jsx : const res = await API.post(
+D:\preeshee Projects\HRnewUI-main\client\src\components\company\CompanyMaster.jsx : await api.post('/api/resource/Company', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\AccountingDimension.jsx : await API.post('/api/resource/Accounting Dimension', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\AccountingPeriod.jsx : await API.post('/api/resource/Accounting Period', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\Bank.jsx : await API.post('/api/resource/Bank', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\Budget.jsx : await API.post('/api/resource/Budget', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\BudgetVariations.jsx : const response = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\ChartOfAccounts.jsx : await API.post('/api/resource/Account', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\CostCenter.jsx : await API.post('/api/resource/Cost Center', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\CostCenterAllocation.jsx : await API.post('/api/resource/Cost Center Allocation', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\CostCenterAllocation.jsx : await API.post('/api/method/frappe.client.submit', { doc: formData });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\CostCenterAllocation.jsx : await API.post('/api/method/frappe.client.cancel', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\Currency.jsx : await API.post('/api/resource/Currency', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\CurrencyExchange.jsx : await API.post('/api/resource/Currency Exchange', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\ExchangeRateRevaluation.jsx : const res = await API.post('/api/resource/Exchange Rate Revaluation', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\ExchangeRateRevaluation.jsx : await API.post('/api/method/frappe.client.submit', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\ExchangeRateRevaluation.jsx : await API.post('/api/method/frappe.client.cancel', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\FinanceBook.jsx : await API.post('/api/resource/Finance Book', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\FiscalYear.jsx : await API.post('/api/resource/Fiscal Year', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\ItemGroup.jsx : await API.post('/api/resource/Item Group', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\ItemPrice.jsx : await API.post('/api/resource/Item Price', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\ItemTaxTemplate.jsx : await API.post('/api/resource/Item Tax Template', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\JournalEntry.jsx : await API.post('/api/resource/Journal Entry', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\JournalEntryTemplate.jsx : await API.post('/api/resource/Journal Entry Template', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\LowerDeductionCertificate.jsx : await API.post('/api/resource/Lower Deduction Certificate', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\ModeOfPayment.jsx : await API.post('/api/resource/Mode of Payment', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\MonthlyDistribution.jsx : await API.post('/api/resource/Monthly Distribution', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\PaymentEntry.jsx : await API.post('/api/resource/Payment Entry', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\PaymentTerm.jsx : await API.post('/api/resource/Payment Term', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\PriceList.jsx : await API.post('/api/resource/Price List', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\PurchaseTaxesTemplate.jsx : await API.post('/api/resource/Purchase Taxes and Charges Template', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\SalesTaxesTemplate.jsx : await API.post('/api/resource/Sales Taxes and Charges Template', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\TaxCategory.jsx : await API.post('/api/resource/Tax Category', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\TaxRule.jsx : await API.post('/api/resource/Tax Rule', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\TaxWithholdingCategory.jsx : await API.post('/api/resource/Tax Withholding Category', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Accounting\TermsAndConditions.jsx : await API.post('/api/resource/Terms and Conditions', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Assets\AssetCapitalization.jsx : else { await API.post('/api/resource/Asset Capitalization', formData); notification.success({ message: 'Created!' }); }
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Assets\AssetCategory.jsx : await API.post('/api/resource/Asset Category', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Assets\AssetForm.jsx : await API.post('/api/resource/Asset', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Assets\AssetMaintenance.jsx : await API.post('/api/resource/Asset Maintenance', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Assets\AssetMaintenanceLog.jsx : await API.post('/api/resource/Asset Maintenance Log', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Assets\AssetMaintenanceTeam.jsx : await API.post('/api/resource/Asset Maintenance Team', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Assets\AssetMovement.jsx : await API.post('/api/resource/Asset Movement', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Assets\AssetRepair.jsx : await API.post('/api/resource/Asset Repair', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Assets\AssetValueAdjustment.jsx : await API.post('/api/resource/Asset Value Adjustment', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Assets\Location.jsx : await API.post('/api/resource/Location', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\grievance\Grievanceform.js : const res = await api.post(url, { ...values, datesAndDetails }, {}, false);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\grievance\Grievencelogin.js : const res = await api.post(url, values);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\grievance\Grievencelogin.js : const res = await api.post(url, values);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\rcf\Login.js : const response = await api.post(`common/apiAuth`, data);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\rcf\Login.js : const res = await api.post(url, data, headers, true);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\rcf\Register.js : const response = await api.post(`common/apiAuth`, data);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\rcf\Register.js : const res = await api.post(url, data, headers, true);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\recruiter\Register.js : const response = await api.post(`common/apiAuth`, data);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\recruiter\Register.js : const res = await api.post(url, values, headers, true);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\Login.js : const response = await api.post(`common/apiAuth`, data);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\Login.js : const res = await api.post(url, data, headers, true);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\LoginPage.jsx : const response = await api.post(`common/apiAuth`, data);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\LoginPage.jsx : const response = await API.post('/api/method/login', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\LoginPage.jsx : const accessTokenResponse = await api.post('/linkedin/getAccessToken', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\LoginPage.jsx : const profileResponse = await api.post('/linkedin/getProfileData', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\Register.jsx : const res = await api.post(url, values);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\Register.jsx : const res = await api.post('common/sendOtp', { mobile: mobileNumber });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\auth\Register.jsx : const res = await api.post('common/send-mail', { sendTo: email, emailSubject: 'Candid Verification', template });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Buying\PurchaseOrder.jsx : const res = await API.post('/api/resource/Purchase Order', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Buying\PurchaseOrder.jsx : await API.post(endpoint, { doc: { ...formData, doctype: 'Purchase Order' } });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Buying\PurchaseOrder.jsx : await API.post('/api/method/erpnext.buying.doctype.purchase_order.purchase_order.update_status', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Buying\PurchaseOrder.jsx : await API.post('/api/method/erpnext.buying.doctype.purchase_order.purchase_order.close_or_unclose_purchase_orders', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Buying\PurchaseOrder.jsx : await API.post('/api/method/frappe.client.set_value', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\departments\DepartmentForm.jsx : await api.post('/api/resource/Department', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\designations\DesignationEdit.jsx : await api.post('/api/resource/Designation', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\AbsentStudentReport.jsx : const response = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\AcademicTerm.jsx : await API.post('/api/resource/Academic Term', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\AcademicYear.jsx : await API.post('/api/resource/Academic Year', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\Article.jsx : await API.post('/api/resource/Article', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\AssessmentCriteria.jsx : await API.post('/api/resource/Assessment Criteria', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\AssessmentGroup.jsx : await API.post('/api/resource/Assessment Group', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\AssessmentPlan.jsx : await API.post('/api/resource/Assessment Plan', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\AssessmentResult.jsx : await API.post('/api/resource/Assessment Result', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\AssessmentResultTool.jsx : return API.post('/api/resource/Assessment Result', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\Course.jsx : await API.post('/api/resource/Course', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\CourseActivity.jsx : await API.post('/api/resource/Course Activity', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\CourseEnrollment.jsx : await API.post('/api/resource/Course Enrollment', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\CourseSchedule.jsx : await API.post('/api/resource/Course Schedule', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\CourseSchedulingTool.jsx : // await API.post(endpoint, { ...form, ... });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\FeeCategory.jsx : await API.post('/api/resource/Fee Category', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\Fees.jsx : await API.post('/api/resource/Fees', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\FeeSchedule.jsx : await API.post('/api/resource/Fee Schedule', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\FeeStructure.jsx : await API.post('/api/resource/Fee Structure', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\GradingScale.jsx : await API.post('/api/resource/Grading Scale', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\Guardian.jsx : await API.post('/api/resource/Guardian', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\Instructor.jsx : await API.post('/api/resource/Instructor', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\Program.jsx : await API.post('/api/resource/Program', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\ProgramEnrollment.jsx : await API.post('/api/resource/Program Enrollment', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\ProgramEnrollmentTool.jsx : return API.post('/api/resource/Program Enrollment', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\ProgramWiseFeeCollection.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\Quiz.jsx : await API.post('/api/resource/Quiz', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\QuizActivity.jsx : await API.post('/api/resource/Quiz Activity', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\Room.jsx : await API.post('/api/resource/Room', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\Student.jsx : await API.post('/api/resource/Student', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentAdmission.jsx : await API.post('/api/resource/Student Admission', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentApplicant.jsx : await API.post('/api/resource/Student Applicant', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentAttendance.jsx : await API.post('/api/resource/Student Attendance', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentAttendanceTool.jsx : API.post('/api/resource/Student Attendance', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentBatchName.jsx : await API.post('/api/resource/Student Batch Name', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentBatchWiseAttendance.jsx : const response = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentCategory.jsx : await API.post('/api/resource/Student Category', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentFeeCollection.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentGroup.jsx : await API.post('/api/resource/Student Group', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentGroupCreationTool.jsx : return API.post('/api/resource/Student Group', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentLeaveApplication.jsx : await API.post('/api/resource/Student Leave Application', form);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentLog.jsx : await API.post('/api/resource/Student Log', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\StudentMonthlyAttendanceSheet.jsx : const response = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\Topic.jsx : await API.post('/api/resource/Topic', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Education\Video.jsx : await API.post('/api/resource/Video', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\EmployeeMaster\AddEmployee.jsx : await API.post('/api/resource/Employee', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\EmpMasterUpload\EmpMasterUpload.jsx : await api.post('/api/resource/Employee', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\Reports\IncomeTaxComputation.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\Reports\IncomeTaxDeductions.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\Reports\PFDeductions.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\Reports\PTDeductions.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\Reports\SalaryPaymentsECS.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\Reports\SalaryPaymentsMode.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\Reports\SalaryRegister.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\AdditionalSalary.jsx : const res = await API.post('/api/resource/Additional Salary', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\BenefitApplication.jsx : const res = await API.post('/api/resource/Employee Benefit Application', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\BenefitClaim.jsx : const res = await API.post('/api/resource/Employee Benefit Claim', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\BulkSalaryStructureAssignment.jsx : await API.post('/api/resource/Salary Structure Assignment', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\EmployeeIncentive.jsx : const res = await API.post('/api/resource/Employee Incentive', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\IncomeTaxSlab.jsx : const res = await API.post('/api/resource/Income Tax Slab', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\PayrollEntry.jsx : await API.post('/api/resource/Payroll Entry', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\PayrollPeriod.jsx : const res = await API.post('/api/resource/Payroll Period', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\RetentionBonus.jsx : const res = await API.post('/api/resource/Retention Bonus', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\SalaryComponent.jsx : await API.post('/api/resource/Salary Component', { salary_component: formData.salary_component, ...payload });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\SalarySlip.jsx : const res = await API.post('/api/resource/Salary Slip', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\SalaryStructure.jsx : const res = await API.post('/api/resource/Salary Structure', createPayload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\SalaryStructureAssignment.jsx : const res = await API.post('/api/resource/Salary Structure Assignment', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\SalaryWithholding.jsx : const res = await API.post('/api/resource/Salary Withholding', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\TaxExemptionCategories.jsx : const res = await API.post('/api/resource/Employee Tax Exemption Sub Category', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\TaxExemptionDeclaration.jsx : const res = await API.post('/api/resource/Employee Tax Exemption Declaration', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ERPPayroll\TaxExemptionProof.jsx : const res = await API.post('/api/resource/Employee Tax Exemption Proof Submission', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\CheckInLocationModal.jsx : await API.post('/api/resource/Employee Checkin', checkinData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSAttendanceRegularise.jsx : await API.post('/api/resource/Attendance Request', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSChangeHomeImage.jsx : await API.post('/api/method/upload_file', formData, {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSConfirmationReview.jsx : await API.post('/api/resource/Employee Confirmation', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSExpenseClaim.jsx : await API.post('/api/resource/Expense Claim', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSGenericReport.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSHelpDesk.jsx : await API.post('/api/resource/Issue', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSInvestmentDeclaration.jsx : await API.post('/api/resource/Employee Tax Exemption Declaration', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSLeaveApplication.jsx : await API.post('/api/resource/Leave Application', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSLeaveEncashment.jsx : await API.post('/api/resource/Leave Encashment', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSOnboarding.jsx : await API.post('/api/resource/Employee Onboarding', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSOnboardingTemplate.jsx : await API.post('/api/resource/Employee Onboarding Template', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSProxyAttendance.jsx : await API.post('/api/resource/Attendance Request', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSResignationNote.jsx : await API.post('/api/resource/Employee Resignation', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSTaxReport.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSWorkOnHoliday.jsx : () => API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSWorkOnHoliday.jsx : () => API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\ESS\ESSWorkOnHoliday.jsx : await API.post('/api/resource/Compensatory Leave Request', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\holidays\HolidayNew.jsx : await api.post('/api/resource/Holiday List', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Master\Branch.jsx : const res = await API.post('/api/resource/Branch', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Master\EmployeeGrade.jsx : const res = await API.post('/api/resource/Employee Grade', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Master\HRSettings.jsx : const res = await API.post('/api/method/frappe.desk.form.load.getdoc', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Master\HRSettings.jsx : await API.post('/api/method/frappe.desk.form.save.savedocs', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Performance\Appraisal.jsx : await API.post(API_BASE, payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Performance\AppraisalCycle.jsx : await API.post(API_BASE, payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Performance\AppraisalTemplate.jsx : await API.post('/api/resource/Appraisal Template', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Performance\EmployeeFeedbackCriteria.jsx : await API.post(API_BASE, {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Performance\EmployeePerformanceFeedback.jsx : await API.post(API_BASE, payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Performance\EmployeePerformanceFeedbackByHR.jsx : await API.post(API_BASE, payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Performance\Goal.jsx : await API.post(API_BASE, payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Performance\KRA.jsx : await API.post('/api/resource/KRA', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\AppointmentLetter.jsx : const res = await API.post('/api/resource/Appointment Letter', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\AppointmentLetterTemplate.jsx : const res = await API.post('/api/resource/Appointment Letter Template', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\EmployeeReferral.jsx : const res = await API.post(API_BASE, payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\EmployeeReferral.jsx : const res = await API.post('/api/method/upload_file', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\Interview.jsx : const res = await API.post('/api/resource/Interview', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\InterviewFeedback.jsx : const res = await API.post('/api/resource/Interview Feedback', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\InterviewRound.jsx : const res = await API.post('/api/resource/Interview Round', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\InterviewType.jsx : const res = await API.post('/api/resource/Interview Type', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\JobApplicant.jsx : const res = await API.post('/api/resource/Job Applicant', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\JobApplicant.jsx : await API.post('/api/resource/Job Applicant', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\JobOffer.jsx : const res = await API.post('/api/resource/Job Offer', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\JobOpening.jsx : const res = await API.post('/api/resource/Job Opening', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\JobRequisition.jsx : const res = await API.post('/api/resource/Job Requisition', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\RecruitmentAnalytics.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\StaffingPlan.jsx : await API.post('/api/method/frappe.client.save', { doc });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Recruitment\StaffingPlan.jsx : await API.post('/api/method/frappe.client.insert', { doc });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\BlanketOrder.jsx : await API.post('/api/resource/Blanket Order', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\BlanketOrder.jsx : await API.post(ep, { doctype: 'Blanket Order', name: editingRecord });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\CouponCode.jsx : await API.post('/api/resource/Coupon Code', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\Customer.jsx : await API.post('/api/resource/Customer', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\LoyaltyPointEntry.jsx : await API.post('/api/resource/Loyalty Point Entry', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\LoyaltyProgram.jsx : await API.post('/api/resource/Loyalty Program', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\POSProfile.jsx : await API.post('/api/resource/POS Profile', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\PricingRule.jsx : await API.post('/api/resource/Pricing Rule', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\ProductBundle.jsx : await API.post('/api/resource/Product Bundle', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\PromotionalScheme.jsx : await API.post('/api/resource/Promotion Scheme', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\Quotation.jsx : await API.post('/api/resource/Quotation', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\Quotation.jsx : await API.post(endpoint, payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\SalesInvoice.jsx : else { await API.post('/api/resource/Sales Invoice', formData); notification.success({ message: 'Created.' }); }
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\SalesInvoice.jsx : await API.post(ep, { doc: { ...formData, doctype: 'Sales Invoice' } });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\SalesOrder.jsx : const res = await API.post('/api/resource/Sales Order', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\SalesOrder.jsx : await API.post(endpoint, { doc: { ...formData, doctype: 'Sales Order' } });
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\SalesOrder.jsx : const res = await API.post('/api/method/erpnext.selling.doctype.sales_order.sales_order.make_purchase_order', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\SalesPartner.jsx : await API.post('/api/resource/Sales Partner', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\SalesPerson.jsx : await API.post('/api/resource/Sales Person', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Selling\ShippingRule.jsx : await API.post('/api/resource/Shipping Rule', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\DeliveryNote.jsx : await API.post('/api/resource/Delivery Note', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\DeliveryTrip.jsx : await API.post(API_URL, formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\Item.jsx : const res = await API.post('/api/resource/Website Item', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\Item.jsx : await API.post('/api/resource/Item', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\ItemAlternative.jsx : await API.post('/api/resource/Item Alternative', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\ItemGroup.jsx : await API.post('/api/resource/Item Group', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\ItemManufacturer.jsx : await API.post('/api/resource/Item Manufacturer', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\MaterialRequest.jsx : await API.post('/api/resource/Material Request', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\PickList.jsx : await API.post(API_URL, formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\ProductBundle.jsx : await API.post('/api/resource/Product Bundle', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\PurchaseReceipt.jsx : await API.post('/api/resource/Purchase Receipt', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\ShippingRule.jsx : await API.post('/api/resource/Shipping Rule', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\StockEntry.jsx : await API.post('/api/resource/Stock Entry', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\StockSettings.jsx : const res = await API.post('/api/method/frappe.desk.form.load.getdoc', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\StockSettings.jsx : await API.post('/api/method/frappe.desk.form.save.savedocs', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Stock\WarehouseMaster.jsx : const res = await API.post('/api/resource/Warehouse', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\AttendanceReports\ShiftPunchRegister.jsx : await API.post('/api/resource/Employee Checkin', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\CaptureAttendance\ImportAttendance.jsx : await api.post('/api/resource/Attendance', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\AttendanceControl.jsx : await API.post('/api/resource/Attendance', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\AttendanceRequest.jsx : await api.post('/api/resource/Attendance Request', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\CompensatoryLeaveRequest.jsx : await api.post('/api/resource/Compensatory Leave Request', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\EmployeeLeaveBalance.jsx : const res = await API.post('/api/method/frappe.desk.query_report.run', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\EmployeeLeaveMaster.jsx : await API.post('/api/resource/Leave Allocation', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\HRViewLeavesOutdoor.jsx : await api.post('/api/resource/Leave Application', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\LeaveApplicationForm.jsx : await api.post('/api/resource/Leave Application', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\LeavePolicyConfig.jsx : await api.post('/api/resource/Leave Policy', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\ShiftMaster.jsx : await api.post('/api/resource/Shift Type', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\ShiftPlanningUpload.jsx : await api.post('/api/resource/Shift Assignment', payload);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\UploadMonthlyLeaveBalance.jsx : await API.post('/api/resource/Leave Allocation', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\UploadOpeningLeaveBalance.jsx : await API.post('/api/resource/Leave Allocation', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\UploadOpeningLeaveBalance.jsx : await API.post('/api/resource/Leave Allocation', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\UploadOpeningLeaveBalance.jsx : await API.post('/api/resource/Leave Encashment', {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\TALV\UploadResume.jsx : const { data } = await api.post('/local-api/api/resumes/bulk-upload', formData, {
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Website\WebsiteItem.jsx : await API.post('/api/resource/Website Item', formData);
+D:\preeshee Projects\HRnewUI-main\client\src\pages\Website\WebsiteItem.jsx : const response = await API.post('/api/method/upload_file', fData, {

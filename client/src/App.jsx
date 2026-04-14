@@ -63,6 +63,12 @@ import StockAgeing from './pages/Stock/StockAgeing';
 import ItemPriceStock from './pages/Stock/ItemPriceStock';
 import WarehouseWiseStock from './pages/Stock/WarehouseWiseStock';
 import StockSettings from './pages/Stock/StockSettings';
+import WarehouseMaster from './pages/Stock/WarehouseMaster';
+import UOM from './pages/Stock/UOM';
+import Brand from './pages/Stock/Brand';
+import ItemAttribute from './pages/Stock/ItemAttribute';
+import UOMConversionFactor from './pages/Stock/UOMConversionFactor';
+import ItemVariantSettings from './pages/Stock/ItemVariantSettings';
 import LoginPage from './pages/auth/LoginPage.jsx';
 import Register from './pages/auth/Register.jsx';
 import DepartmentList from './pages/departments/DepartmentList';
@@ -716,6 +722,12 @@ function App() {
                 <Route path="/stock/item-price-stock" element={<ItemPriceStock />} />
                 <Route path="/stock/warehouse-wise-stock-balance" element={<WarehouseWiseStock />} />
                 <Route path="/stock/stock-settings" element={<StockSettings />} />
+                <Route path="/stock/warehouse" element={<WarehouseMaster />} />
+                <Route path="/stock/uom" element={<UOM />} />
+                <Route path="/stock/brand" element={<Brand />} />
+                <Route path="/stock/item-attribute" element={<ItemAttribute />} />
+                <Route path="/stock/uom-conversion-factor" element={<UOMConversionFactor />} />
+                <Route path="/stock/item-variant-settings" element={<ItemVariantSettings />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />
