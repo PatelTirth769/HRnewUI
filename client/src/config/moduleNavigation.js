@@ -729,7 +729,31 @@ export const moduleNavigation = {
                     { label: 'Delivery Note', path: '/stock/delivery-note' },
                     { label: 'Purchase Receipt', path: '/stock/purchase-receipt' },
                     { label: 'Pick List', path: '/stock/pick-list' },
-                    { label: 'Delivery Trip', path: '/stock/delivery-trip' },
+                ],
+            },
+            {
+                title: 'Tools',
+                icon: 'tools',
+                items: [
+                    { label: 'Stock Reconciliation', path: '/stock/stock-reconciliation' },
+                    { label: 'Landed Cost Voucher', path: '/stock/landed-cost-voucher' },
+                    { label: 'Packing Slip', path: '/stock/packing-slip' },
+                    { label: 'Quality Inspection', path: '/stock/quality-inspection' },
+                    { label: 'Quality Inspection Template', path: '/stock/quality-inspection-template' },
+                    { label: 'Quick Stock Balance', path: '/stock/quick-stock-balance' },
+                ],
+            },
+            {
+                title: 'Key Reports',
+                icon: 'trending-up',
+                items: [
+                    { label: 'Stock Analytics', path: '/stock/report/stock-analytics' },
+                    { label: 'Delivery Note Trends', path: '/stock/report/delivery-note-trends' },
+                    { label: 'Purchase Receipt Trends', path: '/stock/report/purchase-receipt-trends' },
+                    { label: 'Sales Order Analysis', path: '/stock/report/sales-order-analysis' },
+                    { label: 'Purchase Order Analysis', path: '/stock/report/purchase-order-analysis' },
+                    { label: 'Item Shortage Report', path: '/stock/report/item-shortage-report' },
+                    { label: 'Batch-Wise Balance History', path: '/stock/report/batch-wise-balance-history' },
                 ],
             },
             {
@@ -743,6 +767,30 @@ export const moduleNavigation = {
                     { label: 'Stock Ageing', path: '/stock/stock-ageing' },
                     { label: 'Item Price Stock', path: '/stock/item-price-stock' },
                     { label: 'Warehouse Wise Stock Balance', path: '/stock/warehouse-wise-stock-balance' }
+                ],
+            },
+            {
+                title: 'Other Reports',
+                icon: 'file-text',
+                items: [
+                    { label: 'Requested Items To Be Transferred', path: '/stock/report/requested-items-transfer' },
+                    { label: 'Batch Item Expiry Status', path: '/stock/report/batch-item-expiry-status' },
+                    { label: 'Item Prices', path: '/stock/report/item-prices' },
+                    { label: 'Itemwise Recommended Reorder Level', path: '/stock/report/recommended-reorder-level' },
+                    { label: 'Item Variant Details', path: '/stock/report/item-variant-details' },
+                    { label: 'Subcontracted Raw Materials To Be Transferred', path: '/stock/report/subcontract-raw-materials-transfer' },
+                    { label: 'Subcontracted Item To Be Received', path: '/stock/report/subcontract-item-received' },
+                ],
+            },
+            {
+                title: 'Serial No and Batch',
+                icon: 'database',
+                items: [
+                    { label: 'Serial No', path: '/stock/serial-no' },
+                    { label: 'Batch', path: '/stock/batch' },
+                    { label: 'Installation Note', path: '/stock/installation-note' },
+                    { label: 'Serial No Service Contract Expiry', path: '/stock/serial-no-service-contract-expiry' },
+                    { label: 'Serial No Status', path: '/stock/serial-no-status' },
                 ],
             },
             {

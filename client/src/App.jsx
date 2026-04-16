@@ -66,9 +66,34 @@ import StockSettings from './pages/Stock/StockSettings';
 import WarehouseMaster from './pages/Stock/WarehouseMaster';
 import UOM from './pages/Stock/UOM';
 import Brand from './pages/Stock/Brand';
+import SerialNo from './pages/Stock/SerialNo';
+import Batch from './pages/Stock/Batch';
+import InstallationNote from './pages/Stock/InstallationNote';
 import ItemAttribute from './pages/Stock/ItemAttribute';
 import UOMConversionFactor from './pages/Stock/UOMConversionFactor';
 import ItemVariantSettings from './pages/Stock/ItemVariantSettings';
+import SerialNoServiceContractExpiry from './pages/Stock/SerialNoServiceContractExpiry';
+import SerialNoStatus from './pages/Stock/SerialNoStatus';
+import StockReconciliation from './pages/Stock/StockReconciliation';
+import LandedCostVoucher from './pages/Stock/LandedCostVoucher';
+import PackingSlip from './pages/Stock/PackingSlip';
+import QualityInspection from './pages/Stock/QualityInspection';
+import QualityInspectionTemplate from './pages/Stock/QualityInspectionTemplate';
+import QuickStockBalance from './pages/Stock/QuickStockBalance';
+import StockAnalytics from './pages/Stock/StockAnalytics';
+import DeliveryNoteTrends from './pages/Stock/DeliveryNoteTrends';
+import PurchaseReceiptTrends from './pages/Stock/PurchaseReceiptTrends';
+import SalesOrderAnalysis from './pages/Stock/SalesOrderAnalysis';
+import PurchaseOrderAnalysis from './pages/Stock/PurchaseOrderAnalysis';
+import ItemShortageReport from './pages/Stock/ItemShortageReport';
+import BatchWiseBalanceHistory from './pages/Stock/BatchWiseBalanceHistory';
+import RequestedItemsTransfer from './pages/Stock/RequestedItemsTransfer';
+import BatchItemExpiryStatus from './pages/Stock/BatchItemExpiryStatus';
+import ItemPrices from './pages/Stock/ItemPrices';
+import RecommendedReorderLevel from './pages/Stock/RecommendedReorderLevel';
+import ItemVariantDetails from './pages/Stock/ItemVariantDetails';
+import SubcontractRawMaterialsTransfer from './pages/Stock/SubcontractRawMaterialsTransfer';
+import SubcontractItemReceived from './pages/Stock/SubcontractItemReceived';
 import LoginPage from './pages/auth/LoginPage.jsx';
 import Register from './pages/auth/Register.jsx';
 import DepartmentList from './pages/departments/DepartmentList';
@@ -725,9 +750,34 @@ function App() {
                 <Route path="/stock/warehouse" element={<WarehouseMaster />} />
                 <Route path="/stock/uom" element={<UOM />} />
                 <Route path="/stock/brand" element={<Brand />} />
+                <Route path="/stock/serial-no" element={<SerialNo />} />
+                <Route path="/stock/batch" element={<Batch />} />
+                <Route path="/stock/installation-note" element={<InstallationNote />} />
                 <Route path="/stock/item-attribute" element={<ItemAttribute />} />
                 <Route path="/stock/uom-conversion-factor" element={<UOMConversionFactor />} />
                 <Route path="/stock/item-variant-settings" element={<ItemVariantSettings />} />
+                <Route path="/stock/serial-no-service-contract-expiry" element={<SerialNoServiceContractExpiry />} />
+                <Route path="/stock/serial-no-status" element={<SerialNoStatus />} />
+                <Route path="/stock/stock-reconciliation" element={<StockReconciliation />} />
+                <Route path="/stock/landed-cost-voucher" element={<LandedCostVoucher />} />
+                <Route path="/stock/packing-slip" element={<PackingSlip />} />
+                <Route path="/stock/quality-inspection" element={<QualityInspection />} />
+                <Route path="/stock/quality-inspection-template" element={<QualityInspectionTemplate />} />
+                <Route path="/stock/quick-stock-balance" element={<QuickStockBalance />} />
+                <Route path="/stock/report/stock-analytics" element={<StockAnalytics />} />
+                <Route path="/stock/report/delivery-note-trends" element={<DeliveryNoteTrends />} />
+                <Route path="/stock/report/purchase-receipt-trends" element={<PurchaseReceiptTrends />} />
+                <Route path="/stock/report/sales-order-analysis" element={<SalesOrderAnalysis />} />
+                <Route path="/stock/report/purchase-order-analysis" element={<PurchaseOrderAnalysis />} />
+                <Route path="/stock/report/item-shortage-report" element={<ItemShortageReport />} />
+                <Route path="/stock/report/batch-wise-balance-history" element={<BatchWiseBalanceHistory />} />
+                <Route path="/stock/report/requested-items-transfer" element={<RequestedItemsTransfer />} />
+                <Route path="/stock/report/batch-item-expiry-status" element={<BatchItemExpiryStatus />} />
+                <Route path="/stock/report/item-prices" element={<ItemPrices />} />
+                <Route path="/stock/report/recommended-reorder-level" element={<RecommendedReorderLevel />} />
+                <Route path="/stock/report/item-variant-details" element={<ItemVariantDetails />} />
+                <Route path="/stock/report/subcontract-raw-materials-transfer" element={<SubcontractRawMaterialsTransfer />} />
+                <Route path="/stock/report/subcontract-item-received" element={<SubcontractItemReceived />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />
