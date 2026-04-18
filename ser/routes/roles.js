@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../firebase');
+const { getCollection } = require('./firebaseHelper');
 
 // Utility to ensure compatibility with frontend expecting MongoDB-like _id
 const formatDoc = (doc) => ({ _id: doc.id, ...doc.data() });
@@ -8,7 +9,9 @@ const formatDoc = (doc) => ({ _id: doc.id, ...doc.data() });
 // GET all roles
 router.get('/', async (req, res) => {
     try {
-        const snapshot = await db.collection('roles').get();
+        const systemCode = req.query.system || null;
+        const rolesCol = getCollection(db, systemCode, 'roles');
+        const snapshot = await rolesCol.get();
         const roles = snapshot.docs.map(formatDoc);
         res.json({ data: roles });
     } catch (err) {
@@ -21,15 +24,17 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         const id = req.params.id;
+        const systemCode = req.query.system || null;
+        const rolesCol = getCollection(db, systemCode, 'roles');
         
         // Try by name first
-        const snapshot = await db.collection('roles').where('name', '==', id).limit(1).get();
+        const snapshot = await rolesCol.where('name', '==', id).limit(1).get();
         if (!snapshot.empty) {
             return res.json({ data: formatDoc(snapshot.docs[0]) });
         }
         
         // Try by ID directly
-        const docRef = db.collection('roles').doc(id);
+        const docRef = rolesCol.doc(id);
         const doc = await docRef.get();
         if (doc.exists) {
             return res.json({ data: formatDoc(doc) });
@@ -46,14 +51,16 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const { name } = req.body;
+        const systemCode = req.query.system || req.body.system || null;
+        const rolesCol = getCollection(db, systemCode, 'roles');
         
         // Check for uniqueness
-        const existing = await db.collection('roles').where('name', '==', name).limit(1).get();
+        const existing = await rolesCol.where('name', '==', name).limit(1).get();
         if (!existing.empty) {
             return res.status(409).json({ error: 'A role with this name already exists' });
         }
         
-        const docRef = await db.collection('roles').add(req.body);
+        const docRef = await rolesCol.add(req.body);
         const newDoc = await docRef.get();
         res.status(201).json({ data: formatDoc(newDoc) });
     } catch (err) {
@@ -66,15 +73,17 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const id = req.params.id;
+        const systemCode = req.query.system || req.body.system || null;
+        const rolesCol = getCollection(db, systemCode, 'roles');
         let docRef;
 
         // Find by name first
-        const snapshot = await db.collection('roles').where('name', '==', id).limit(1).get();
+        const snapshot = await rolesCol.where('name', '==', id).limit(1).get();
         if (!snapshot.empty) {
             docRef = snapshot.docs[0].ref;
         } else {
             // Assume ID
-            docRef = db.collection('roles').doc(id);
+            docRef = rolesCol.doc(id);
         }
 
         const doc = await docRef.get();
@@ -97,13 +106,15 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         const id = req.params.id;
+        const systemCode = req.query.system || null;
+        const rolesCol = getCollection(db, systemCode, 'roles');
         let docRef;
 
-        const snapshot = await db.collection('roles').where('name', '==', id).limit(1).get();
+        const snapshot = await rolesCol.where('name', '==', id).limit(1).get();
         if (!snapshot.empty) {
             docRef = snapshot.docs[0].ref;
         } else {
-            docRef = db.collection('roles').doc(id);
+            docRef = rolesCol.doc(id);
         }
 
         const doc = await docRef.get();

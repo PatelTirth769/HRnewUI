@@ -6,6 +6,7 @@ const fs = require('fs');
 const AdmZip = require('adm-zip');
 const ResumeParser = require('../resume-parser/src');
 const { db } = require('../firebase');
+const { getCollection } = require('./firebaseHelper');
 
 const formatDoc = (doc) => ({ _id: doc.id, ...doc.data() });
 
@@ -124,7 +125,9 @@ router.post('/bulk-upload', upload.single('zipFile'), async (req, res) => {
                     uploadedAt: new Date().toISOString()
                 };
 
-                await db.collection('resumes').add(newResume);
+                const systemCode = req.query.system || req.body.system || null;
+                const resumesCol = getCollection(db, systemCode, 'resumes');
+                await resumesCol.add(newResume);
                 successCount++;
 
             } catch (err) {
@@ -160,11 +163,12 @@ router.post('/bulk-upload', upload.single('zipFile'), async (req, res) => {
 // @route   GET /api/resumes
 router.get('/', async (req, res) => {
     try {
-        const { search, skills, page = 1, limit = 20 } = req.query;
+        const { search, skills, page = 1, limit = 20, system } = req.query;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         
-        let queryRef = db.collection('resumes');
+        const resumesCol = getCollection(db, system || null, 'resumes');
+        let queryRef = resumesCol;
         
         // Very basic Firestore 'all skills' simulation
         // Firebase doesn't support $all natively. For simple array-contains, we can at least filter by the first skill in the DB if skills array is sent.
@@ -225,7 +229,9 @@ router.get('/', async (req, res) => {
 // @route   POST /api/resumes
 router.post('/', async (req, res) => {
     try {
-        const { name, email, phone, objective, skills, experience, education, profiles } = req.body;
+        const { name, email, phone, objective, skills, experience, education, profiles, system: bodySystem } = req.body;
+        const systemCode = req.query.system || bodySystem || null;
+        const resumesCol = getCollection(db, systemCode, 'resumes');
 
         const newResume = {
             name: name || 'Manual Entry',
@@ -240,7 +246,7 @@ router.post('/', async (req, res) => {
             uploadedAt: new Date().toISOString()
         };
 
-        const docRef = await db.collection('resumes').add(newResume);
+        const docRef = await resumesCol.add(newResume);
         const doc = await docRef.get();
         
         res.status(201).json({ success: true, data: formatDoc(doc) });
@@ -253,7 +259,9 @@ router.post('/', async (req, res) => {
 // @route   GET /api/resumes/:id
 router.get('/:id', async (req, res) => {
     try {
-        const doc = await db.collection('resumes').doc(req.params.id).get();
+        const systemCode = req.query.system || null;
+        const resumesCol = getCollection(db, systemCode, 'resumes');
+        const doc = await resumesCol.doc(req.params.id).get();
         if (!doc.exists) {
             return res.status(404).json({ success: false, error: 'Resume not found' });
         }
@@ -267,7 +275,9 @@ router.get('/:id', async (req, res) => {
 // @route   PUT /api/resumes/:id
 router.put('/:id', async (req, res) => {
     try {
-        const docRef = db.collection('resumes').doc(req.params.id);
+        const systemCode = req.query.system || req.body.system || null;
+        const resumesCol = getCollection(db, systemCode, 'resumes');
+        const docRef = resumesCol.doc(req.params.id);
         const doc = await docRef.get();
         if (!doc.exists) {
             return res.status(404).json({ success: false, error: 'Resume not found' });
@@ -285,7 +295,9 @@ router.put('/:id', async (req, res) => {
 // @route   DELETE /api/resumes/:id
 router.delete('/:id', async (req, res) => {
     try {
-        const docRef = db.collection('resumes').doc(req.params.id);
+        const systemCode = req.query.system || null;
+        const resumesCol = getCollection(db, systemCode, 'resumes');
+        const docRef = resumesCol.doc(req.params.id);
         const doc = await docRef.get();
         if (!doc.exists) {
             return res.status(404).json({ success: false, error: 'Resume not found' });

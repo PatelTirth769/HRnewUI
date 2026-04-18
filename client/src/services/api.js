@@ -10,34 +10,36 @@ const API = axios.create({
 
 /**
  * Set the active system for all subsequent API calls.
- * When a system is selected, ERPNext API calls are routed through the
- * ser backend's reverse proxy: /local-api/erp-proxy/{systemCode}/api/...
- * 
- * @param {string|null} systemCode - The system code (e.g. 'preeshe'), or null to use default proxy
+ * Hardcoded to Schooler.
  */
 export function setActiveSystem(systemCode) {
-    if (systemCode) {
-        localStorage.setItem('activeSystem', systemCode);
-        // Route through the ser backend's reverse proxy
-        API.defaults.baseURL = `/local-api/erp-proxy/${systemCode}`;
-    } else {
-        localStorage.removeItem('activeSystem');
-        // Fall back to the default Vite proxy (direct to preeshe)
-        API.defaults.baseURL = '';
-    }
+    API.defaults.baseURL = `/local-api/erp-proxy/schooler`;
+    localStorage.setItem('activeSystem', 'schooler');
 }
 
 /**
  * Get the currently active system code from localStorage
  */
 export function getActiveSystem() {
-    return localStorage.getItem('activeSystem') || null;
+    return 'schooler';
 }
 
-// On module load, restore active system from localStorage
-const savedSystem = getActiveSystem();
-if (savedSystem) {
-    setActiveSystem(savedSystem);
+/**
+ * Get the query string parameter for local backend API calls.
+ */
+export function getSystemQueryParam(separator = '?') {
+    return `${separator}system=schooler`;
 }
+
+/**
+ * Get the active system code string for use in local API calls.
+ * @returns {string|null}
+ */
+export function getSystemForLocalAPI() {
+    return 'schooler';
+}
+
+// On module load
+setActiveSystem('schooler');
 
 export default API;

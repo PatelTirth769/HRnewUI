@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
-import API from '../../services/api';
+import API, { getSystemQueryParam } from '../../services/api';
+
 
 export default function JobRequisition() {
     const [view, setView] = useState('list');
@@ -141,7 +142,7 @@ export default function JobRequisition() {
         setSaving(true);
         try {
             // ── Enforce Staff Planning Check ──
-            const settingsRes = await fetch('/local-api/recruitment-settings');
+            const settingsRes = await fetch(`/local-api/recruitment-settings${getSystemQueryParam()}`);
             const settings = await settingsRes.json();
 
             if (settings.enforceStaffPlanning) {

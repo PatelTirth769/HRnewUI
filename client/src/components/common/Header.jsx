@@ -4,6 +4,8 @@ import { useUserRole } from '../../hooks/useUserRole';
 import { getBranding } from '../../config/branding';
 import { useAuth } from '../../context/auth';
 import { FiLogOut } from 'react-icons/fi';
+import { getSystemQueryParam } from '../../services/api';
+
 
 const employeeHiddenModules = new Set(['master', 'elcLetters', 'approvers']);
 
@@ -17,7 +19,7 @@ const Header = ({ onModuleClick }) => {
   const [navData, setNavData] = useState({});
 
   useEffect(() => {
-    fetch('/local-api/navigation')
+    fetch(`/local-api/navigation${getSystemQueryParam()}`)
       .then(res => res.json())
       .then(modules => {
         const map = {};

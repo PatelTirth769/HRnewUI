@@ -6,13 +6,13 @@ import { LoadingOutlined } from '@ant-design/icons';
 import api from '../../utility/api';
 import { useAuth } from '../../context/auth.jsx';
 import Config from '../../utility/Config';
-import { FaUser, FaLock, FaEye, FaEyeSlash, FaServer, FaClock } from 'react-icons/fa';
+import { FaUser, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
 import './style.css';
 import API, { setActiveSystem } from '../../services/api';
 import axios from 'axios';
+import ssvLogo from '../../assets/images/SSVLOGO.png';
 
 const { Title, Text } = Typography;
-const SCHOOLER_APP_URL = import.meta.env.VITE_SCHOOLER_APP_URL || 'http://localhost:5174';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -25,10 +25,9 @@ const LoginPage = () => {
   const [profile, setProfile] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [discoveredRole, setDiscoveredRole] = useState(null);
-  const [discoveredSystem, setDiscoveredSystem] = useState(null);
   const emailInputValue = Form.useWatch('email', form);
 
-  // Discover role as user types or on blur
+  // Discover role as user types or on blur (local role hint, purely visual)
   useEffect(() => {
     const fetchDiscoveredRole = async () => {
       const identifier = (emailInputValue || '').trim();
@@ -37,39 +36,16 @@ const LoginPage = () => {
         return;
       }
       try {
-        const identifier = (emailInputValue || '').trim();
         const res = await axios.get(`/local-api/local/users/get-role/${encodeURIComponent(identifier)}`);
         setDiscoveredRole(res.data?.role);
-        setDiscoveredSystem(res.data?.system);
       } catch (err) {
         setDiscoveredRole(null);
-        setDiscoveredSystem(null);
       }
     };
     
     const timeoutId = setTimeout(fetchDiscoveredRole, 500); // 500ms debounce
     return () => clearTimeout(timeoutId);
   }, [emailInputValue]);
-
-  // Systems state
-  const [systems, setSystems] = useState([]);
-  const [selectedSystem, setSelectedSystem] = useState(null);
-  const [loadingSystems, setLoadingSystems] = useState(true);
-
-  const emailLower = (emailInputValue || '').toLowerCase();
-  const isAdministratorLogin = emailLower.includes('administrator');
-
-  // Determine the effective system for display and login
-  let systemForDisplay = discoveredSystem || (isAdministratorLogin ? selectedSystem : null);
-  if (!isAdministratorLogin && !discoveredSystem && emailLower) {
-    if (emailLower.includes('lingayasvidyapeeth.edu.in')) {
-      systemForDisplay = 'lingayas';
-    } else if (emailLower.includes('lingayasgroup.org')) {
-      systemForDisplay = 'ecommerce';
-    } else if (emailLower.length > 5) { // Only default to preeshe if they've typed enough
-      systemForDisplay = 'preeshe';
-    }
-  }
 
   const apiAuthenticate = async () => {
     const data = {
@@ -79,7 +55,6 @@ const LoginPage = () => {
     };
     try {
       const response = await api.post(`common/apiAuth`, data);
-
       if (response.data.responseStatus === 'Ok') {
         localStorage.setItem('apiToken', response.data.token);
       }
@@ -95,54 +70,15 @@ const LoginPage = () => {
 
   useEffect(() => {
     apiAuthenticate();
-    fetchSystems();
   }, []);
 
-  // Fetch systems from backend
-  const fetchSystems = async () => {
-    setLoadingSystems(true);
-    try {
-      const res = await axios.get('/local-api/systems');
-      const systemsList = res.data || [];
-      const hiddenSystems = new Set(['celejor', 'celejio', 'bombiam', 'bombaim']);
-      const filteredSystems = systemsList.filter((system) => {
-        const code = (system?.code || '').toLowerCase();
-        const name = (system?.name || '').toLowerCase();
-        return !hiddenSystems.has(code) && !hiddenSystems.has(name);
-      });
-
-      setSystems(filteredSystems);
-      // Auto-select first active system
-      const firstActive = filteredSystems.find(s => s.status === 'active');
-      if (firstActive) {
-        setSelectedSystem(firstActive.code);
-      }
-    } catch (err) {
-      console.error('Failed to fetch systems:', err);
-      // Fallback: default to preeshe
-      setSystems([{ name: 'Preeshe', code: 'preeshe', status: 'active', order: 1 }]);
-      setSelectedSystem('preeshe');
-    } finally {
-      setLoadingSystems(false);
-    }
-  };
-
   const onFinish = async (values) => {
-    if (isAdministratorLogin && !selectedSystem) {
-      notification.warning({ message: 'Please select a system to log into' });
-      return;
-    }
-
     setLoading(true);
-
-    // Use the system detected for display as the system to log into
-    const systemToUse = systemForDisplay;
-
-    // Set active system in api.js so all calls route through the proxy
-    setActiveSystem(systemToUse);
+    // Enforce our active system configuration to schooler.
+    setActiveSystem('schooler');
 
     try {
-      // ERPNext Login Endpoint (routed through proxy)
+      // ERPNext Login Endpoint (routed through proxy to schooler)
       const response = await API.post('/api/method/login', {
         usr: values.email,
         pwd: values.password
@@ -182,21 +118,11 @@ const LoginPage = () => {
         localStorage.setItem('userToken', 'session-active');
         localStorage.setItem('userRole', mongoRole || 'Employee');
         localStorage.setItem('userIsHRAdmin', isHRAdmin ? 'true' : 'false');
-        localStorage.setItem('activeSystem', systemToUse);
+        localStorage.setItem('activeSystem', 'schooler');
+        localStorage.setItem('activeSystemName', 'Schooler');
+
         if (mongoRole) {
           localStorage.setItem('mongoRole', mongoRole);
-        }
-
-        // Find the selected system name for display
-        const sys = systems.find(s => s.code === systemToUse);
-        if (sys) {
-          localStorage.setItem('activeSystemName', sys.name);
-        }
-
-        if ((systemToUse || '').toLowerCase() === 'schooler') {
-          // Open Schooler frontend when Schooler is selected at login.
-          window.location.href = SCHOOLER_APP_URL;
-          return;
         }
 
         // Redirect based on role
@@ -254,25 +180,14 @@ const LoginPage = () => {
     }
   }, [location]);
 
-  // System card color palette
-  const systemColors = [
-    { bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', text: '#fff' },
-    { bg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', text: '#fff' },
-    { bg: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', text: '#fff' },
-    { bg: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', text: '#fff' },
-    { bg: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', text: '#fff' },
-    { bg: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)', text: '#fff' },
-  ];
-
-  const getSystemColor = (index) => systemColors[index % systemColors.length];
-
   return (
     <div className="login-page">
-      <div className="auth-container-multi">
+      <img src={ssvLogo} alt="SSV Logo" className="login-page-logo-bg" />
+      <div className="auth-container" style={{maxWidth: '480px', width: '100%', margin: '0 auto', display: 'flex', justifyContent: 'center'}}>
         {/* ─── LEFT: Login Form ─── */}
-        <div className="login-div card-glass auth-card">
+        <div className="login-div card-glass auth-card" style={{ flex: '1 1 auto', borderRight: 'none', borderRadius: '16px'}}>
           <Title level={3} className="auth-title">
-            Login to your account
+            Login to Schooler
           </Title>
 
           <Form layout="vertical" onFinish={onFinish} form={form}>
@@ -291,9 +206,9 @@ const LoginPage = () => {
                   border: '1px solid #e0e0e0',
                 }}
               />
-              {(discoveredRole || (!isAdministratorLogin && systemForDisplay)) && (
+              {discoveredRole && (
                 <div style={{ marginTop: '4px', fontSize: '12px', color: '#10b981', fontWeight: '500' }}>
-                  System: {systems.find(s => s.code === systemForDisplay)?.name || 'Detected'} {discoveredRole ? `| Role: ${discoveredRole}` : ''}
+                  Schooler User | Role: {discoveredRole}
                 </div>
               )}
             </Form.Item>
@@ -317,13 +232,11 @@ const LoginPage = () => {
               />
             </Form.Item>
             <Form.Item>
-              <Button type="primary" htmlType="submit" className="auth-btn w-100" disabled={loading || (isAdministratorLogin && !selectedSystem)}>
+              <Button type="primary" htmlType="submit" className="auth-btn w-100" disabled={loading}>
                 {loading ? (
                   <>Logging in... <Spin indicator={<LoadingOutlined spin />} /></>
                 ) : (
-                  isAdministratorLogin
-                    ? (selectedSystem ? `Login to ${systems.find(s => s.code === selectedSystem)?.name || 'System'}` : 'Select a system →')
-                    : 'Login'
+                  'Login'
                 )}
               </Button>
             </Form.Item>
@@ -338,70 +251,6 @@ const LoginPage = () => {
             </Text>
           </div>
         </div>
-
-        {/* ─── RIGHT: System Selector Panel ─── */}
-        {isAdministratorLogin && (
-          <div className="system-selector-panel card-glass">
-          <div className="system-selector-header">
-            <FaServer style={{ fontSize: '1.2rem', color: '#667eea' }} />
-            <span className="system-selector-title">Select System</span>
-          </div>
-          <p className="system-selector-subtitle">
-            Choose which system to access
-          </p>
-
-          {loadingSystems ? (
-            <div className="system-loading">
-              <Spin indicator={<LoadingOutlined spin style={{ fontSize: 24, color: '#667eea' }} />} />
-              <span>Loading systems...</span>
-            </div>
-          ) : (
-            <div className="system-cards-list">
-              {systems.map((sys, index) => {
-                const isActive = sys.status === 'active';
-                const isSelected = selectedSystem === sys.code;
-                const colorSet = getSystemColor(index);
-
-                return (
-                  <div
-                    key={sys.code}
-                    className={`system-card ${isSelected ? 'system-card-selected' : ''} ${!isActive ? 'system-card-upcoming' : ''}`}
-                    onClick={() => isActive && setSelectedSystem(sys.code)}
-                    style={{
-                      cursor: isActive ? 'pointer' : 'default',
-                      opacity: isActive ? 1 : 0.55,
-                    }}
-                  >
-                    <div className="system-card-icon" style={{ background: colorSet.bg }}>
-                      {sys.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="system-card-info">
-                      <div className="system-card-name">{sys.name}</div>
-                      {isActive ? (
-                        <span className="system-badge system-badge-active">Active</span>
-                      ) : (
-                        <span className="system-badge system-badge-upcoming">
-                          <FaClock style={{ fontSize: '0.65rem', marginRight: '3px' }} />
-                          Coming Soon
-                        </span>
-                      )}
-                    </div>
-                    {isSelected && isActive && (
-                      <div className="system-card-check">✓</div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {selectedSystem && (
-            <div className="system-selected-info">
-              Logging into: <strong>{systems.find(s => s.code === selectedSystem)?.name}</strong>
-            </div>
-          )}
-        </div>
-        )}
       </div>
     </div>
   );

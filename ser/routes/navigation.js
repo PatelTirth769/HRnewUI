@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../firebase');
+const { getCollection } = require('./firebaseHelper');
 
 const fallbackModules = [
 	{ moduleKey: 'master', title: 'Master', order: 1, adminOnly: true },
@@ -44,9 +45,11 @@ function normalizeModule(doc) {
 	};
 }
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
 	try {
-		const snapshot = await db.collection('navigation').get();
+		const systemCode = req.query.system || null;
+		const navCol = getCollection(db, systemCode, 'navigation');
+		const snapshot = await navCol.get();
 		let modules = snapshot.docs.map(normalizeModule).filter((m) => m.active);
 
 		if (modules.length === 0) {

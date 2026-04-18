@@ -8,45 +8,15 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const System = require('../models/System');
 
-const preesheUrl = process.env.PREESHE_ERP_URL || 'https://preeshe.hrhovercraft.in';
-const lingayasUrl = process.env.LINGAYAS_ERP_URL || 'https://erpdev.lingayasvidyapeeth.edu.in:8000';
-const schoolerUrl = process.env.SCHOOLER_ERP_URL || preesheUrl;
+const schoolerUrl = process.env.SCHOOLER_ERP_URL || 'https://3iinfotech.hrhovercraft.in';
 
 const systems = [
-    {
-        name: 'Preeshe',
-        code: 'preeshe',
-        erpNextUrl: preesheUrl,
-        status: 'active',
-        order: 1,
-    },
-    {
-        name: 'Celejor',
-        code: 'celejor',
-        erpNextUrl: 'https://celejor.hrhovercraft.in',
-        status: 'upcoming',
-        order: 2,
-    },
-    {
-        name: 'Bombiam',
-        code: 'bombiam',
-        erpNextUrl: 'https://bombiam.hrhovercraft.in',
-        status: 'upcoming',
-        order: 3,
-    },
-    {
-        name: 'Lingayas Vidyapeeth',
-        code: 'lingayas',
-        erpNextUrl: lingayasUrl,
-        status: 'active',
-        order: 4,
-    },
     {
         name: 'Schooler',
         code: 'schooler',
         erpNextUrl: schoolerUrl,
         status: 'active',
-        order: 5,
+        order: 1,
     },
 ];
 

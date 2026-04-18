@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { getSystemQueryParam } from '../../services/api';
 import { useUserRole } from '../../hooks/useUserRole';
 
 export default function JobOpening() {
@@ -179,7 +180,7 @@ export default function JobOpening() {
         setSaving(true);
         try {
             // ── Enforce Staff Planning Check ──
-            const settingsRes = await fetch('/local-api/recruitment-settings');
+            const settingsRes = await fetch(`/local-api/recruitment-settings${getSystemQueryParam()}`);
             const settings = await settingsRes.json();
 
             if (settings.enforceStaffPlanning) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Typography, Checkbox, Divider, Button, message, Spin } from 'antd';
+import { getSystemQueryParam } from '../../services/api';
 
 const { Title, Text } = Typography;
 
@@ -9,7 +10,7 @@ const RecruitmentSettings = () => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch('/local-api/recruitment-settings')
+    fetch(`/local-api/recruitment-settings${getSystemQueryParam()}`)
       .then(res => res.json())
       .then(data => {
         setEnforceStaffPlanning(!!data.enforceStaffPlanning);
@@ -24,7 +25,7 @@ const RecruitmentSettings = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/local-api/recruitment-settings', {
+      const res = await fetch(`/local-api/recruitment-settings${getSystemQueryParam()}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enforceStaffPlanning }),

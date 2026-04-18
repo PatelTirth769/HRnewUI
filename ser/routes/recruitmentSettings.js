@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../firebase');
+const { getCollection } = require('./firebaseHelper');
 
 // Utility to get or create settings
-async function getSettings() {
-    const docRef = db.collection('recruitmentsettings').doc('singleton');
+async function getSettings(systemCode) {
+    const settingsCol = getCollection(db, systemCode, 'recruitmentsettings');
+    const docRef = settingsCol.doc('singleton');
     const doc = await docRef.get();
     
     if (doc.exists) {
@@ -19,7 +21,8 @@ async function getSettings() {
 // GET /recruitment-settings — fetch current settings
 router.get('/', async (req, res) => {
     try {
-        const settings = await getSettings();
+        const systemCode = req.query.system || null;
+        const settings = await getSettings(systemCode);
         res.json(settings);
     } catch (err) {
         console.error('Error fetching recruitment settings:', err);
@@ -30,8 +33,10 @@ router.get('/', async (req, res) => {
 // PUT /recruitment-settings — update settings
 router.put('/', async (req, res) => {
     try {
-        const docRef = db.collection('recruitmentsettings').doc('singleton');
-        const settings = await getSettings();
+        const systemCode = req.query.system || null;
+        const settingsCol = getCollection(db, systemCode, 'recruitmentsettings');
+        const docRef = settingsCol.doc('singleton');
+        const settings = await getSettings(systemCode);
         
         let updatedSettings = { ...settings };
         if (req.body.enforceStaffPlanning !== undefined) {

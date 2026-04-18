@@ -2,30 +2,10 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 const { db } = require('../firebase');
-
-// In-memory cache for system lookups (refreshed every 5 minutes)
-let systemCache = {};
-let cacheTime = 0;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const { getCollection, isSchooler } = require('./firebaseHelper');
 
 async function getSystemUrl(code) {
-    const now = Date.now();
-    if (now - cacheTime > CACHE_TTL || !systemCache[code]) {
-        try {
-            const snapshot = await db.collection('systems').where('status', '==', 'active').get();
-            systemCache = {};
-            snapshot.forEach(doc => { 
-                const data = doc.data();
-                if (data.code && data.erpNextUrl) {
-                    systemCache[data.code] = data.erpNextUrl; 
-                }
-            });
-            cacheTime = now;
-        } catch (err) {
-            console.error('Error caching systems from Firebase:', err);
-        }
-    }
-    return systemCache[code] || null;
+    return process.env.SCHOOLER_ERP_URL || 'https://3iinfotech.hrhovercraft.in';
 }
 
 // Proxy all requests: /erp-proxy/:systemCode/...rest
@@ -88,7 +68,9 @@ router.all('/:systemCode/*', async (req, res) => {
                               if (!empData.branch) {
                                   return res.status(400).json({ message: "No branch assigned to employee. Cannot verify location." });
                               }
-                              const configDoc = await db.collection('attendance_configs').doc(encodeURIComponent(empData.branch)).get();
+                              // Use system-aware collection for attendance_configs
+                              const attendanceCol = getCollection(db, systemCode, 'attendance_configs');
+                              const configDoc = await attendanceCol.doc(encodeURIComponent(empData.branch)).get();
                               if (!configDoc.exists) {
                                    return res.status(400).json({ message: `GPS Configuration missing for branch ${empData.branch}` });
                               }
@@ -140,14 +122,17 @@ router.all('/:systemCode/*', async (req, res) => {
                     let mongoRole = null;
                     let mongoUserExists = false;
 
+                    // Use system-aware collection for users
+                    const usersCol = getCollection(db, systemCode, 'users');
+
                     // Try by email first
-                    let snapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+                    let snapshot = await usersCol.where('email', '==', email).limit(1).get();
                     if (!snapshot.empty) {
                         mongoUserExists = true;
                         mongoRole = snapshot.docs[0].data().role;
                     } else {
                         // Try by username
-                        snapshot = await db.collection('users').where('username', '==', email).limit(1).get();
+                        snapshot = await usersCol.where('username', '==', email).limit(1).get();
                         if (!snapshot.empty) {
                             mongoUserExists = true;
                             mongoRole = snapshot.docs[0].data().role;
@@ -230,9 +215,9 @@ router.all('/:systemCode/*', async (req, res) => {
                         if (mongoUserExists) {
                             if (updatedRole && updatedRole !== mongoRole) {
                                 console.log(`[Login Intercept] Role mismatch. Existing: ${mongoRole}, New: ${updatedRole}. Updating Firebase...`);
-                                const querySnapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+                                const querySnapshot = await usersCol.where('email', '==', email).limit(1).get();
                                 if (!querySnapshot.empty) {
-                                    await db.collection('users').doc(querySnapshot.docs[0].id).update({ 
+                                    await usersCol.doc(querySnapshot.docs[0].id).update({ 
                                         role: updatedRole,
                                         system: systemCode 
                                     });
@@ -248,7 +233,7 @@ router.all('/:systemCode/*', async (req, res) => {
                             // New user: if we couldn't detect a role, default to Employee
                             const roleToCreate = updatedRole || 'Employee';
                             console.log(`[Login Intercept] User NOT found in Firebase. Creating with role ${roleToCreate}...`);
-                            await db.collection('users').add({
+                            await usersCol.add({
                                 email: email,
                                 username: email,
                                 role: roleToCreate,

@@ -48,13 +48,27 @@ input::placeholder {
 
 /* Consolidated login-page style */
 .login-page {
-  background: url('../../assets/images/lingayalogin.jpeg') no-repeat center center fixed;
-  background-size: 100% 100%;
-  background-color: #f0f9ff;
+  background: radial-gradient(circle at 50% 20%, #f8fbff 0%, #eff6ff 45%, #e8f3ef 100%);
   min-height: 100vh;
   width: 100%;
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-page-logo-bg {
+  position: absolute;
+  top: 5vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(42vw, 460px);
+  max-width: 90vw;
+  opacity: 0.9;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  filter: drop-shadow(0 16px 40px rgba(0, 0, 0, 0.18));
 }
 
 /* Removed duplicate .login-page block */
@@ -78,12 +92,26 @@ input::placeholder {
   padding: 2rem 1rem;
   padding-top: 40vh;
   /* Push card down to avoid covering top text */
+  position: relative;
+  z-index: 1;
 }
 
 .auth-card {
   width: 420px;
   max-width: 92vw;
   padding: 28px 32px;
+}
+
+@media (max-width: 768px) {
+  .login-page-logo-bg {
+    top: 8vh;
+    width: min(62vw, 330px);
+    opacity: 0.85;
+  }
+
+  .auth-container {
+    padding-top: 34vh;
+  }
 }
 
 .auth-title {

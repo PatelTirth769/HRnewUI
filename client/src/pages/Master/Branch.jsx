@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import API from '../../services/api';
+import { getSystemQueryParam } from '../../services/api';
 import axios from 'axios';
 
 const InputField = ({ label, value, required = false, onChange, type = "text", disabled = false }) => (
@@ -68,7 +69,7 @@ export default function Branch() {
             if (res.data.data) {
                 let initialData = res.data.data;
                 try {
-                    const confRes = await axios.get(`/local-api/attendance-configs/${encodeURIComponent(name)}`);
+                    const confRes = await axios.get(`/local-api/attendance-configs/${encodeURIComponent(name)}${getSystemQueryParam()}`);
                     if (confRes.data.data) {
                         initialData.latitude = confRes.data.data.latitude || '';
                         initialData.longitude = confRes.data.data.longitude || '';
@@ -114,7 +115,7 @@ export default function Branch() {
             if (editingRecord) {
                 await API.put(`/api/resource/Branch/${encodeURIComponent(editingRecord.name)}`, payload);
                 const branchValue = formData.branch || formData.name;
-                await axios.post('/local-api/attendance-configs', { 
+                await axios.post(`/local-api/attendance-configs${getSystemQueryParam()}`, { 
                     branchName: branchValue, 
                     latitude: formData.latitude, 
                     longitude: formData.longitude 
@@ -123,7 +124,7 @@ export default function Branch() {
             } else {
                 const res = await API.post('/api/resource/Branch', payload);
                 const branchValue = res.data?.data?.name || res.data?.data?.branch || formData.branch || formData.name;
-                await axios.post('/local-api/attendance-configs', { 
+                await axios.post(`/local-api/attendance-configs${getSystemQueryParam()}`, { 
                     branchName: branchValue, 
                     latitude: formData.latitude, 
                     longitude: formData.longitude 
