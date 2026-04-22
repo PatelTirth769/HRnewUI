@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { notification, Spin, Tabs } from 'antd';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { notification, Spin, Tabs, Dropdown, Button } from 'antd';
+import { FiChevronDown } from 'react-icons/fi';
 import API from '../../services/api';
 
 const SalesInvoice = () => {
@@ -11,6 +13,7 @@ const SalesInvoice = () => {
     const [search, setSearch] = useState('');
     const [customers, setCustomers] = useState([]);
     const [companies, setCompanies] = useState([]);
+    const navigate = useNavigate();
 
     const init = {
         naming_series: 'ACC-SINV-.YYYY.-', posting_date: new Date().toISOString().split('T')[0],
@@ -52,11 +55,39 @@ const SalesInvoice = () => {
         items: [], taxes: [], timesheets: []
     };
 
+    const location = useLocation();
     const [formData, setFormData] = useState(init);
 
     useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('from_so') === '1') {
+            const siData = sessionStorage.getItem('si_from_so');
+            if (siData) {
+                try {
+                    const parsed = JSON.parse(siData);
+                    // Ensure naming_series and other metadata are preserved or initialized
+                    setFormData({
+                        ...init,
+                        ...parsed,
+                        docstatus: 0, // Ensure it starts as Draft
+                        status: 'Draft',
+                        items: (parsed.items || []).map(item => ({
+                            ...item,
+                            amount: (parseFloat(item.qty) || 0) * (parseFloat(item.rate) || 0)
+                        }))
+                    });
+                    sessionStorage.removeItem('si_from_so');
+                } catch (e) {
+                    console.error('Failed to parse SO data for SI:', e);
+                }
+            }
+            setView('form');
+        }
+    }, [location]);
+
+    useEffect(() => {
         if (view === 'list') fetchRecords();
-        else { fetchDD(); editingRecord ? fetchDetails(editingRecord) : setFormData(init); }
+        else { fetchDD(); editingRecord ? fetchDetails(editingRecord) : (new URLSearchParams(location.search).get('from_so') !== '1' && setFormData(init)); }
     }, [view, editingRecord]);
 
     useEffect(() => { if (view === 'form') calc(); },
@@ -108,11 +139,26 @@ const SalesInvoice = () => {
         if (!formData.customer) { notification.warning({ message: 'Customer is required.' }); return; }
         setSaving(true);
         try {
-            if (editingRecord) { await API.put(`/api/resource/Sales Invoice/${encodeURIComponent(editingRecord)}`, formData); notification.success({ message: 'Updated.' }); }
-            else { await API.post('/api/resource/Sales Invoice', formData); notification.success({ message: 'Created.' }); }
-            setView('list');
-        } catch (e) { const m = e.response?.data?._server_messages ? JSON.parse(e.response.data._server_messages)[0] : e.message; notification.error({ message: 'Save Failed', description: m }); }
-        finally { setSaving(false); }
+            if (editingRecord) { 
+                await API.put(`/api/resource/Sales Invoice/${encodeURIComponent(editingRecord)}`, formData); 
+                notification.success({ message: 'Updated.' });
+                setView('list'); 
+            } else { 
+                const res = await API.post('/api/resource/Sales Invoice', formData); 
+                const newDoc = res.data.data || res.data;
+                notification.success({ message: 'Created.' }); 
+                if (newDoc && newDoc.name) {
+                    setEditingRecord(newDoc.name);
+                    setFormData(newDoc);
+                    // Stay in form view so user can Submit
+                } else {
+                    setView('list');
+                }
+            }
+        } catch (e) { 
+            const m = e.response?.data?._server_messages ? JSON.parse(e.response.data._server_messages)[0] : e.message; 
+            notification.error({ message: 'Save Failed', description: m }); 
+        } finally { setSaving(false); }
     };
 
     const handleDocAction = async (action) => {
@@ -134,6 +180,28 @@ const SalesInvoice = () => {
     const addRow = (k, r) => setFormData(p => ({ ...p, [k]: [...(p[k] || []), r] }));
     const rmRow = (k, i) => { const a = [...(formData[k] || [])]; a.splice(i, 1); setFormData({ ...formData, [k]: a }); };
     const chRow = (k, i, f, v) => { const a = [...(formData[k] || [])]; a[i] = { ...a[i], [f]: v }; setFormData({ ...formData, [k]: a }); };
+
+    const handleCreateMenuClick = ({ key }) => {
+        if (key === 'payment') {
+            handleCreatePayment();
+        } else {
+            notification.info({ message: `"${key}" action is not implemented yet.` });
+        }
+    };
+
+    const handleCreatePayment = () => {
+        if (formData.docstatus !== 1) {
+            notification.warning({ message: 'Sales Invoice must be submitted before creating a Payment Entry.' });
+            return;
+        }
+        navigate(`/accounting/payment-entry?source_name=${editingRecord}&source_doctype=Sales Invoice`);
+    };
+
+    const createMenuItems = [
+        { key: 'payment', label: 'Payment' },
+        { key: 'payment_request', label: 'Payment Request' },
+        { key: 'delivery_note', label: 'Delivery Note' },
+    ];
 
     const empty = () => (
         <div className="flex flex-col items-center justify-center p-8 bg-white border border-t-0 rounded-b border-gray-200">
@@ -466,7 +534,14 @@ const SalesInvoice = () => {
                         <button className="px-6 py-2 bg-gray-900 text-white rounded-md text-sm font-bold hover:bg-gray-800 transition shadow-md disabled:opacity-70" onClick={handleSave} disabled={saving}>{saving?'...':'Save'}</button>
                         <button className="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition shadow-md disabled:opacity-70 ml-2" onClick={()=>handleDocAction('submit')} disabled={saving}>Submit</button>
                     </>}
-                    {editingRecord && isSub && <button className="px-6 py-2 bg-red-600 text-white rounded-md text-sm font-bold hover:bg-red-700 transition shadow-md disabled:opacity-70" onClick={()=>handleDocAction('cancel')} disabled={saving}>Cancel</button>}
+                    {editingRecord && isSub && <>
+                        <button className="px-6 py-2 bg-red-600 text-white rounded-md text-sm font-bold hover:bg-red-700 transition shadow-md disabled:opacity-70 mr-2" onClick={()=>handleDocAction('cancel')} disabled={saving}>Cancel</button>
+                        <Dropdown menu={{ items: createMenuItems, onClick: handleCreateMenuClick }} trigger={['click']}>
+                            <Button className="flex items-center gap-1 h-9 text-[13px] bg-[#1a202c] text-white border-[#1a202c] hover:!text-white hover:!border-[#1a202c] hover:!bg-[#2d3748] font-medium transition-colors">
+                                Create <FiChevronDown />
+                            </Button>
+                        </Dropdown>
+                    </>}
                 </div>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 min-h-[500px]">

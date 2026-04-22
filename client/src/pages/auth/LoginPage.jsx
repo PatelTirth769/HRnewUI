@@ -12,8 +12,6 @@ import API, { setActiveSystem } from '../../services/api';
 import axios from 'axios';
 
 const { Title, Text } = Typography;
-const SCHOOLER_APP_URL = import.meta.env.VITE_SCHOOLER_APP_URL || 'http://localhost:5174';
-
 const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -104,7 +102,7 @@ const LoginPage = () => {
     try {
       const res = await axios.get('/local-api/systems');
       const systemsList = res.data || [];
-      const hiddenSystems = new Set(['celejor', 'celejio', 'bombiam', 'bombaim']);
+      const hiddenSystems = new Set(['celejor', 'celejio', 'bombiam', 'bombaim', 'schooler']);
       const filteredSystems = systemsList.filter((system) => {
         const code = (system?.code || '').toLowerCase();
         const name = (system?.name || '').toLowerCase();
@@ -179,6 +177,9 @@ const LoginPage = () => {
         // Store basic user info 
         localStorage.setItem('isLogged', 'true');
         localStorage.setItem('user', values.email);
+        if (response.data.full_name) {
+          localStorage.setItem('userName', response.data.full_name);
+        }
         localStorage.setItem('userToken', 'session-active');
         localStorage.setItem('userRole', mongoRole || 'Employee');
         localStorage.setItem('userIsHRAdmin', isHRAdmin ? 'true' : 'false');
@@ -191,12 +192,6 @@ const LoginPage = () => {
         const sys = systems.find(s => s.code === systemToUse);
         if (sys) {
           localStorage.setItem('activeSystemName', sys.name);
-        }
-
-        if ((systemToUse || '').toLowerCase() === 'schooler') {
-          // Open Schooler frontend when Schooler is selected at login.
-          window.location.href = SCHOOLER_APP_URL;
-          return;
         }
 
         // Redirect based on role

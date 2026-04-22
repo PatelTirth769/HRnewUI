@@ -53,6 +53,7 @@ import MaterialRequest from './pages/Stock/MaterialRequest';
 import StockEntry from './pages/Stock/StockEntry';
 import DeliveryNote from './pages/Stock/DeliveryNote';
 import PurchaseReceipt from './pages/Stock/PurchaseReceipt';
+import PurchaseInvoice from './pages/Buying/PurchaseInvoice';
 import PickList from './pages/Stock/PickList';
 import DeliveryTrip from './pages/Stock/DeliveryTrip';
 import StockLedger from './pages/Stock/StockLedger';
@@ -108,6 +109,10 @@ import HolidayEdit from './pages/holidays/HolidayEdit';
 import HolidayNew from './pages/holidays/HolidayNew';
 import EntityMaster from './pages/masters/EntityMaster';
 import EntityEdit from './pages/masters/EntityEdit';
+import UserList from './pages/masters/UserList';
+import RoleList from './pages/masters/RoleList';
+import RoleProfileList from './pages/masters/RoleProfileList';
+import ModuleProfileList from './pages/masters/ModuleProfileList';
 import QualificationMaster from './pages/masters/QualificationMaster';
 import QualificationEdit from './pages/masters/QualificationEdit';
 import QualificationNew from './pages/masters/QualificationNew';
@@ -374,6 +379,10 @@ function App() {
         navigate('/selling/customer');
     } else if (moduleKey === 'buying') {
         navigate('/buying/purchase-order');
+    } else if (moduleKey === 'master') {
+        navigate('/master/departments');
+    } else if (moduleKey === 'users') {
+        navigate('/users');
     } else if (moduleKey === 'stock') {
         navigate('/stock/item');
     }
@@ -455,6 +464,10 @@ function App() {
                 <Route path="/add-event" element={<AddEvent />} />
                 <Route path="/edit-event/:id" element={<AddEvent />} />
                 <Route path="/employee-master" element={<EmployeeMaster />} />
+                <Route path="/users" element={<UserList />} />
+                <Route path="/users/roles" element={<RoleList />} />
+                <Route path="/users/role-profiles" element={<RoleProfileList />} />
+                <Route path="/users/module-profiles" element={<ModuleProfileList />} />
                 <Route path="/add-employee" element={<AddEmployee />} />
                 <Route path="/edit-employee/:id" element={<AddEmployee />} />
                 <Route path="/employee-master/report-view" element={<EmployeeReportView />} />
@@ -727,6 +740,7 @@ function App() {
                 {/* Buying */}
                 <Route path="/buying" element={<Navigate to="/buying/purchase-order" replace />} />
                 <Route path="/buying/purchase-order" element={<PurchaseOrder />} />
+                <Route path="/buying/purchase-invoice" element={<PurchaseInvoice />} />
                 <Route path="/stock/item" element={<Item />} />
                 <Route path="/stock/item-group" element={<ItemGroup />} />
                 <Route path="/stock/product-bundle" element={<ProductBundle />} />

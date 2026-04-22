@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { notification, Spin, Tabs, Dropdown, Button, Space, Popconfirm, Modal } from 'antd';
 import { FiChevronDown, FiChevronLeft, FiChevronRight, FiPrinter, FiMoreHorizontal } from 'react-icons/fi';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import API from '../../services/api';
 
 const PurchaseOrder = () => {
@@ -13,6 +13,7 @@ const PurchaseOrder = () => {
     const [editingRecord, setEditingRecord] = useState(null);
     const [search, setSearch] = useState('');
     const [confirmAction, setConfirmAction] = useState(null);
+    const navigate = useNavigate();
 
     const [suppliers, setSuppliers] = useState([]);
 
@@ -733,6 +734,26 @@ const PurchaseOrder = () => {
         { key: 'view', label: 'View' },
     ];
 
+    const handleCreateAction = async ({ key }) => {
+        if (key === 'purchase_invoice') {
+            setSaving(true);
+            try {
+                const res = await API.post('/api/method/erpnext.buying.doctype.purchase_order.purchase_order.make_purchase_invoice', {
+                    source_name: editingRecord
+                });
+                if (res.data.message) {
+                    sessionStorage.setItem('pi_from_po', JSON.stringify(res.data.message));
+                    navigate('/buying/purchase-invoice?from_po=1');
+                }
+            } catch (err) {
+                console.error(err);
+                notification.error({ message: 'Error', description: 'Failed to create Purchase Invoice' });
+            } finally { setSaving(false); }
+        } else if (key === 'payment') {
+            navigate(`/accounting/payment-entry?source_name=${editingRecord}&source_doctype=Purchase Order`);
+        }
+    };
+
     const poCreateMenuItems = [
         { key: 'purchase_receipt', label: 'Purchase Receipt' },
         { key: 'purchase_invoice', label: 'Purchase Invoice' },
@@ -816,7 +837,7 @@ const PurchaseOrder = () => {
                                 </Button>
                             </Dropdown>
 
-                            <Dropdown menu={{ items: poCreateMenuItems }} trigger={['click']}>
+                            <Dropdown menu={{ items: poCreateMenuItems, onClick: handleCreateAction }} trigger={['click']}>
                                 <Button className="flex items-center gap-1 h-8 text-[13px] bg-[#1a202c] text-white border-[#1a202c] hover:!text-white hover:!border-[#1a202c] hover:!bg-[#2d3748] font-medium transition-colors">
                                     Create <FiChevronDown />
                                 </Button>

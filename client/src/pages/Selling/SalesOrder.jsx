@@ -983,6 +983,7 @@ const SalesOrder = () => {
                                     <th className={`${thStyle} text-right`}>Quantity *</th>
                                     <th className={`${thStyle} text-right`}>Rate ({formData.currency})</th>
                                     <th className={`${thStyle} text-right`}>Amount ({formData.currency})</th>
+                                    <th className={`${thStyle} text-center`}>Drop Ship</th>
                                     <th className={`${thStyle} w-10 text-center text-gray-400 font-normal`}><FiChevronDown className="inline" /> ⚙️</th>
                                 </tr>
                             </thead>
@@ -1005,6 +1006,15 @@ const SalesOrder = () => {
                                         <td className={`${tdStyle} font-bold`}><input type="number" className={`${rowInputStyle} text-right font-bold text-gray-800`} value={row.qty || ''} onChange={e => handleRowChange('items', i, 'qty', e.target.value)} disabled={!isDraft} /></td>
                                         <td className={tdStyle}><div className="flex items-center justify-end"><span className="text-gray-400 mr-1">₹</span><input type="number" className={`${rowInputStyle} text-right w-24`} value={row.rate || ''} onChange={e => handleRowChange('items', i, 'rate', e.target.value)} disabled={!isDraft} /></div></td>
                                         <td className={`${tdStyle} text-right font-semibold text-gray-800`}>₹ {Number(row.amount || 0).toFixed(2)}</td>
+                                        <td className={`${tdStyle} text-center`}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={!!row.delivered_by_supplier} 
+                                                onChange={e => handleRowChange('items', i, 'delivered_by_supplier', e.target.checked ? 1 : 0)} 
+                                                className="w-4 h-4 text-blue-600 rounded"
+                                                disabled={!isDraft}
+                                            />
+                                        </td>
                                         <td className={`${tdStyle} text-center`}>
                                             <div className="flex items-center gap-1 justify-center">
                                                 <button onClick={() => { setEditingItemIndex(i); setIsItemModalVisible(true); }} className="p-1.5 hover:bg-gray-100 rounded text-gray-500 transition-colors" title="Edit row">✎</button>
@@ -1290,8 +1300,47 @@ const SalesOrder = () => {
         if (key === 'purchase_order') {
             setPOSelectedItems((formData.items || []).map(() => true));
             setShowPOModal(true);
+        } else if (key === 'sales_invoice') {
+            handleCreateSalesInvoice();
+        } else if (key === 'payment') {
+            handleCreatePayment();
         } else {
             notification.info({ message: `"${key}" action is not implemented yet.` });
+        }
+    };
+
+    const handleCreatePayment = () => {
+        if (formData.docstatus !== 1) {
+            notification.warning({ message: 'Sales Order must be submitted before creating a Payment Entry.' });
+            return;
+        }
+        navigate(`/accounting/payment-entry?source_name=${editingRecord}&source_doctype=Sales Order`);
+    };
+
+    const handleCreateSalesInvoice = async () => {
+        if (formData.docstatus !== 1) {
+            notification.warning({ message: 'Sales Order must be submitted before creating a Sales Invoice.' });
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const res = await API.post('/api/method/erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice', {
+                source_name: editingRecord
+            });
+            
+            const siData = res.data.message;
+            if (siData) {
+                sessionStorage.setItem('si_from_so', JSON.stringify(siData));
+                navigate('/selling/sales-invoice?from_so=1');
+            } else {
+                notification.error({ message: 'Failed to map Sales Invoice from Sales Order.' });
+            }
+        } catch (e) {
+            const m = e.response?.data?._server_messages ? JSON.parse(e.response.data._server_messages)[0] : e.message;
+            notification.error({ message: 'Mapping Failed', description: m });
+        } finally {
+            setSaving(false);
         }
     };
 

@@ -25,15 +25,6 @@ const BRANDING_BY_CODE = {
     showHeaderTitle: false,
     headerTitle: 'Dash Board',
   },
-  schooler: {
-    code: 'schooler',
-    displayName: 'Schooler',
-    headerLogo: defaultLogo,
-    sidebarLogo: defaultLogo,
-    salarySlipLogo: defaultLogo,
-    showHeaderTitle: true,
-    headerTitle: 'Schooler Dashboard',
-  },
   ecommerce: {
     code: 'ecommerce',
     displayName: 'Ecommerce',

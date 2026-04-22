@@ -700,6 +700,7 @@ export const moduleNavigation = {
                 icon: 'shopping-cart',
                 items: [
                     { label: 'Purchase Order', path: '/buying/purchase-order' },
+                    { label: 'Purchase Invoice', path: '/buying/purchase-invoice' },
                     { label: 'Purchase Receipt', path: '/stock/purchase-receipt' },
                 ],
             }
@@ -806,6 +807,28 @@ export const moduleNavigation = {
                     { label: 'Item Variant Settings', path: '/stock/item-variant-settings' },
                 ],
             }
+        ],
+    },
+    users: {
+        title: 'Users',
+        sections: [
+            {
+                title: 'User Management',
+                icon: 'user-group',
+                items: [
+                    { label: 'Users', path: '/users', adminOnly: true },
+                    { label: 'Role', path: '/users/roles', adminOnly: true },
+                    { label: 'Role Profile', path: '/users/role-profiles', adminOnly: true },
+                    { label: 'Module Profile', path: '/users/module-profiles', adminOnly: true },
+                ],
+            },
+            {
+                title: 'Settings',
+                icon: 'cog',
+                items: [
+                    { label: 'Settings', path: '/settings' },
+                ],
+            },
         ],
     },
 };

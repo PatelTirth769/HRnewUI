@@ -56,9 +56,11 @@ router.all('/:systemCode/*', async (req, res) => {
             validateStatus: () => true, // Don't throw on non-2xx responses
         };
 
-        // Remove headers that shouldn't be forwarded
+        // Remove headers that shouldn't be forwarded or can cause issues
         delete axiosConfig.headers['content-length'];
         delete axiosConfig.headers['connection'];
+        delete axiosConfig.headers['expect'];
+        delete axiosConfig.headers['host'];
 
         // Forward body for POST/PUT/PATCH
         if (['POST', 'PUT', 'PATCH'].includes(req.method.toUpperCase())) {
@@ -190,16 +192,6 @@ router.all('/:systemCode/*', async (req, res) => {
                         
                         console.log(`[Login Intercept] Final ERPNext Roles: ${erpRoles.join(', ')} | Profile: ${moduleProfile} | Role Profile: ${roleProfileName}`);
                         
-                        // Debugging snippet: log keys relating to roles/profiles just in case
-                        const roleKeys = Object.keys(userRes.data?.data || {}).filter(k => k.includes('role') || k.includes('profile'));
-                        try {
-                            require('fs').writeFileSync('debug_login_response.json', JSON.stringify({
-                                roleKeys,
-                                roleProfileName,
-                                moduleProfile,
-                                email
-                            }, null, 2));
-                        } catch(e) {}
 
                         // Determine if we got any meaningful data from ERPNext
                         const gotMeaningfulData = erpRoles.length > 0 || (moduleProfile && moduleProfile !== 'Employee' && moduleProfile !== '') || roleProfileName;

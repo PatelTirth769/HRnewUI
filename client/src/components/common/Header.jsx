@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useUserRole } from '../../hooks/useUserRole';
 import { getBranding } from '../../config/branding';
 import { useAuth } from '../../context/auth';
-import { FiLogOut } from 'react-icons/fi';
+import { FiLogOut, FiUser } from 'react-icons/fi';
 
 const employeeHiddenModules = new Set(['master', 'elcLetters', 'approvers']);
 
@@ -30,6 +30,7 @@ const Header = ({ onModuleClick }) => {
 
   const [theme, setTheme] = useState(() => localStorage.getItem('ui-theme') || 'corporate');
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const themes = ['corporate', 'minimal', 'warm'];
   const themeColors = { corporate: '#1F3C88', minimal: '#5A4FCF', warm: '#008080' };
 
@@ -61,10 +62,38 @@ const Header = ({ onModuleClick }) => {
         {/* Menu items based on active system */}
         {branding.code === 'ecommerce' ? (
           <>
+            {isAdmin && (
+              <div key="master-dropdown" className="nav-dropdown-group">
+                <div 
+                  className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors"
+                  onClick={() => onModuleClick('master')}
+                >
+                  Master
+                </div>
+                <div className="nav-dropdown-content">
+                  <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('master'); }}>
+                    Master Data
+                  </div>
+                  <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/dashboard'); onModuleClick('master'); }}>
+                    Dashboard
+                  </div>
+                  <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/approver'); onModuleClick('master'); }}>
+                    Approvers
+                  </div>
+                  <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/reports'); onModuleClick('master'); }}>
+                    Reports
+                  </div>
+                  <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/users'); onModuleClick('users'); }}>
+                    Users
+                  </div>
+                </div>
+              </div>
+            )}
             <div onClick={() => onModuleClick('selling')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Selling</div>
             <div onClick={() => onModuleClick('buying')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Buying</div>
             <div onClick={() => onModuleClick('stock')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Stock</div>
             <div onClick={() => onModuleClick('assets')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Assets</div>
+            <div onClick={() => onModuleClick('accounting')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Accounting</div>
           </>
         ) : (
           <>
@@ -126,14 +155,17 @@ const Header = ({ onModuleClick }) => {
                         <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('master'); }}>
                           Master Data
                         </div>
-                        <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/dashboard'); }}>
+                        <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/dashboard'); onModuleClick('master'); }}>
                           Dashboard
                         </div>
-                        <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/approver'); }}>
+                        <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/approver'); onModuleClick('master'); }}>
                           Approvers
                         </div>
-                        <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/reports'); }}>
+                        <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/reports'); onModuleClick('master'); }}>
                           Reports
+                        </div>
+                        <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/users'); onModuleClick('users'); }}>
+                          Users
                         </div>
                       </div>
                     </div>
@@ -158,6 +190,7 @@ const Header = ({ onModuleClick }) => {
             {isAdmin && <div onClick={() => onModuleClick('selling')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Selling</div>}
             {isAdmin && <div onClick={() => onModuleClick('buying')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Buying</div>}
             {isAdmin && <div onClick={() => onModuleClick('stock')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Stock</div>}
+            {isAdmin && <div onClick={() => onModuleClick('accounting')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Accounting</div>}
             <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate">Self Service</Link>
             {!isAdmin && isInventory && (
               <div onClick={() => onModuleClick('assets')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Assets</div>
@@ -198,11 +231,40 @@ const Header = ({ onModuleClick }) => {
         </div>
 
         <div 
-          className="cursor-pointer hover:text-red-600 transition-colors flex items-center justify-center p-1" 
-          onClick={handleLogout} 
-          title="Log Out"
+          className="relative cursor-pointer"
+          onMouseEnter={() => setProfileMenuOpen(true)}
+          onMouseLeave={() => setProfileMenuOpen(false)}
         >
-          <FiLogOut size={18} />
+          <div 
+            className="hover:text-blue-600 transition-colors flex items-center justify-center p-1" 
+            title="Profile"
+            onClick={() => setProfileMenuOpen(v => !v)}
+          >
+            <FiUser size={18} />
+          </div>
+          
+          <div className={`absolute right-0 pt-2 top-full w-48 z-50 transition-all duration-200 ${profileMenuOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+            <div className="bg-white border rounded-md shadow-lg p-3">
+              <div className="text-sm font-semibold text-gray-800 break-all mb-1">
+                {localStorage.getItem('userName') || localStorage.getItem('user')}
+              </div>
+              <div className="text-xs text-gray-500 mb-3 pb-2 border-b font-medium uppercase tracking-wider">
+                {localStorage.getItem('mongoRole') || localStorage.getItem('userRole') || 'Employee'}
+              </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm('Are you sure you want to logout?')) {
+                    handleLogout();
+                  }
+                }}
+                className="flex items-center gap-2 text-sm text-red-600 hover:text-red-800 transition-colors w-full text-left"
+              >
+                <FiLogOut size={16} />
+                <span>Log Out</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div >
     </header >
