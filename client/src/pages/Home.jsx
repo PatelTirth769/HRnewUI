@@ -18,10 +18,10 @@ const Home = () => {
       <div className="max-w-6xl mx-auto px-6">
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold text-gray-800 mb-4">
-            Welcome to HR Management System
+            Welcome to SSV Management System
           </h1>
           <p className="text-xl text-gray-600 mb-8">
-            Streamline your HR processes with our comprehensive solution
+            Streamline your processes with our comprehensive solution
           </p>
         </div>
 

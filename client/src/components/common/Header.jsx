@@ -91,7 +91,7 @@ const Header = ({ onModuleClick }) => {
                           className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors"
                           onClick={() => onModuleClick('hr')}
                         >
-                          HR
+                          Management
                         </div>
                         <div className="nav-dropdown-content">
                           {subModules.map(sub => (
@@ -160,6 +160,20 @@ const Header = ({ onModuleClick }) => {
             {isAdmin && <div onClick={() => onModuleClick('selling')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Selling</div>}
             {isAdmin && <div onClick={() => onModuleClick('buying')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Buying</div>}
             {isAdmin && <div onClick={() => onModuleClick('stock')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Stock</div>}
+            
+            {isAdmin && (
+              <div key="more-dropdown" className="nav-dropdown-group">
+                <div className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors">
+                  More
+                </div>
+                <div className="nav-dropdown-content">
+                  <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('transport'); }}>
+                    Transport Management
+                  </div>
+                </div>
+              </div>
+            )}
+
             <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate">Self Service</Link>
             {!isAdmin && isInventory && (
               <div onClick={() => onModuleClick('assets')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Assets</div>

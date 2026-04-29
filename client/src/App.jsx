@@ -7,9 +7,21 @@ import Sidebar from './components/common/Sidebar';
 import Dashboard from './pages/Dashboard';
 import EmployeeSelfService from './pages/ESS/EmployeeSelfService';
 import Approver from './pages/ESS/Approver';
+import LoginPage from './pages/auth/LoginPage';
+import Register from './pages/auth/Register';
 
-import EmployeeMIS from './pages/EmployeeMIS';
 import CompanyMaster from './components/company/CompanyMaster';
+import EmployeeMIS from './pages/EmployeeMIS';
+import TransportConfiguration from './pages/Transport/Settings/TransportConfiguration';
+import SetPunchTiming from './pages/Transport/Transaction/SetPunchTiming';
+import TransportRange from './pages/Transport/Master/TransportRange';
+import TransportCarryForward from './pages/Transport/Transaction/TransportCarryForward';
+import NewTransportReport from './pages/Transport/Reports/NewTransportReport';
+import RouteExcelImport from './pages/Transport/Transaction/RouteExcelImport';
+import StudentTransportAllocation from './pages/Transport/Transaction/StudentTransportAllocation';
+import StudentPunchDetail from './pages/Transport/Reports/StudentPunchDetail';
+import TransportSMS from './pages/Transport/Transaction/TransportSMS';
+import TransportFeeImport from './pages/Transport/Transaction/TransportFeeImport';
 import Home from './pages/Home';
 import About from './pages/About';
 import Contact from './pages/Contact';
@@ -94,8 +106,6 @@ import RecommendedReorderLevel from './pages/Stock/RecommendedReorderLevel';
 import ItemVariantDetails from './pages/Stock/ItemVariantDetails';
 import SubcontractRawMaterialsTransfer from './pages/Stock/SubcontractRawMaterialsTransfer';
 import SubcontractItemReceived from './pages/Stock/SubcontractItemReceived';
-import LoginPage from './pages/auth/LoginPage.jsx';
-import Register from './pages/auth/Register.jsx';
 import DepartmentList from './pages/departments/DepartmentList';
 import DepartmentDetail from './pages/departments/DepartmentDetail';
 import DepartmentEdit from './pages/departments/DepartmentEdit';
@@ -138,6 +148,11 @@ import Miscellaneous from './pages/Needs/Miscellaneous';
 import ManpowerBudget from './pages/Needs/ManpowerBudget';
 import TalentRegister from './pages/Needs/TalentRegister';
 import ManageCV from './pages/Needs/ManageCV';
+
+// Transport 
+import AddVehicle from './pages/Transport/Master/AddVehicle';
+import AddBusStop from './pages/Transport/Master/AddBusStop';
+import AddBusRoutes from './pages/Transport/Master/AddBusRoutes';
 import SearchCV from './pages/Needs/SearchCV';
 import TRTracker from './pages/Needs/TRTracker';
 import UploadCandidateMaster from './pages/Needs/UploadCandidateMaster';
@@ -376,6 +391,8 @@ function App() {
         navigate('/buying/purchase-order');
     } else if (moduleKey === 'stock') {
         navigate('/stock/item');
+    } else if (moduleKey === 'transport') {
+        navigate('/transport/dashboard');
     }
   };
 
@@ -778,6 +795,22 @@ function App() {
                 <Route path="/stock/report/item-variant-details" element={<ItemVariantDetails />} />
                 <Route path="/stock/report/subcontract-raw-materials-transfer" element={<SubcontractRawMaterialsTransfer />} />
                 <Route path="/stock/report/subcontract-item-received" element={<SubcontractItemReceived />} />
+                
+                {/* Transport Routes */}
+                <Route path="/transport/dashboard" element={<div className="p-8"><h1 className="text-2xl font-bold">Transport Dashboard</h1><p className="mt-4 text-gray-500">Integration with Firebase for content coming soon...</p></div>} />
+                <Route path="/transport/settings/config" element={<TransportConfiguration />} />
+                <Route path="/transport/master/add-vehicle" element={<AddVehicle />} />
+                <Route path="/transport/master/add-bus-stop" element={<AddBusStop />} />
+                <Route path="/transport/master/add-bus-routes" element={<AddBusRoutes />} />
+                <Route path="/transport/master/range" element={<TransportRange />} />
+                <Route path="/transport/transaction/student-allocation" element={<StudentTransportAllocation />} />
+                <Route path="/transport/transaction/route-excel-import" element={<RouteExcelImport />} />
+                <Route path="/transport/transaction/punch-timing" element={<SetPunchTiming />} />
+                <Route path="/transport/transaction/transport-sms" element={<TransportSMS />} />
+                <Route path="/transport/transaction/carry-forward" element={<TransportCarryForward />} />
+                <Route path="/transport/transaction/fee-import" element={<TransportFeeImport />} />
+                <Route path="/transport/reports/student-punch-detail" element={<StudentPunchDetail />} />
+                <Route path="/transport/reports/new-transport-report" element={<NewTransportReport />} />
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />

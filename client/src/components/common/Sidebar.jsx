@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { moduleNavigation } from '../../config/moduleNavigation';
 import { useUserRole } from '../../hooks/useUserRole';
 import { getBranding } from '../../config/branding';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 const Icon = ({ name, className }) => {
     const icons = {
@@ -124,20 +126,152 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
     const { isAdmin } = useUserRole();
     const branding = getBranding();
     const [expandedSections, setExpandedSections] = useState({});
+    const [firebaseConfig, setFirebaseConfig] = useState(null);
+    const [loadingFirebase, setLoadingFirebase] = useState(false);
 
     useEffect(() => {
-        if (activeModule && moduleNavigation[activeModule]) {
+        if (activeModule === 'transport') {
+            setLoadingFirebase(true);
+            const fetchFirebaseSections = async () => {
+                try {
+                    const sectionsRef = collection(db, "schooler_system", "transport_management", "sidebar_sections");
+                    const snapshot = await getDocs(sectionsRef);
+                    const sectionsData = [];
+                    snapshot.forEach((doc) => {
+                        sectionsData.push({ id: doc.id, ...doc.data() });
+                    });
+                    
+                    // Sort strictly by order field
+                    sectionsData.sort((a, b) => (a.order || 0) - (b.order || 0));
+                    
+                    // NEW: Ensure our newly added local items exist even if Firebase is used
+                    const ensureItems = (sectionTitle, newItems) => {
+                        const section = sectionsData.find(s => s.title.toLowerCase() === sectionTitle.toLowerCase());
+                        if (section) {
+                            if (!section.items) section.items = [];
+                            newItems.forEach(newItem => {
+                                if (!section.items.find(item => item.path === newItem.path)) {
+                                    section.items.push(newItem);
+                                }
+                            });
+                        }
+                    };
+
+                    if (sectionsData.length > 0) {
+                        ensureItems('Settings', [
+                            { label: 'General Settings', path: '/transport/settings' },
+                            { label: 'School Transport Configuration', path: '/transport/settings/config' }
+                        ]);
+                        ensureItems('Master', [
+                            { label: 'Add Bus Routes', path: '/transport/master/add-bus-routes' },
+                            { label: 'Driver Master', path: '/transport/master/driver' },
+                            { label: 'Route Master', path: '/transport/master/route' },
+                            { label: 'Transport Range', path: '/transport/master/range' }
+                        ]);
+                        ensureItems('Transaction', [
+                            { label: 'Transport Fee Import', path: '/transport/transaction/fee-import' },
+                            { label: 'Student Transport Allocation', path: '/transport/transaction/student-allocation' },
+                            { label: 'Set Punch Timing', path: '/transport/transaction/punch-timing' },
+                            { label: 'Transport SMS', path: '/transport/transaction/transport-sms' },
+                            { label: 'Allocate Route Excel', path: '/transport/transaction/route-excel-import' },
+                            { label: 'Transport Carry Forward', path: '/transport/transaction/carry-forward' }
+                        ]);
+                        ensureItems('Reports', [
+                            { label: 'Student Punch Detail', path: '/transport/reports/student-punch-detail' },
+                            { label: 'New Transport Report', path: '/transport/reports/new-transport-report' }
+                        ]);
+                    }
+
+                    // Fallback to dummy data if Firebase has 0 configurations set up yet
+                    if (sectionsData.length === 0) {
+                        sectionsData.push(
+                            { title: 'Settings', icon: 'cog', order: 1, items: [{ label: 'General Settings', path: '/transport/settings' }, { label: 'School Transport Configuration', path: '/transport/settings/config' }] },
+                            { title: 'Master', icon: 'database', order: 2, items: [{ label: 'Add Vehicle', path: '/transport/master/add-vehicle' }, { label: 'Add Bus Stop', path: '/transport/master/add-bus-stop' }, { label: 'Add Bus Routes', path: '/transport/master/add-bus-routes' }, { label: 'Driver Master', path: '/transport/master/driver' }, { label: 'Route Master', path: '/transport/master/route' }, { label: 'Transport Range', path: '/transport/master/range' }] },
+                            { title: 'Transaction', icon: 'switch-horizontal', order: 3, items: [
+                                { label: 'Transport Fee Import', path: '/transport/transaction/fee-import' },
+                                { label: 'Trip Allocation', path: '/transport/transaction/allocated' },
+                                { label: 'Student Transport Allocation', path: '/transport/transaction/student-allocation' },
+                                { label: 'Set Punch Timing', path: '/transport/transaction/punch-timing' },
+                                { label: 'Transport SMS', path: '/transport/transaction/transport-sms' },
+                                { label: 'Allocate Route Excel', path: '/transport/transaction/route-excel-import' },
+                                { label: 'Transport Carry Forward', path: '/transport/transaction/carry-forward' }
+                            ] },
+                            { title: 'Finance', icon: 'currency-dollar', order: 4, items: [{ label: 'Fee Collection', path: '/transport/finance/fees' }] },
+                            { title: 'Integration', icon: 'link', order: 5, items: [{ label: 'GPS Tracking', path: '/transport/integration/gps' }] },
+                            { title: 'Reports', icon: 'chart-bar', order: 6, items: [
+                                { label: 'Trip Reports', path: '/transport/reports/trip' },
+                                { label: 'Student Punch Detail', path: '/transport/reports/student-punch-detail' },
+                                { label: 'New Transport Report', path: '/transport/reports/new-transport-report' }
+                            ] }
+                        );
+                    }
+                    
+                    const newConfig = {
+                        title: 'Transport Management',
+                        sections: sectionsData
+                    };
+                    
+                    console.log('Sidebar: Final Transport config:', newConfig);
+                    setFirebaseConfig(newConfig);
+                    
+                    const initialExpanded = {};
+                    newConfig.sections.forEach(section => {
+                        initialExpanded[section.title] = true;
+                    });
+                    setExpandedSections(initialExpanded);
+                } catch (error) {
+                    console.error("Error fetching firebase sidebar:", error);
+                    // Provide fallback empty state if firebase fails (or config missing)
+                    setFirebaseConfig({
+                        title: 'Transport Management',
+                        sections: [
+                            { title: 'Settings', icon: 'cog', items: [] },
+                            { title: 'Master', icon: 'database', items: [] },
+                            { title: 'Transaction', icon: 'switch-horizontal', items: [] },
+                            { title: 'Finance', icon: 'currency-dollar', items: [] },
+                            { title: 'Integration', icon: 'link', items: [] },
+                            { title: 'Reports', icon: 'chart-bar', items: [] }
+                        ]
+                    });
+                } finally {
+                    setLoadingFirebase(false);
+                }
+            };
+            fetchFirebaseSections();
+        } else if (activeModule && moduleNavigation[activeModule]) {
             const initialExpanded = {};
             moduleNavigation[activeModule].sections.forEach(section => {
                 initialExpanded[section.title] = true;
             });
             setExpandedSections(initialExpanded);
+            setFirebaseConfig(null);
         }
     }, [activeModule]);
 
-    if (!isOpen || !activeModule || !moduleNavigation[activeModule]) return null;
+    if (!isOpen || !activeModule) return null;
+    if (activeModule !== 'transport' && !moduleNavigation[activeModule]) return null;
 
-    const config = moduleNavigation[activeModule];
+    const config = activeModule === 'transport' ? firebaseConfig : moduleNavigation[activeModule];
+
+    // If loading firebase data dynamically
+    if (activeModule === 'transport' && loadingFirebase && !config) {
+        return (
+            <>
+                <div className={`fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[45] transition-opacity duration-300 opacity-100`} onClick={onClose} />
+                <div className={`fixed inset-y-0 left-0 w-72 bg-white z-[50] flex items-center justify-center shadow-2xl transition-transform translate-x-0`}>
+                    <div className="flex flex-col items-center">
+                        <svg className="animate-spin h-8 w-8 text-blue-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span className="text-gray-500 font-medium font-sm">Loading modules...</span>
+                    </div>
+                </div>
+            </>
+        );
+    }
+    
+    if (!config) return null;
 
     const toggleSection = (title) => {
         setExpandedSections(prev => ({
@@ -175,12 +309,21 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     <div className="p-4 space-y-4">
-                        {config.sections.map((section) => {
+                        {config.sections && config.sections.length === 0 && (
+                            <div className="flex flex-col items-center justify-center pt-8 px-4 text-center">
+                                <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 mb-3">
+                                    <Icon name="database" className="w-6 h-6" />
+                                </div>
+                                <h3 className="text-sm font-bold text-gray-700">No Configured Sections</h3>
+                                <p className="text-xs text-gray-500 mt-1">Add data to Firebase to see modules here.</p>
+                            </div>
+                        )}
+                        {config.sections && config.sections.map((section) => {
                             // Filter items based on admin status
-                            const filteredItems = section.items.filter(item => !item.adminOnly || isAdmin);
+                            const filteredItems = (section.items || []).filter(item => !item.adminOnly || isAdmin);
 
-                            // If no items left after filtering, don't show the section
-                            if (filteredItems.length === 0) return null;
+                            // If no items left after filtering, and this is NOT a dynamic module (or it's Firebase and explicitly empty)
+                            if (filteredItems.length === 0 && activeModule !== 'transport') return null;
 
                             return (
                                 <div key={section.title} className="bg-white rounded-xl overflow-hidden border border-gray-50 shadow-sm">
@@ -206,12 +349,18 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                                     <div className={`transition-all duration-300 ease-in-out ${expandedSections[section.title] ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
                                         } overflow-hidden`}>
                                         <div className="py-1 bg-gray-50/30">
+                                            {filteredItems.length === 0 && (
+                                                <div className="text-xs italic text-gray-400 px-8 py-3 opacity-70">
+                                                    (Empty)
+                                                </div>
+                                            )}
                                             {filteredItems.map((item) => {
                                                 const isActive = location.pathname === item.path;
                                                 return (
                                                     <div
                                                         key={item.label}
                                                         onClick={() => {
+                                                            console.log('Sidebar: Navigating to', item.path);
                                                             navigate(item.path);
                                                             onClose();
                                                         }}

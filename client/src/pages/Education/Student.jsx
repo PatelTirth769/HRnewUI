@@ -13,6 +13,7 @@ const emptyForm = () => ({
     middle_name: '',
     joining_date: new Date().toISOString().slice(0, 10),
     last_name: '',
+    program: '',
     user: '',
     student_email_id: '',
     student_mobile_number: '',
@@ -47,6 +48,7 @@ const Student = () => {
     const [students, setStudents] = useState([]);
     const [loadingList, setLoadingList] = useState(true);
     const [search, setSearch] = useState('');
+    const [selectedProgram, setSelectedProgram] = useState('');
 
     // Form states
     const [activeTab, setActiveTab] = useState('Details');
@@ -63,6 +65,7 @@ const Student = () => {
     useEffect(() => {
         if (view === 'list') {
             fetchStudents();
+            fetchDropdownData(); // For filter dropdown
         } else {
             setActiveTab('Details');
             fetchDropdownData();
@@ -77,7 +80,7 @@ const Student = () => {
     const fetchStudents = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Student?fields=["name","first_name","middle_name","last_name","student_email_id","student_mobile_number","joining_date","enabled","gender"]&limit_page_length=None&order_by=modified desc';
+            const url = '/api/resource/Student?fields=["name","first_name","middle_name","last_name","student_email_id","student_mobile_number","joining_date","enabled","gender","program"]&limit_page_length=None&order_by=modified desc';
             const response = await API.get(url);
             setStudents(response.data.data || []);
         } catch (err) {
@@ -131,6 +134,7 @@ const Student = () => {
                 country: d.country || 'India',
                 guardians: d.guardians || [],
                 siblings: d.siblings || [],
+                program: d.program || '',
                 customer_group: d.customer_group || '',
                 date_of_leaving: d.date_of_leaving || '',
                 reason_for_leaving: d.reason_for_leaving || '',
@@ -232,14 +236,14 @@ const Student = () => {
 
     if (view === 'list') {
         const filtered = students.filter(s => {
-            if (!search) return true;
-            const q = search.toLowerCase();
-            return (
-                (s.name || '').toLowerCase().includes(q) ||
-                (s.first_name || '').toLowerCase().includes(q) ||
-                (s.last_name || '').toLowerCase().includes(q) ||
-                (s.student_email_id || '').toLowerCase().includes(q)
+            const matchesSearch = !search || (
+                (s.name || '').toLowerCase().includes(search.toLowerCase()) ||
+                (s.first_name || '').toLowerCase().includes(search.toLowerCase()) ||
+                (s.last_name || '').toLowerCase().includes(search.toLowerCase()) ||
+                (s.student_email_id || '').toLowerCase().includes(search.toLowerCase())
             );
+            const matchesProgram = !selectedProgram || s.program === selectedProgram;
+            return matchesSearch && matchesProgram;
         });
 
         return (
@@ -258,8 +262,16 @@ const Student = () => {
 
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
                     <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-80" placeholder="Search ID, Name or Email..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                    {search && (
-                        <button className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1" onClick={() => setSearch('')}>
+                    <select 
+                        className="border border-gray-300 rounded px-3 py-2 text-sm w-60" 
+                        value={selectedProgram} 
+                        onChange={(e) => setSelectedProgram(e.target.value)}
+                    >
+                        <option value="">Filter by Program...</option>
+                        {programs.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    {(search || selectedProgram) && (
+                        <button className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1" onClick={() => { setSearch(''); setSelectedProgram(''); }}>
                             ✕ Clear Filters
                         </button>
                     )}
@@ -412,6 +424,13 @@ const Student = () => {
                                 <input className={inputStyle} value={form.last_name} onChange={e => updateField('last_name', e.target.value)} placeholder="Last Name" />
                             </div>
                             <div>
+                                <label className={labelStyle}>Program</label>
+                                <select className={inputStyle} value={form.program} onChange={e => updateField('program', e.target.value)}>
+                                    <option value="">Select Program...</option>
+                                    {programs.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            </div>
+                            <div>
                                 <label className={labelStyle}>User ID (Optional)</label>
                                 <input className={inputStyle} value={form.user} onChange={e => updateField('user', e.target.value)} placeholder="ERPNext User ID" />
                             </div>
@@ -515,7 +534,7 @@ const Student = () => {
                                                     <td className="px-3 py-2.5">
                                                         <select className="w-full border border-blue-200 rounded px-2 py-1.5 text-sm bg-blue-50/20 shadow-sm focus:outline-none font-medium" value={g.guardian} onChange={e => updateGuardian(idx, 'guardian', e.target.value)}>
                                                             <option value="">Link Guardian...</option>
-                                                            {guardiansList.map(gl => <option key={gl.name} value={gl.name}>{gl.name}</option>)}
+                                                            {guardiansList.map(gl => <option key={gl.name} value={gl.name}>{gl.name} ({gl.guardian_name})</option>)}
                                                         </select>
                                                     </td>
                                                     <td className="px-3 py-2.5">
