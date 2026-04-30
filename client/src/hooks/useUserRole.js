@@ -17,11 +17,17 @@ export function useUserRole() {
     const isAdmin = isHRAdmin || isAdminUser;
     const isInventory = userRole === 'Inventory';
     const isAccounts = userRole === 'Accounts';
+    const isStudent = userRole === 'Student';
+    const isInstructor = userRole === 'Instructor';
+    const isGuardian = userRole === 'Guardian';
 
     return {
         isAdmin,
-        isEmployee: !isAdmin && !isInventory && !isAccounts,
+        isEmployee: !isAdmin && !isInventory && !isAccounts && !isStudent && !isInstructor && !isGuardian,
         isInventory,
         isAccounts,
+        isStudent,
+        isInstructor,
+        isGuardian,
     };
 }

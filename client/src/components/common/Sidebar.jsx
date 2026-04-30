@@ -123,7 +123,7 @@ const Icon = ({ name, className }) => {
 const Sidebar = ({ isOpen, onClose, activeModule }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { isAdmin } = useUserRole();
+    const { isAdmin, isStudent, isInstructor, isGuardian } = useUserRole();
     const branding = getBranding();
     const [expandedSections, setExpandedSections] = useState({});
     const [firebaseConfig, setFirebaseConfig] = useState(null);
@@ -319,8 +319,20 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                             </div>
                         )}
                         {config.sections && config.sections.map((section) => {
-                            // Filter items based on admin status
-                            const filteredItems = (section.items || []).filter(item => !item.adminOnly || isAdmin);
+                            // Filter items based on admin/student/instructor status
+                            const filteredItems = (section.items || []).filter(item => {
+                                if (isAdmin) return !item.hideFromAdmin;
+                                if (isStudent) return item.studentAccess === true;
+                                if (isGuardian) return item.guardianAccess === true;
+                                // Instructors get full access to everything in Education module, 
+                                // but we only show the relevant dashboard in the Overview section.
+                                if (isInstructor && activeModule === 'education') {
+                                    if (section.title === 'Overview') return item.instructorAccess === true;
+                                    return true;
+                                }
+                                if (isInstructor) return item.instructorAccess === true;
+                                return !item.adminOnly;
+                            });
 
                             // If no items left after filtering, and this is NOT a dynamic module (or it's Firebase and explicitly empty)
                             if (filteredItems.length === 0 && activeModule !== 'transport') return null;

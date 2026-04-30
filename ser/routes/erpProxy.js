@@ -206,6 +206,12 @@ router.all('/:systemCode/*', async (req, res) => {
                             updatedRole = 'Inventory';
                         } else if (erpRoles.includes('Accounts User') || erpRoles.includes('Accounts Manager') || erpRoles.includes('Accounts') || moduleProfile === 'Accounts') {
                             updatedRole = 'Accounts';
+                        } else if (erpRoles.includes('Student') || moduleProfile === 'Student') {
+                            updatedRole = 'Student';
+                        } else if (erpRoles.includes('Instructor') || moduleProfile === 'Instructor' || erpRoles.includes('Academic User')) {
+                            updatedRole = 'Instructor';
+                        } else if (erpRoles.includes('Guardian') || moduleProfile === 'Guardian') {
+                            updatedRole = 'Guardian';
                         } else if (gotMeaningfulData) {
                             // Only default to Employee if we actually got real data from ERPNext
                             updatedRole = 'Employee';

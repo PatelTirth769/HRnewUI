@@ -128,6 +128,12 @@ const LoginPage = () => {
         // Redirect based on role
         if (isHRAdmin) {
           navigate('/home');
+        } else if (mongoRole === 'Student') {
+          navigate('/student-dashboard');
+        } else if (mongoRole === 'Instructor') {
+          navigate('/instructor-dashboard');
+        } else if (mongoRole === 'Guardian') {
+          navigate('/guardian-dashboard');
         } else {
           navigate('/employee-self-service');
         }

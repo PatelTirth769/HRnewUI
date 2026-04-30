@@ -455,12 +455,21 @@ export const moduleNavigation = {
         title: 'Education',
         sections: [
             {
+                title: 'Overview',
+                icon: 'chart-bar',
+                items: [
+                    { label: 'Student Dashboard', path: '/student-dashboard', studentAccess: true, hideFromAdmin: true },
+                    { label: 'Instructor Dashboard', path: '/instructor-dashboard', instructorAccess: true, hideFromAdmin: true },
+                    { label: 'Guardian Dashboard', path: '/guardian-dashboard', guardianAccess: true, hideFromAdmin: true },
+                ],
+            },
+            {
                 title: 'Master',
                 icon: 'database',
                 items: [
-                    { label: 'Program', path: '/education/program' },
-                    { label: 'Course', path: '/education/course' },
-                    { label: 'Topic', path: '/education/topic' },
+                    { label: 'Program', path: '/education/program', studentAccess: true, instructorAccess: true, guardianAccess: true },
+                    { label: 'Course', path: '/education/course', instructorAccess: true },
+                    { label: 'Topic', path: '/education/topic', instructorAccess: true },
                     { label: 'Room', path: '/education/room' },
                 ],
             },
@@ -468,20 +477,20 @@ export const moduleNavigation = {
                 title: 'CONTENT MASTER',
                 icon: 'file-text',
                 items: [
-                    { label: 'Article', path: '/education/article' },
-                    { label: 'Video', path: '/education/video' },
-                    { label: 'Quiz', path: '/education/quiz' },
+                    { label: 'Article', path: '/education/article', instructorAccess: true },
+                    { label: 'Video', path: '/education/video', studentAccess: true, instructorAccess: true, guardianAccess: true },
+                    { label: 'Quiz', path: '/education/quiz', studentAccess: true, instructorAccess: true, guardianAccess: true },
                 ],
             },
             {
                 title: 'Student and Instructor',
                 icon: 'user-group',
                 items: [
-                    { label: 'Student', path: '/education/student' },
+                    { label: 'Student', path: '/education/student', studentAccess: true, instructorAccess: true, guardianAccess: true },
                     { label: 'Student Group', path: '/education/student-group' },
                     { label: 'Student Log', path: '/education/student-log' },
                     { label: 'Instructor', path: '/education/instructor' },
-                    { label: 'Guardian', path: '/education/guardian' },
+                    { label: 'Guardian', path: '/education/guardian', studentAccess: true, guardianAccess: true },
                 ],
             },
             {
@@ -490,7 +499,7 @@ export const moduleNavigation = {
                 items: [
                     { label: 'Student Admission', path: '/education/student-admission' },
                     { label: 'Student Applicant', path: '/education/student-applicant' },
-                    { label: 'Program Enrollment', path: '/education/program-enrollment' },
+                    { label: 'Program Enrollment', path: '/education/program-enrollment', studentAccess: true, instructorAccess: true, guardianAccess: true },
                     { label: 'Course Enrollment', path: '/education/course-enrollment' },
                 ],
             },
@@ -498,7 +507,7 @@ export const moduleNavigation = {
                 title: 'Schedule',
                 icon: 'calendar',
                 items: [
-                    { label: 'Course Schedule', path: '/education/course-schedule' },
+                    { label: 'Course Schedule', path: '/education/course-schedule', studentAccess: true, instructorAccess: true, guardianAccess: true },
                     { label: 'Course Scheduling Tool', path: '/education/course-scheduling-tool' },
                 ],
             },
@@ -506,8 +515,8 @@ export const moduleNavigation = {
                 title: 'ATTENDANCE',
                 icon: 'check-badge',
                 items: [
-                    { label: 'Student Attendance', path: '/education/student-attendance' },
-                    { label: 'Student Leave Application', path: '/education/student-leave-application' },
+                    { label: 'Student Attendance', path: '/education/student-attendance', studentAccess: true, instructorAccess: true, guardianAccess: true },
+                    { label: 'Student Leave Application', path: '/education/student-leave-application', studentAccess: true, instructorAccess: true, guardianAccess: true },
                     { label: 'Student Monthly Attendance Sheet', path: '/education/student-monthly-attendance-sheet' },
                     { label: 'Absent Student Report', path: '/education/absent-student-report' },
                     { label: 'Student Batch-Wise Attendance', path: '/education/student-batch-wise-attendance' },
@@ -519,9 +528,9 @@ export const moduleNavigation = {
             {
                 title: 'ASSESSMENT',
                 items: [
-                    { label: 'Assessment Plan', path: '/education/assessment-plan' },
+                    { label: 'Assessment Plan', path: '/education/assessment-plan', instructorAccess: true },
                     { label: 'Assessment Group', path: '/education/assessment-group' },
-                    { label: 'Assessment Result', path: '/education/assessment-result' },
+                    { label: 'Assessment Result', path: '/education/assessment-result', studentAccess: true, instructorAccess: true, guardianAccess: true },
                     { label: 'Assessment Criteria', path: '/education/assessment-criteria' },
                 ],
             },
@@ -560,7 +569,8 @@ export const moduleNavigation = {
                     { label: 'Fee Structure', path: '/education/fee-structure' },
                     { label: 'Fee Category', path: '/education/fee-category' },
                     { label: 'Fee Schedule', path: '/education/fee-schedule' },
-                    { label: 'Fees', path: '/education/fees' },
+                    { label: 'Fees', path: '/education/fees', studentAccess: true, guardianAccess: true },
+                    { label: 'Sales Invoice', path: '/accounting/sales-invoice', studentAccess: true, guardianAccess: true },
                     { label: 'Student Fee Collection', path: '/education/student-fee-collection' },
                     { label: 'Program wise Fee Collection', path: '/education/program-wise-fee-collection' },
                 ],
@@ -569,7 +579,7 @@ export const moduleNavigation = {
                 title: 'SETTINGS',
                 icon: 'cog',
                 items: [
-                    { label: 'Education Settings', path: '/education/settings' },
+                    { label: 'Education Settings', path: '/education/settings', studentAccess: true, guardianAccess: true },
                     { label: 'Student Category', path: '/education/student-category' },
                     { label: 'Student Batch Name', path: '/education/student-batch-name' },
                     { label: 'Grading Scale', path: '/education/grading-scale' },

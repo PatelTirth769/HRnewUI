@@ -1,6 +1,9 @@
 {
   "roleKeys": [
+    "module_profile",
+    "role",
     "roles"
   ],
-  "email": "administrator"
+  "moduleProfile": "Instructor",
+  "email": "jhaji@gmail.com"
 }

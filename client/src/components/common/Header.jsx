@@ -11,7 +11,7 @@ const employeeHiddenModules = new Set(['master', 'elcLetters', 'approvers']);
 
 const Header = ({ onModuleClick }) => {
   const navigate = useNavigate();
-  const { isAdmin, isInventory, isAccounts } = useUserRole();
+  const { isAdmin, isInventory, isAccounts, isStudent, isInstructor, isGuardian } = useUserRole();
   const branding = getBranding();
   const [auth, setAuth] = useAuth();
 
@@ -156,7 +156,7 @@ const Header = ({ onModuleClick }) => {
               }, []);
             })()}
 
-            {isAdmin && <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Education</div>}
+            {(isAdmin || isStudent || isInstructor || isGuardian) && <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Education</div>}
             {isAdmin && <div onClick={() => onModuleClick('selling')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Selling</div>}
             {isAdmin && <div onClick={() => onModuleClick('buying')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Buying</div>}
             {isAdmin && <div onClick={() => onModuleClick('stock')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Stock</div>}
@@ -174,7 +174,14 @@ const Header = ({ onModuleClick }) => {
               </div>
             )}
 
-            <Link to="/employee-self-service" target="_blank" rel="noopener noreferrer" className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate">Self Service</Link>
+            <Link 
+              to={isStudent ? "/student-dashboard" : isInstructor ? "/instructor-dashboard" : isGuardian ? "/guardian-dashboard" : "/employee-self-service"} 
+              target={(isStudent || isInstructor || isGuardian) ? "_self" : "_blank"} 
+              rel="noopener noreferrer" 
+              className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold"
+            >
+              {(isStudent || isInstructor || isGuardian) ? "Dashboard" : "Self Service"}
+            </Link>
             {!isAdmin && isInventory && (
               <div onClick={() => onModuleClick('assets')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Assets</div>
             )}

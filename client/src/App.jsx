@@ -9,6 +9,9 @@ import EmployeeSelfService from './pages/ESS/EmployeeSelfService';
 import Approver from './pages/ESS/Approver';
 import LoginPage from './pages/auth/LoginPage';
 import Register from './pages/auth/Register';
+import StudentDashboard from './pages/Education/StudentDashboard';
+import InstructorDashboard from './pages/Education/InstructorDashboard';
+import GuardianDashboard from './pages/Education/GuardianDashboard';
 
 import CompanyMaster from './components/company/CompanyMaster';
 import EmployeeMIS from './pages/EmployeeMIS';
@@ -356,13 +359,18 @@ import WebsiteItem from './pages/Website/WebsiteItem';
 import PurchaseOrder from './pages/Buying/PurchaseOrder';
 
 const RootRedirect = () => {
-  const { isAdmin } = useUserRole();
-  return <Navigate to={isAdmin ? "/home" : "/employee-self-service"} replace />;
+  const { isAdmin, isStudent, isInstructor, isGuardian } = useUserRole();
+  if (isAdmin) return <Navigate to="/home" replace />;
+  if (isStudent) return <Navigate to="/student-dashboard" replace />;
+  if (isInstructor) return <Navigate to="/instructor-dashboard" replace />;
+  if (isGuardian) return <Navigate to="/guardian-dashboard" replace />;
+  return <Navigate to="/employee-self-service" replace />;
 };
 
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isAdmin, isStudent, isInstructor, isGuardian } = useUserRole();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [activeModule, setActiveModule] = React.useState(null);
 
@@ -382,7 +390,10 @@ function App() {
     } else if (moduleKey === 'assets') {
         navigate('/assets/asset');
     } else if (moduleKey === 'education') {
-        navigate('/education/student');
+        if (isStudent) navigate('/student-dashboard');
+        else if (isInstructor) navigate('/instructor-dashboard');
+        else if (isGuardian) navigate('/guardian-dashboard');
+        else navigate('/education/student');
     } else if (moduleKey === 'accounting') {
         navigate('/accounting/company');
     } else if (moduleKey === 'selling') {
@@ -427,6 +438,9 @@ function App() {
                 <Route path="/home" element={<Home />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/employee-self-service/*" element={<EmployeeSelfService />} />
+                <Route path="/student-dashboard" element={<StudentDashboard />} />
+                <Route path="/instructor-dashboard" element={<InstructorDashboard />} />
+                <Route path="/guardian-dashboard" element={<GuardianDashboard />} />
                 <Route path="/approver/*" element={<Approver />} />
 
                 <Route path="/employee-mis" element={<EmployeeMIS />} />
