@@ -336,6 +336,29 @@ import GradingScale from './pages/Education/GradingScale';
 import AcademicYear from './pages/Education/AcademicYear';
 import AcademicTerm from './pages/Education/AcademicTerm';
 
+// Enquiry Module
+import AddEnquiry from './pages/Enquiry/AddEnquiry';
+import FollowUpDays from './pages/Enquiry/FollowUpDays';
+import SourceOfEnquiry from './pages/Enquiry/SourceOfEnquiry';
+import EnquiryFollowUpList from './pages/Enquiry/EnquiryFollowUpList';
+import ReferrerMaster from './pages/Enquiry/ReferrerMaster';
+import RegistrationForm from './pages/Enquiry/RegistrationForm';
+import FormFeeSetup from './pages/Enquiry/FormFeeSetup';
+import FinalAdmissionForm from './pages/Enquiry/FinalAdmissionForm';
+import DownloadAdmissionForm from './pages/Enquiry/DownloadAdmissionForm';
+import EnquiryReport from './pages/Enquiry/EnquiryReport';
+import RegistrationReport from './pages/Enquiry/RegistrationReport';
+import AdmissionReport from './pages/Enquiry/AdmissionReport';
+import EnquiryCustomReport from './pages/Enquiry/EnquiryCustomReport';
+import RegistrationCustomReport from './pages/Enquiry/RegistrationCustomReport';
+import ClassRestrictionSetup from './pages/Enquiry/ClassRestrictionSetup';
+
+
+
+
+
+
+
 // Selling Module
 import Customer from './pages/Selling/Customer';
 import Quotation from './pages/Selling/Quotation';
@@ -404,6 +427,8 @@ function App() {
         navigate('/stock/item');
     } else if (moduleKey === 'transport') {
         navigate('/transport/dashboard');
+    } else if (moduleKey === 'enquiry') {
+        navigate('/enquiry/dashboard');
     }
   };
 
@@ -825,6 +850,29 @@ function App() {
                 <Route path="/transport/transaction/fee-import" element={<TransportFeeImport />} />
                 <Route path="/transport/reports/student-punch-detail" element={<StudentPunchDetail />} />
                 <Route path="/transport/reports/new-transport-report" element={<NewTransportReport />} />
+
+                {/* Enquiry Routes */}
+                <Route path="/enquiry/dashboard" element={<div className="p-8"><h1 className="text-2xl font-bold">Enquiry Dashboard</h1><p className="mt-4 text-gray-500">Enquiry module content coming soon...</p></div>} />
+                <Route path="/enquiry/add" element={<AddEnquiry />} />
+                <Route path="/enquiry/follow-up-days" element={<FollowUpDays />} />
+                <Route path="/enquiry/source" element={<SourceOfEnquiry />} />
+                <Route path="/enquiry/follow-up-list" element={<EnquiryFollowUpList />} />
+                <Route path="/enquiry/referrer" element={<ReferrerMaster />} />
+                <Route path="/enquiry/registration/add" element={<RegistrationForm initialView="form" />} />
+                <Route path="/enquiry/registration/manage" element={<RegistrationForm initialView="list" />} />
+                <Route path="/enquiry/admission/fee-setup" element={<FormFeeSetup />} />
+                <Route path="/enquiry/admission/final-form" element={<FinalAdmissionForm initialView="form" />} />
+                <Route path="/enquiry/admission/download" element={<DownloadAdmissionForm />} />
+                <Route path="/enquiry/reports/enquiry" element={<EnquiryReport />} />
+                <Route path="/enquiry/reports/registration" element={<RegistrationReport />} />
+                <Route path="/enquiry/reports/admission" element={<AdmissionReport />} />
+                <Route path="/enquiry/reports/enquiry-custom" element={<EnquiryCustomReport />} />
+                <Route path="/enquiry/reports/registration-custom" element={<RegistrationCustomReport />} />
+                <Route path="/enquiry/setup/class-restriction" element={<ClassRestrictionSetup />} />
+
+
+
+
               </Route> {/* End of Protected Routes */}
 
               <Route path="*" element={<Navigate to="/home" replace />} />

@@ -818,4 +818,63 @@ export const moduleNavigation = {
             }
         ],
     },
+    enquiry: {
+        title: 'Enquiry Module',
+        sections: [
+            {
+                title: 'Overview',
+                icon: 'chart-bar',
+                items: [
+                    { label: 'Enquiry Dashboard', path: '/enquiry/dashboard' },
+                ],
+            },
+            {
+                title: 'Enquiry',
+                icon: 'document-text',
+                items: [
+                    { label: 'Add Enquiry', path: '/enquiry/add' },
+                    { label: 'Follow Up Days', path: '/enquiry/follow-up-days' },
+                    { label: 'Source Of Enquiry', path: '/enquiry/source' },
+                    { label: 'Enquiry Follow Up\'s', path: '/enquiry/follow-up-list' },
+                    { label: 'Referrer Master', path: '/enquiry/referrer' },
+                ],
+            },
+            {
+                title: 'Registration',
+                icon: 'user-add',
+                items: [
+                    { label: 'Registration Form', path: '/enquiry/registration/add' },
+                    { label: 'Manage Registration', path: '/enquiry/registration/manage' },
+                ],
+            },
+            {
+                title: 'Admission',
+                icon: 'academic-cap',
+                items: [
+                    { label: 'Form Fee Setup', path: '/enquiry/admission/fee-setup' },
+                    { label: 'Final Admission Form', path: '/enquiry/admission/final-form' },
+                    { label: 'Download Admission Form', path: '/enquiry/admission/download' },
+                ],
+            },
+            {
+                title: 'Report',
+                icon: 'presentation-chart-line',
+                items: [
+                    { label: 'Enquiry Report', path: '/enquiry/reports/enquiry' },
+                    { label: 'Registration Report', path: '/enquiry/reports/registration' },
+                    { label: 'Admission Report', path: '/enquiry/reports/admission' },
+                    { label: 'Enquiry Custom Report', path: '/enquiry/reports/enquiry-custom' },
+                    { label: 'Registration Custom Report', path: '/enquiry/reports/registration-custom' },
+
+                ],
+            },
+            {
+                title: 'Setup',
+                icon: 'cog',
+                items: [
+                    { label: 'Class Restriction Setup', path: '/enquiry/setup/class-restriction' },
+                ],
+            },
+        ],
+    },
 };
