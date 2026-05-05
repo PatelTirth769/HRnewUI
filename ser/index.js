@@ -45,6 +45,7 @@ app.use('/local/users', require('./routes/users'));
 app.use('/users', require('./routes/users'));
 app.use('/attendance-configs', require('./routes/attendanceConfigs'));
 app.use('/api', require('./routes/employeeRoutes'));
+app.use('/payment', require('./routes/payment'));
 
 const PORT = process.env.PORT || 3636;
 const useMongo = String(process.env.USE_MONGO || '').toLowerCase() === 'true';

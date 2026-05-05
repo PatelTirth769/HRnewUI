@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Row, Col, Statistic, List, Avatar, Tag, Spin, notification, Empty, Descriptions, Divider, Button, Alert, Badge } from 'antd';
+import { Card, Typography, Row, Col, Statistic, List, Avatar, Tag, Spin, notification, Empty, Descriptions, Divider, Button, Alert, Badge, Modal, Checkbox } from 'antd';
 import { 
   BookOutlined, 
   CalendarOutlined, 
@@ -13,7 +13,9 @@ import {
   MailOutlined,
   SyncOutlined,
   InfoCircleOutlined,
-  LockOutlined
+  LockOutlined,
+  CreditCardOutlined,
+  RightOutlined
 } from '@ant-design/icons';
 import API from '../../services/api';
 
@@ -38,6 +40,11 @@ const StudentDashboard = () => {
       assessments: true
     }
   });
+
+  // Payment Modal State
+  const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
+  const [selectedFee, setSelectedFee] = useState(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -217,6 +224,23 @@ const StudentDashboard = () => {
     }
   };
 
+  const handlePayNow = (feeItem) => {
+    setSelectedFee(feeItem);
+    setTermsAccepted(false);
+    setIsPaymentModalVisible(true);
+  };
+
+  const processPayment = () => {
+    if (!termsAccepted) {
+      notification.warning({ message: 'Action Required', description: 'Please accept the Terms & Conditions to proceed.' });
+      return;
+    }
+    notification.success({ 
+      message: 'Initiating Payment', 
+      description: `Connecting to secure gateway for ₹${(selectedFee.amount || selectedFee.outstanding_amount || 0).toLocaleString()}...` 
+    });
+  };
+
   useEffect(() => {
     fetchAllData();
   }, []);
@@ -232,6 +256,7 @@ const StudentDashboard = () => {
 
   const profile = studentData.profile;
   const studentName = profile ? `${profile.first_name || ''} ${profile.middle_name || ''} ${profile.last_name || ''}`.trim() : userEmail;
+  const guardianName = (profile && profile.guardians && profile.guardians.length > 0) ? profile.guardians[0].guardian_name : 'N/A';
 
   return (
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
@@ -283,7 +308,7 @@ const StudentDashboard = () => {
             <Col xs={24} sm={12} md={6}>
               <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
                 {studentData.permissions.fees ? (
-                  <Statistic title="PENDING FEES" value={studentData.fees} valueStyle={{ color: '#ff4d4f', fontWeight: 800 }} prefix={<WalletOutlined />} precision={2} />
+                  <Statistic title="PENDING FEES" value={studentData.fees} valueStyle={{ color: '#ff4d4f', fontWeight: 800 }} prefix={<WalletOutlined />} precision={2} formatter={(value) => `₹${value.toLocaleString()}`} />
                 ) : (
                   <div style={{ textAlign: 'center', padding: '10px' }}><LockOutlined style={{ color: '#bfbfbf', fontSize: '24px' }} /><br/><Text type="secondary">Access Locked</Text></div>
                 )}
@@ -333,7 +358,21 @@ const StudentDashboard = () => {
                     <List
                       dataSource={studentData.feeRecords}
                       renderItem={item => (
-                        <List.Item extra={<span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>{item.outstanding_amount}</span>}>
+                        <List.Item extra={
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <span className="font-bold">₹{item.outstanding_amount.toLocaleString()}</span>
+                            <Tag color={item.outstanding_amount === 0 ? "green" : "red"} style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>{item.outstanding_amount === 0 ? "PAID" : "UNPAID"}</Tag>
+                            <Button 
+                              type="primary" 
+                              size="small" 
+                              shape="round"
+                              style={{ fontSize: '10px', height: '24px' }}
+                              onClick={() => handlePayNow(item)}
+                            >
+                              PAY NOW
+                            </Button>
+                          </div>
+                        }>
                           <List.Item.Meta 
                             title={<Text strong>{item.name}</Text>} 
                             description={`Due: ${item.due_date}`} 
@@ -352,14 +391,40 @@ const StudentDashboard = () => {
                       />
                       <List
                         dataSource={studentData.feeStructureDetails.components}
-                        renderItem={item => (
-                          <List.Item extra={<span className="font-bold">₹{item.amount.toLocaleString()}</span>}>
-                            <List.Item.Meta title={item.fees_category} />
-                          </List.Item>
-                        )}
+                        renderItem={item => {
+                          let dueDate = "";
+                          const t = item.fees_category || "";
+                          if (t.includes("Q1")) dueDate = "Payable by 10th March";
+                          else if (t.includes("Q2")) dueDate = "Payable by 10th June";
+                          else if (t.includes("Q3")) dueDate = "Payable by 10th Sep";
+                          else if (t.includes("Q4")) dueDate = "Payable by 10th Dec";
+
+                          return (
+                            <List.Item extra={
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <span className="font-bold">₹{item.amount.toLocaleString()}</span>
+                                <Tag color="red" style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>UNPAID</Tag>
+                                <Button 
+                                  type="primary" 
+                                  size="small" 
+                                  shape="round"
+                                  style={{ fontSize: '10px', height: '24px' }}
+                                  onClick={() => handlePayNow(item)}
+                                >
+                                  PAY NOW
+                                </Button>
+                              </div>
+                            }>
+                              <List.Item.Meta 
+                                title={t} 
+                                description={dueDate && <span style={{ fontSize: '10px', color: '#8c8c8c' }}>{dueDate}</span>}
+                              />
+                            </List.Item>
+                          );
+                        }}
                       />
                       <Divider style={{ margin: '12px 0' }} />
-                      <div className="flex justify-between items-center px-4">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', items: 'center', padding: '0 16px' }}>
                         <Text strong>Total Expected Amount</Text>
                         <Text strong style={{ fontSize: '18px', color: '#ff4d4f' }}>₹{studentData.feeStructureDetails.total_amount?.toLocaleString()}</Text>
                       </div>
@@ -393,6 +458,115 @@ const StudentDashboard = () => {
           </Row>
         </>
       )}
+
+      {/* Compact Payment Modal */}
+      <Modal
+        title={null}
+        visible={isPaymentModalVisible}
+        onCancel={() => setIsPaymentModalVisible(false)}
+        footer={null}
+        width={800}
+        centered
+        bodyStyle={{ padding: 0, borderRadius: '24px', overflow: 'hidden' }}
+      >
+        <div style={{ background: '#1d4ed8', padding: '16px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: '32px', paddingRight: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <CreditCardOutlined style={{ fontSize: '20px', opacity: 0.8 }} />
+            <h2 style={{ fontSize: '18px', fontWeight: 900, margin: 0, color: 'white', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Fee Checkout</h2>
+          </div>
+          <div style={{ cursor: 'pointer' }} onClick={() => setIsPaymentModalVisible(false)}>
+            <RightOutlined rotate={-45} style={{ fontSize: '20px' }} />
+          </div>
+        </div>
+
+        <div style={{ padding: '24px' }}>
+          {profile && selectedFee && (
+            <>
+              {/* Header Info */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', background: '#eff6ff', padding: '16px', borderRadius: '12px', border: '1px solid #dbeafe' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Avatar size={48} icon={<UserOutlined />} style={{ background: '#1d4ed8', color: 'white' }} />
+                  <div>
+                    <h4 style={{ fontSize: '16px', fontWeight: 900, color: '#1f2937', margin: 0 }}>{studentName}</h4>
+                    <span style={{ fontSize: '10px', fontWeight: 900, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{profile.program || 'General Program'}</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block' }}>Guardian</span>
+                  <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#374151' }}>{guardianName}</span>
+                </div>
+              </div>
+
+              {/* Detail Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px', paddingLeft: '8px', paddingRight: '8px' }}>
+                <div>
+                  <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block' }}>Student ID</span>
+                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>{profile.name}</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block' }}>Academic Session</span>
+                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>2026 - 2027</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block' }}>Fee Structure</span>
+                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>{studentData.feeStructure || 'Standard'}</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block' }}>Term / Category</span>
+                  <Tag color="blue" style={{ margin: 0, fontWeight: 'bold', border: 'none', background: '#dbeafe', color: '#1e40af', fontSize: '11px' }}>{selectedFee.fees_category || selectedFee.name}</Tag>
+                </div>
+                <div>
+                  <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block' }}>Email Address</span>
+                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{profile.student_email_id || 'N/A'}</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block' }}>Mobile Number</span>
+                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>{profile.student_mobile_number || 'N/A'}</span>
+                </div>
+              </div>
+
+              {/* Address Row */}
+              <div style={{ marginBottom: '24px', padding: '12px', background: '#f9fafb', borderRadius: '8px', border: '1px solid #f3f4f6', display: 'flex', alignItems: 'start', gap: '12px' }}>
+                <InfoCircleOutlined style={{ color: '#60a5fa', marginTop: '4px' }} />
+                <div>
+                  <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block' }}>Billing Address</span>
+                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#374151' }}>
+                    {profile.address_line1 || 'N/A'} {profile.address_line2 || ''}, {profile.city}, {profile.state} - {profile.pincode}
+                  </span>
+                </div>
+              </div>
+
+              {/* Footer Bar */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '24px', borderTop: '1px solid #f3f4f6', paddingTop: '24px' }}>
+                <div style={{ flex: 1 }}>
+                  <Checkbox 
+                    checked={termsAccepted} 
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    style={{ fontSize: '11px', color: '#6b7280', fontWeight: 500, lineHeight: 1.4 }}
+                  >
+                    I confirm all student and fee details are correct. I agree to the <span style={{ color: '#1d4ed8', textDecoration: 'underline' }}>Terms</span>.
+                  </Checkbox>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Payable Amount</span>
+                    <span style={{ fontSize: '28px', fontWeight: 900, color: '#1d4ed8', lineHeight: 1 }}>₹{(selectedFee.amount || selectedFee.outstanding_amount || 0).toLocaleString()}</span>
+                  </div>
+                  <Button 
+                    type="primary" 
+                    size="large" 
+                    style={{ height: '56px', paddingLeft: '32px', paddingRight: '32px', borderRadius: '12px', fontSize: '16px', fontWeight: 900, border: 'none', background: termsAccepted ? '#1d4ed8' : '#e5e7eb', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                    onClick={processPayment}
+                    disabled={!termsAccepted}
+                  >
+                    CONFIRM & PAY
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };

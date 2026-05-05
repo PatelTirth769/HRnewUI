@@ -201,23 +201,24 @@ const LoginPage = () => {
               label="Email (Employee id or Phone No)"
               name="email"
               rules={[{ required: true, message: 'Email or ID is required' }]}
+              extra={discoveredRole && (
+                <div style={{ marginTop: '4px', fontSize: '12px', color: '#10b981', fontWeight: '500' }}>
+                  Schooler User | Role: {discoveredRole}
+                </div>
+              )}
             >
               <Input
                 prefix={<FaUser style={{ color: '#888' }} />}
                 placeholder="Email (Employee id or Phone No)"
-                autoComplete="new-password"
+                autoComplete="username"
                 style={{
                   padding: '10px',
                   borderRadius: '4px',
                   border: '1px solid #e0e0e0',
                 }}
               />
-              {discoveredRole && (
-                <div style={{ marginTop: '4px', fontSize: '12px', color: '#10b981', fontWeight: '500' }}>
-                  Schooler User | Role: {discoveredRole}
-                </div>
-              )}
             </Form.Item>
+
             <Form.Item
               label="Password"
               name="password"
@@ -226,7 +227,8 @@ const LoginPage = () => {
               <Input.Password
                 prefix={<FaLock style={{ color: '#888' }} />}
                 placeholder="Password"
-                autoComplete="new-password"
+                autoComplete="current-password"
+
                 style={{
                   padding: '10px',
                   borderRadius: '4px',
