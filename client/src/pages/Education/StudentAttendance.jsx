@@ -54,14 +54,17 @@ const StudentAttendance = () => {
         try {
             const safeGet = (url) => API.get(url).catch(() => ({ data: { data: [] } }));
             const [sRes, csRes, pRes, sgRes] = await Promise.all([
-                safeGet('/api/resource/Student?limit_page_length=None'),
+                safeGet('/api/resource/Student?fields=["name","first_name","last_name"]&limit_page_length=None'),
                 safeGet('/api/resource/Course Schedule?limit_page_length=None'),
                 safeGet('/api/resource/Program?limit_page_length=None'),
                 safeGet('/api/resource/Student Group?limit_page_length=None'),
             ]);
             setDropdowns(prev => ({
                 ...prev,
-                students: sRes.data.data?.map(d => ({ value: d.name, label: d.name })) || [],
+                students: sRes.data.data?.map(d => ({ 
+                    value: d.name, 
+                    label: `${d.name} - ${d.first_name || ''} ${d.last_name || ''}`.trim() 
+                })) || [],
                 courseSchedules: csRes.data.data?.map(d => ({ value: d.name, label: d.name })) || [],
                 programs: pRes.data.data?.map(d => ({ value: d.name, label: d.name })) || [],
                 studentGroups: sgRes.data.data?.map(d => ({ value: d.name, label: d.name })) || [],
@@ -74,7 +77,7 @@ const StudentAttendance = () => {
     const fetchAttendanceList = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Student Attendance?fields=["name","student","date","status","student_group"]&limit_page_length=None&order_by=date desc';
+            const url = '/api/resource/Student Attendance?fields=["name","student","student_name","date","status","student_group"]&limit_page_length=None&order_by=date desc';
             const response = await API.get(url);
             setAttendanceList(response.data.data || []);
         } catch (err) {
@@ -141,6 +144,7 @@ const StudentAttendance = () => {
             const q = search.toLowerCase();
             return (
                 (s.student || '').toLowerCase().includes(q) ||
+                (s.student_name || '').toLowerCase().includes(q) ||
                 (s.name || '').toLowerCase().includes(q) ||
                 (s.status || '').toLowerCase().includes(q)
             );
@@ -184,7 +188,10 @@ const StudentAttendance = () => {
                                         <td className="px-4 py-3">
                                             <button className="text-blue-600 hover:underline font-medium" onClick={() => { setEditingRecord(row.name); setView('form'); }}>{row.name}</button>
                                         </td>
-                                        <td className="px-4 py-3">{row.student}</td>
+                                        <td className="px-4 py-3">
+                                            <div className="font-semibold text-gray-800">{row.student_name || row.student}</div>
+                                            <div className="text-[10px] text-gray-400">{row.student}</div>
+                                        </td>
                                         <td className="px-4 py-3">{row.date}</td>
                                         <td className="px-4 py-3">
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${

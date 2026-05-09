@@ -572,6 +572,7 @@ export const moduleNavigation = {
                     { label: 'Fees', path: '/education/fees', studentAccess: true, guardianAccess: true },
                     { label: 'Sales Invoice', path: '/accounting/sales-invoice', studentAccess: true, guardianAccess: true },
                     { label: 'Student Fee Collection', path: '/education/student-fee-collection' },
+                    { label: 'Fees report', path: '/education/fees-report' },
                     { label: 'Program wise Fee Collection', path: '/education/program-wise-fee-collection' },
                 ],
             },

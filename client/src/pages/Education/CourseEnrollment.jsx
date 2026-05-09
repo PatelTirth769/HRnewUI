@@ -50,12 +50,15 @@ const CourseEnrollment = () => {
             const [peRes, cRes, sRes] = await Promise.all([
                 safeGet('/api/resource/Program Enrollment?limit_page_length=None'),
                 safeGet('/api/resource/Course?limit_page_length=None'),
-                safeGet('/api/resource/Student?limit_page_length=None'),
+                safeGet('/api/resource/Student?fields=["name","first_name","last_name"]&limit_page_length=None'),
             ]);
             setDropdowns({
                 programEnrollments: peRes.data.data?.map(d => d.name) || [],
                 courses: cRes.data.data?.map(d => d.name) || [],
-                students: sRes.data.data?.map(d => d.name) || [],
+                students: sRes.data.data?.map(d => ({
+                    id: d.name,
+                    name: `${d.first_name || ''} ${d.last_name || ''}`.trim()
+                })) || [],
             });
         } catch (err) {
             console.error('Error fetching dropdowns:', err);
@@ -65,7 +68,7 @@ const CourseEnrollment = () => {
     const fetchEnrollmentList = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Course Enrollment?fields=["name","student","course","enrollment_date","program_enrollment"]&limit_page_length=None&order_by=enrollment_date desc';
+            const url = '/api/resource/Course Enrollment?fields=["name","student","student_name","course","enrollment_date","program_enrollment"]&limit_page_length=None&order_by=enrollment_date desc';
             const response = await API.get(url);
             setEnrollmentList(response.data.data || []);
         } catch (err) {
@@ -132,6 +135,7 @@ const CourseEnrollment = () => {
             const q = search.toLowerCase();
             return (
                 (s.student || '').toLowerCase().includes(q) ||
+                (s.student_name || '').toLowerCase().includes(q) ||
                 (s.course || '').toLowerCase().includes(q) ||
                 (s.name || '').toLowerCase().includes(q)
             );
@@ -175,7 +179,10 @@ const CourseEnrollment = () => {
                                         <td className="px-4 py-3 font-medium">
                                             <button className="text-blue-600 hover:text-blue-800" onClick={() => { setEditingRecord(row.name); setView('form'); }}>{row.name}</button>
                                         </td>
-                                        <td className="px-4 py-3 font-semibold text-gray-800">{row.student}</td>
+                                        <td className="px-4 py-3">
+                                            <div className="font-semibold text-gray-800">{row.student_name || row.student}</div>
+                                            <div className="text-[10px] text-gray-400">{row.student}</div>
+                                        </td>
                                         <td className="px-4 py-3 text-gray-600">{row.course}</td>
                                         <td className="px-4 py-3 text-gray-500">{row.enrollment_date}</td>
                                         <td className="px-4 py-3 text-gray-400 italic">{row.program_enrollment || '-'}</td>
@@ -231,7 +238,7 @@ const CourseEnrollment = () => {
                         <label className={labelStyle}>Student *</label>
                         <select className={inputStyle} value={form.student} onChange={e => setForm({ ...form, student: e.target.value })}>
                             <option value="">Select Student</option>
-                            {dropdowns.students.map(s => <option key={s} value={s}>{s}</option>)}
+                            {dropdowns.students.map(s => <option key={s.id} value={s.id}>{s.id} - {s.name}</option>)}
                         </select>
                     </div>
                 </div>

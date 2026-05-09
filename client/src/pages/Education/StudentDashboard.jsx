@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Row, Col, Statistic, List, Avatar, Tag, Spin, notification, Empty, Descriptions, Divider, Button, Alert, Badge, Modal, Checkbox } from 'antd';
+import { Card, Typography, Row, Col, Statistic, List, Avatar, Tag, Spin, notification, Empty, Descriptions, Divider, Button, Alert, Badge, Modal, Checkbox, Tabs, Table } from 'antd';
 import { 
   BookOutlined, 
   CalendarOutlined, 
@@ -15,9 +15,14 @@ import {
   InfoCircleOutlined,
   LockOutlined,
   CreditCardOutlined,
-  RightOutlined
+  RightOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import API from '../../services/api';
+import axios from 'axios';
+import html2pdf from 'html2pdf.js';
+import FeeReceiptTemplate from './FeeReceiptTemplate';
+import { useRef } from 'react';
 
 const { Title, Text } = Typography;
 
@@ -45,6 +50,11 @@ const StudentDashboard = () => {
   const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
   const [selectedFee, setSelectedFee] = useState(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [paidTerms, setPaidTerms] = useState({});
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const receiptRef = useRef(null);
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -103,27 +113,54 @@ const StudentDashboard = () => {
       const profile = fullRes.data?.data;
       const studentId = student.name;
 
+      // Fetch paid terms from Firebase
+      try {
+        const historyRes = await axios.get(`/local-api/payment/history/${encodeURIComponent(studentId)}`);
+        if (historyRes.data.success && historyRes.data.data) {
+          const paidMap = {};
+          const verifiedHistory = [];
+          historyRes.data.data.forEach(payment => {
+            if (payment.status === 'verified' && payment.fees_category) {
+              verifiedHistory.push(payment);
+              paidMap[payment.fees_category] = {
+                payment_id: payment.payment_id,
+                order_id: payment.order_id,
+                amount: payment.amount,
+                paid_at: payment.verified_at || payment.created_at,
+                status: 'paid'
+              };
+            }
+          });
+          setPaidTerms(paidMap);
+          setPaymentHistory(verifiedHistory);
+        }
+      } catch (err) {
+        console.warn('[StudentDashboard] Could not fetch payment history:', err.message);
+      }
+
       // Parallel Data Fetch with Individual Error Handling
       const [attRes, enrRes, feeRes, assRes, schRes] = await Promise.allSettled([
         API.get('/api/resource/Student Attendance', { params: { filters: JSON.stringify([["student", "=", studentId]]), limit_page_length: 1000 } }),
-        API.get('/api/resource/Program Enrollment', { params: { filters: JSON.stringify([["student", "=", studentId]]), fields: JSON.stringify(["name", "program", "fee_structure"]) } })
-          .catch(err => {
-            if (err.response?.status === 417) {
-              console.warn('[StudentDashboard] 417 Error on Enrollment fields. Retrying with basic fields...');
-              return API.get('/api/resource/Program Enrollment', { params: { filters: JSON.stringify([["student", "=", studentId]]), fields: JSON.stringify(["name", "program"]) } });
-            }
-            throw err;
-          }),
-        API.get('/api/resource/Fees', { params: { filters: JSON.stringify([["student", "=", studentId], ["outstanding_amount", ">", 0]]), fields: JSON.stringify(["name", "due_date", "outstanding_amount", "total_amount"]) } })
-          .catch(err => {
-            if (err.response?.status === 417) {
-              console.warn('[StudentDashboard] 417 Error on Fees fields. Retrying with basic fields...');
-              return API.get('/api/resource/Fees', { params: { filters: JSON.stringify([["student", "=", studentId], ["outstanding_amount", ">", 0]]), fields: JSON.stringify(["name", "outstanding_amount"]) } });
-            }
-            throw err;
-          }),
+        API.get('/api/resource/Program Enrollment', { 
+          params: { 
+            filters: JSON.stringify([["student", "=", studentId]]), 
+            fields: JSON.stringify(["name", "program"]) // Removed fee_structure to avoid 417
+          } 
+        }),
+        API.get('/api/resource/Fees', { 
+          params: { 
+            filters: JSON.stringify([["student", "=", studentId], ["outstanding_amount", ">", 0]]), 
+            fields: JSON.stringify(["name", "outstanding_amount"]) // Minimal fields
+          } 
+        }),
         API.get('/api/resource/Assessment Result', { params: { filters: JSON.stringify([["student", "=", studentId]]) } }),
-        API.get('/api/resource/Course Schedule', { params: { filters: JSON.stringify([["schedule_date", "=", new Date().toISOString().split('T')[0]]]), fields: JSON.stringify(["course", "from_time", "to_time", "room"]), order_by: 'from_time asc' } })
+        API.get('/api/resource/Course Schedule', { 
+          params: { 
+            filters: JSON.stringify([["schedule_date", "=", new Date().toISOString().split('T')[0]]]), 
+            fields: JSON.stringify(["course", "from_time", "to_time", "room"]), 
+            order_by: 'from_time asc' 
+          } 
+        })
       ]);
 
       const permissions = {
@@ -225,20 +262,185 @@ const StudentDashboard = () => {
   };
 
   const handlePayNow = (feeItem) => {
+    // Prevent paying already paid terms
+    const category = feeItem.fees_category || feeItem.name;
+    if (paidTerms[category]) {
+      notification.info({ 
+        message: 'Already Paid', 
+        description: `${category} was already paid on ${new Date(paidTerms[category].paid_at).toLocaleDateString()}.` 
+      });
+      return;
+    }
     setSelectedFee(feeItem);
     setTermsAccepted(false);
     setIsPaymentModalVisible(true);
   };
 
-  const processPayment = () => {
+  const processPayment = async () => {
     if (!termsAccepted) {
       notification.warning({ message: 'Action Required', description: 'Please accept the Terms & Conditions to proceed.' });
       return;
     }
-    notification.success({ 
-      message: 'Initiating Payment', 
-      description: `Connecting to secure gateway for ₹${(selectedFee.amount || selectedFee.outstanding_amount || 0).toLocaleString()}...` 
-    });
+
+    setPaymentProcessing(true);
+
+    try {
+      const amount = selectedFee.amount || selectedFee.outstanding_amount || 0;
+      const feesCategory = selectedFee.fees_category || selectedFee.name;
+      const payload = {
+        student_id: studentData.profile?.name,
+        student_name: studentData.profile?.student_name || studentData.profile?.name,
+        guardian_email: studentData.profile?.student_email_id || userEmail,
+        fee_structure: studentData.feeStructure,
+        fees_category: feesCategory,
+        amount: amount,
+        systemCode: 'schooler'
+      };
+
+      notification.info({ message: 'Initiating Payment', description: 'Connecting to secure gateway...', key: 'pay_init', duration: 3 });
+
+      // 1. Create order on local backend
+      const res = await axios.post('/local-api/payment/create-order', payload);
+      
+      if (res.data.success) {
+        notification.destroy('pay_init');
+        
+        const options = {
+          key: res.data.key_id,
+          amount: res.data.amount,
+          currency: "INR",
+          name: "SSV School Fee Payment",
+          description: `${feesCategory} - ${payload.student_name}`,
+          image: "/vite.svg",
+          order_id: res.data.order_id,
+          handler: async function (response) {
+            // 2. Verify payment on success
+            try {
+              notification.info({ 
+                message: '🔒 Verifying Transaction...', 
+                description: 'Please wait while we verify your payment with the bank.', 
+                key: 'verify_pay',
+                duration: 0 
+              });
+              
+              const verifyRes = await axios.post('/local-api/payment/verify-payment', {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                student_id: payload.student_id,
+                student_name: payload.student_name,
+                guardian_email: payload.guardian_email,
+                amount: payload.amount,
+                fees_category: feesCategory,
+                fee_structure: payload.fee_structure,
+                systemCode: 'schooler'
+              });
+
+              if (verifyRes.data.success) {
+                // IMMEDIATELY update paid terms in state
+                setPaidTerms(prev => ({
+                  ...prev,
+                  [feesCategory]: {
+                    payment_id: response.razorpay_payment_id,
+                    order_id: response.razorpay_order_id,
+                    amount: payload.amount,
+                    paid_at: new Date().toISOString(),
+                    status: 'paid'
+                  }
+                }));
+
+                // Close modal first
+                setIsPaymentModalVisible(false);
+                setPaymentProcessing(false);
+
+                // Show prominent success notification
+                notification.success({ 
+                  message: '✅ Payment Successful!', 
+                  description: `${amount.toLocaleString()} paid for ${feesCategory}. Verified & Recorded in System.`,
+                  key: 'verify_pay',
+                  duration: 8
+                });
+
+                // Refresh data
+                fetchAllData();
+              } else {
+                setPaymentProcessing(false);
+                notification.error({ 
+                  message: 'Verification Failed', 
+                  description: verifyRes.data.message || 'Payment failed verification.', 
+                  key: 'verify_pay'
+                });
+              }
+            } catch (err) {
+              console.error('Verification Error:', err);
+              setPaymentProcessing(false);
+              notification.warning({ 
+                message: '⚠️ Verification Pending', 
+                description: 'Payment succeeded but verification failed. Do not pay again.', 
+                key: 'verify_pay'
+              });
+            }
+          },
+          prefill: {
+            name: payload.student_name,
+            email: payload.guardian_email,
+          },
+          notes: {
+            student_id: payload.student_id,
+            fees_category: feesCategory
+          },
+          theme: { color: "#4F46E5" },
+          modal: {
+            ondismiss: function() {
+              setPaymentProcessing(false);
+            }
+          }
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      }
+    } catch (err) {
+      console.error('Payment Initialization Error:', err);
+      setPaymentProcessing(false);
+      notification.error({ message: 'Payment Error', description: err.message });
+    }
+  };
+
+  const handleDownloadReceipt = (record) => {
+    const dateObj = new Date(record.verified_at || record.created_at);
+    const formattedDate = dateObj.toLocaleDateString('en-GB') + ' ' + dateObj.toLocaleTimeString('en-US');
+    
+    const receiptData = {
+      enrollmentNo: profile?.name,
+      studentName: record.student_name || profile?.student_name || `${profile?.first_name} ${profile?.last_name}`,
+      courseName: profile?.program,
+      semester: record.fees_category || 'N/A',
+      receiptDate: formattedDate,
+      receiptNo: record.payment_id || record.order_id,
+      amount: record.amount,
+      feeName: record.fees_category,
+      paymentMode: 'ONLINE PAYMENT',
+      transactionNo: record.payment_id || 'N/A'
+    };
+
+    setSelectedReceipt(receiptData);
+
+    setTimeout(() => {
+      if (receiptRef.current) {
+        const opt = {
+          margin: 0.3,
+          filename: `Receipt_${receiptData.receiptNo}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, windowWidth: 700, width: 700 },
+          jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(receiptRef.current).save().then(() => {
+          notification.success({ message: 'Receipt Downloaded Successfully' });
+          setSelectedReceipt(null);
+        });
+      }
+    }, 500);
   };
 
   useEffect(() => {
@@ -253,6 +455,10 @@ const StudentDashboard = () => {
       </div>
     );
   }
+
+  const totalPaidAmount = Object.values(paidTerms).reduce((sum, term) => sum + (term.amount || 0), 0);
+  const totalAcademicFees = studentData.feeStructureDetails?.total_amount || 0;
+  const remainingPendingFees = Math.max(0, totalAcademicFees - totalPaidAmount);
 
   const profile = studentData.profile;
   const studentName = profile ? `${profile.first_name || ''} ${profile.middle_name || ''} ${profile.last_name || ''}`.trim() : userEmail;
@@ -308,7 +514,14 @@ const StudentDashboard = () => {
             <Col xs={24} sm={12} md={6}>
               <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
                 {studentData.permissions.fees ? (
-                  <Statistic title="PENDING FEES" value={studentData.fees} valueStyle={{ color: '#ff4d4f', fontWeight: 800 }} prefix={<WalletOutlined />} precision={2} formatter={(value) => `₹${value.toLocaleString()}`} />
+                  <Statistic 
+                    title="PENDING FEES" 
+                    value={studentData.feeStructureDetails ? remainingPendingFees : studentData.fees} 
+                    valueStyle={{ color: '#ff4d4f', fontWeight: 800 }} 
+                    prefix={<WalletOutlined />} 
+                    precision={2} 
+                    formatter={(value) => `₹${value.toLocaleString()}`} 
+                  />
                 ) : (
                   <div style={{ textAlign: 'center', padding: '10px' }}><LockOutlined style={{ color: '#bfbfbf', fontSize: '24px' }} /><br/><Text type="secondary">Access Locked</Text></div>
                 )}
@@ -316,94 +529,138 @@ const StudentDashboard = () => {
             </Col>
           </Row>
 
-          <Row gutter={[24, 24]} style={{ marginTop: '24px' }}>
-            <Col xs={24} lg={16}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                <Card title={<span><IdcardOutlined style={{ color: '#1890ff', marginRight: '8px' }} /> Student Profile</span>} bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                  <Descriptions column={{ xxl: 2, xl: 2, lg: 2, md: 1, sm: 1, xs: 1 }} bordered size="large">
-                    <Descriptions.Item label="Student ID"><Text strong>{profile.name}</Text></Descriptions.Item>
-                    <Descriptions.Item label="Joining Date">{profile.joining_date}</Descriptions.Item>
-                    <Descriptions.Item label="Program"><Tag color="blue">{profile.program || 'N/A'}</Tag></Descriptions.Item>
-                    <Descriptions.Item label="Fee Structure">
-                      <Text strong style={{ color: '#ff4d4f' }}>
-                        <WalletOutlined style={{ marginRight: '8px' }} />
-                        {studentData.feeStructure || 'Not Defined'}
-                      </Text>
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Gender">{profile.gender}</Descriptions.Item>
-                    <Descriptions.Item label="Email"><MailOutlined style={{ color: '#888', marginRight: '8px' }} /> {profile.student_email_id}</Descriptions.Item>
-                    <Descriptions.Item label="Mobile"><PhoneOutlined style={{ color: '#888', marginRight: '8px' }} /> {profile.student_mobile_number}</Descriptions.Item>
-                    <Descriptions.Item label="Status"><Badge status="processing" text="Active" /></Descriptions.Item>
-                  </Descriptions>
-                </Card>
-
-                <Card title={<span><CalendarOutlined style={{ color: '#52c41a', marginRight: '8px' }} /> Today's Schedule</span>} bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                  {studentData.permissions.schedule ? (
+          <Tabs defaultActiveKey="1" className="guardian-tabs" style={{ marginTop: '32px' }}>
+            <Tabs.TabPane tab={<span><IdcardOutlined /> Profile</span>} key="1">
+              <Row gutter={[24, 24]}>
+                <Col xs={24} lg={16}>
+                  <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <Descriptions column={{ xxl: 2, xl: 2, lg: 2, md: 1, sm: 1, xs: 1 }} bordered size="large">
+                      <Descriptions.Item label="Student ID"><Text strong>{profile.name}</Text></Descriptions.Item>
+                      <Descriptions.Item label="Joining Date">{profile.joining_date}</Descriptions.Item>
+                      <Descriptions.Item label="Program"><Tag color="blue">{profile.program || 'N/A'}</Tag></Descriptions.Item>
+                      <Descriptions.Item label="Fee Structure">
+                        <Text strong style={{ color: '#ff4d4f' }}>
+                          <WalletOutlined style={{ marginRight: '8px' }} />
+                          {studentData.feeStructure || 'Not Defined'}
+                        </Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Gender">{profile.gender}</Descriptions.Item>
+                      <Descriptions.Item label="Email"><MailOutlined style={{ color: '#888', marginRight: '8px' }} /> {profile.student_email_id}</Descriptions.Item>
+                      <Descriptions.Item label="Mobile"><PhoneOutlined style={{ color: '#888', marginRight: '8px' }} /> {profile.student_mobile_number}</Descriptions.Item>
+                      <Descriptions.Item label="Status"><Badge status="processing" text="Active" /></Descriptions.Item>
+                    </Descriptions>
+                  </Card>
+                </Col>
+                <Col xs={24} lg={8}>
+                  <Card title={<span><NotificationOutlined style={{ color: '#faad14', marginRight: '8px' }} /> Notifications</span>} bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                     <List
-                      dataSource={studentData.schedule}
-                      locale={{ emptyText: 'No classes today.' }}
+                      dataSource={studentData.notifications}
                       renderItem={item => (
-                        <List.Item>
-                          <List.Item.Meta avatar={<Avatar icon={<BookOutlined />} />} title={item.course} description={`${item.from_time} - ${item.to_time} | ${item.room || 'TBD'}`} />
-                        </List.Item>
+                        <List.Item><Alert message={item} type="info" showIcon style={{ width: '100%', borderRadius: '8px' }} /></List.Item>
                       )}
                     />
-                  ) : (
-                    <Empty description="You do not have permission to view Course Schedules." />
+                  </Card>
+                  {profile.guardians && profile.guardians.length > 0 && (
+                    <Card 
+                      title={<span><UserOutlined style={{ color: '#722ed1', marginRight: '8px' }} /> Linked Guardians</span>} 
+                      bordered={false} 
+                      style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginTop: '24px' }}
+                    >
+                      <List 
+                        dataSource={profile.guardians} 
+                        renderItem={g => (
+                          <List.Item>
+                            <List.Item.Meta 
+                              avatar={<Avatar icon={<UserOutlined />} />} 
+                              title={g.guardian_name} 
+                              description={<Tag color="purple">{g.relation}</Tag>} 
+                            />
+                          </List.Item>
+                        )} 
+                      />
+                    </Card>
                   )}
-                </Card>
+                </Col>
+              </Row>
+            </Tabs.TabPane>
 
-                <Card title={<span><WalletOutlined style={{ color: '#ff4d4f', marginRight: '8px' }} /> Fee Details</span>} bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginTop: '24px' }}>
-                  {studentData.feeRecords && studentData.feeRecords.length > 0 ? (
-                    <List
-                      dataSource={studentData.feeRecords}
-                      renderItem={item => (
+            <Tabs.TabPane tab={<span><CalendarOutlined /> Schedule</span>} key="2">
+              <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                {studentData.permissions.schedule ? (
+                  <List
+                    dataSource={studentData.schedule}
+                    locale={{ emptyText: 'No classes today.' }}
+                    renderItem={item => (
+                      <List.Item>
+                        <List.Item.Meta avatar={<Avatar icon={<BookOutlined />} />} title={item.course} description={`${item.from_time} - ${item.to_time} | ${item.room || 'TBD'}`} />
+                      </List.Item>
+                    )}
+                  />
+                ) : (
+                  <Empty description="You do not have permission to view Course Schedules." />
+                )}
+              </Card>
+            </Tabs.TabPane>
+
+            <Tabs.TabPane tab={<span><WalletOutlined /> Fee Details</span>} key="3">
+              <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                {studentData.feeRecords && studentData.feeRecords.length > 0 ? (
+                  <List
+                    dataSource={studentData.feeRecords}
+                    renderItem={item => {
+                      const isPaid = paidTerms[item.name] || item.outstanding_amount === 0;
+                      return (
                         <List.Item extra={
                           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                             <span className="font-bold">₹{item.outstanding_amount.toLocaleString()}</span>
-                            <Tag color={item.outstanding_amount === 0 ? "green" : "red"} style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>{item.outstanding_amount === 0 ? "PAID" : "UNPAID"}</Tag>
-                            <Button 
-                              type="primary" 
-                              size="small" 
-                              shape="round"
-                              style={{ fontSize: '10px', height: '24px' }}
-                              onClick={() => handlePayNow(item)}
-                            >
-                              PAY NOW
-                            </Button>
+                            <Tag color={isPaid ? "green" : "red"} style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>{isPaid ? "PAID" : "UNPAID"}</Tag>
+                            {!isPaid && (
+                              <Button 
+                                type="primary" 
+                                size="small" 
+                                shape="round"
+                                style={{ fontSize: '10px', height: '24px' }}
+                                onClick={() => handlePayNow(item)}
+                              >
+                                PAY NOW
+                              </Button>
+                            )}
                           </div>
                         }>
                           <List.Item.Meta 
                             title={<Text strong>{item.name}</Text>} 
-                            description={`Due: ${item.due_date}`} 
+                            description={isPaid ? <Text type="success" size="small">Paid on {new Date(paidTerms[item.name]?.paid_at || Date.now()).toLocaleDateString()}</Text> : `Due: ${item.due_date}`} 
                           />
                         </List.Item>
-                      )}
+                      );
+                    }}
+                  />
+                ) : studentData.feeStructureDetails ? (
+                  <div>
+                    <Alert 
+                      message="Scheduled Fees" 
+                      description={`Showing components for: ${studentData.feeStructure}`} 
+                      type="warning" 
+                      showIcon 
+                      style={{ marginBottom: '16px', borderRadius: '8px' }} 
                     />
-                  ) : studentData.feeStructureDetails ? (
-                    <div>
-                      <Alert 
-                        message="Scheduled Fees" 
-                        description={`Showing components for: ${studentData.feeStructure}`} 
-                        type="warning" 
-                        showIcon 
-                        style={{ marginBottom: '16px', borderRadius: '8px' }} 
-                      />
-                      <List
-                        dataSource={studentData.feeStructureDetails.components}
-                        renderItem={item => {
-                          let dueDate = "";
-                          const t = item.fees_category || "";
-                          if (t.includes("Q1")) dueDate = "Payable by 10th March";
-                          else if (t.includes("Q2")) dueDate = "Payable by 10th June";
-                          else if (t.includes("Q3")) dueDate = "Payable by 10th Sep";
-                          else if (t.includes("Q4")) dueDate = "Payable by 10th Dec";
+                    <List
+                      dataSource={studentData.feeStructureDetails.components}
+                      renderItem={item => {
+                        const t = item.fees_category || "";
+                        const isPaid = paidTerms[t];
+                        let dueDate = "";
+                        if (t.includes("Q1")) dueDate = "Payable by 10th March";
+                        else if (t.includes("Q2")) dueDate = "Payable by 10th June";
+                        else if (t.includes("Q3")) dueDate = "Payable by 10th Sep";
+                        else if (t.includes("Q4")) dueDate = "Payable by 10th Dec";
 
-                          return (
-                            <List.Item extra={
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                <span className="font-bold">₹{item.amount.toLocaleString()}</span>
-                                <Tag color="red" style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>UNPAID</Tag>
+                        return (
+                          <List.Item extra={
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                              <span className="font-bold">₹{item.amount.toLocaleString()}</span>
+                              <Tag color={isPaid ? "green" : "red"} style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>{isPaid ? "PAID" : "UNPAID"}</Tag>
+                              {!isPaid && (
                                 <Button 
                                   type="primary" 
                                   size="small" 
@@ -413,57 +670,85 @@ const StudentDashboard = () => {
                                 >
                                   PAY NOW
                                 </Button>
-                              </div>
-                            }>
-                              <List.Item.Meta 
-                                title={t} 
-                                description={dueDate && <span style={{ fontSize: '10px', color: '#8c8c8c' }}>{dueDate}</span>}
-                              />
-                            </List.Item>
-                          );
-                        }}
-                      />
-                      <Divider style={{ margin: '12px 0' }} />
-                      <div style={{ display: 'flex', justifyContent: 'space-between', items: 'center', padding: '0 16px' }}>
-                        <Text strong>Total Expected Amount</Text>
-                        <Text strong style={{ fontSize: '18px', color: '#ff4d4f' }}>₹{studentData.feeStructureDetails.total_amount?.toLocaleString()}</Text>
-                      </div>
+                              )}
+                            </div>
+                          }>
+                            <List.Item.Meta 
+                              title={t} 
+                              description={isPaid ? <Text type="success" style={{ fontSize: '10px' }}>✓ Paid on {new Date(isPaid.paid_at).toLocaleDateString()}</Text> : (dueDate && <span style={{ fontSize: '10px', color: '#8c8c8c' }}>{dueDate}</span>)}
+                            />
+                          </List.Item>
+                        );
+                      }}
+                    />
+                    <Divider style={{ margin: '12px 0' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', items: 'center', padding: '0 16px' }}>
+                      <Text strong>Total Expected Amount</Text>
+                      <Text strong style={{ fontSize: '18px', color: '#ff4d4f' }}>₹{studentData.feeStructureDetails.total_amount?.toLocaleString()}</Text>
                     </div>
-                  ) : (
-                    <Empty description="No pending fees or defined fee structure found." />
-                  )}
-                </Card>
-              </div>
-            </Col>
-
-            <Col xs={24} lg={8}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                <Card title={<span><NotificationOutlined style={{ color: '#faad14', marginRight: '8px' }} /> Notifications</span>} bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                  <List
-                    dataSource={studentData.notifications}
-                    renderItem={item => (
-                      <List.Item><Alert message={item} type="info" showIcon style={{ width: '100%', borderRadius: '8px' }} /></List.Item>
-                    )}
-                  />
-                </Card>
-                {profile.guardians && profile.guardians.length > 0 && (
-                  <Card title={<span><UserOutlined style={{ color: '#722ed1', marginRight: '8px' }} /> Guardians</span>} bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                    <List dataSource={profile.guardians} renderItem={g => (
-                      <List.Item><List.Item.Meta avatar={<Avatar icon={<UserOutlined />} />} title={g.guardian_name} description={<Tag color="purple">{g.relation}</Tag>} /></List.Item>
-                    )} />
-                  </Card>
+                  </div>
+                ) : (
+                  <Empty description="No pending fees or defined fee structure found." />
                 )}
-              </div>
-            </Col>
-          </Row>
+              </Card>
+            </Tabs.TabPane>
+
+            <Tabs.TabPane tab={<span><WalletOutlined /> Fees Receipt Transaction</span>} key="4">
+              <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                <Table 
+                  dataSource={paymentHistory}
+                  rowKey="order_id"
+                  pagination={{ pageSize: 5 }}
+                  columns={[
+                    { title: 'Semester', dataIndex: 'fees_category', key: 'semester' },
+                    { 
+                      title: 'Receipt Date', 
+                      key: 'date',
+                      render: (rec) => {
+                        const d = new Date(rec.verified_at || rec.created_at);
+                        return (
+                          <div>
+                            <div className="font-semibold text-gray-800">{d.toLocaleDateString('en-GB')}</div>
+                            <div className="text-xs text-gray-400">{d.toLocaleTimeString('en-US')}</div>
+                          </div>
+                        );
+                      }
+                    },
+                    { title: 'Receipt No', dataIndex: 'payment_id', key: 'receipt_no' },
+                    { title: 'Amount', dataIndex: 'amount', key: 'amount', render: text => `₹ ${text?.toLocaleString()}` },
+                    { 
+                      title: 'Download', 
+                      key: 'download',
+                      align: 'center',
+                      render: (_, record) => (
+                        <Button 
+                          type="text" 
+                          icon={<DownloadOutlined className="text-xl text-blue-600" />} 
+                          onClick={() => handleDownloadReceipt(record)}
+                        />
+                      )
+                    }
+                  ]}
+                />
+              </Card>
+            </Tabs.TabPane>
+          </Tabs>
         </>
       )}
+
+      {/* Hidden Receipt Component for PDF Generation */}
+      <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '700px' }}>
+        <FeeReceiptTemplate 
+          ref={receiptRef} 
+          receiptData={selectedReceipt} 
+        />
+      </div>
 
       {/* Compact Payment Modal */}
       <Modal
         title={null}
         visible={isPaymentModalVisible}
-        onCancel={() => setIsPaymentModalVisible(false)}
+        onCancel={() => { setIsPaymentModalVisible(false); setPaymentProcessing(false); }}
         footer={null}
         width={800}
         centered
@@ -555,11 +840,12 @@ const StudentDashboard = () => {
                   <Button 
                     type="primary" 
                     size="large" 
+                    loading={paymentProcessing}
                     style={{ height: '56px', paddingLeft: '32px', paddingRight: '32px', borderRadius: '12px', fontSize: '16px', fontWeight: 900, border: 'none', background: termsAccepted ? '#1d4ed8' : '#e5e7eb', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
                     onClick={processPayment}
-                    disabled={!termsAccepted}
+                    disabled={!termsAccepted || paymentProcessing}
                   >
-                    CONFIRM & PAY
+                    {paymentProcessing ? 'PROCESSING...' : 'CONFIRM & PAY'}
                   </Button>
                 </div>
               </div>
@@ -567,6 +853,25 @@ const StudentDashboard = () => {
           )}
         </div>
       </Modal>
+
+      <style>{`
+        .guardian-tabs .ant-tabs-nav::before {
+          border-bottom: 2px solid #F3F4F6;
+        }
+        .guardian-tabs .ant-tabs-tab {
+          font-weight: 700;
+          font-size: 14px;
+          padding: 12px 24px;
+          color: #9CA3AF;
+        }
+        .guardian-tabs .ant-tabs-tab-active {
+          color: #1d4ed8 !important;
+        }
+        .guardian-tabs .ant-tabs-ink-bar {
+          background: #1d4ed8;
+          height: 3px;
+        }
+      `}</style>
     </div>
   );
 };

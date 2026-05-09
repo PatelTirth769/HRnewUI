@@ -10,14 +10,14 @@ export default function StudentCategory() {
     const [editingRecord, setEditingRecord] = useState(null);
     const [searchId, setSearchId] = useState('');
 
-    const defaultForm = { student_category: '' };
+    const defaultForm = { category: '' };
     const [formData, setFormData] = useState({ ...defaultForm });
 
     // ─── FETCH ALL ───────────────────────────────────────────────
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await API.get('/api/resource/Student Category?fields=["name"]&limit_page_length=None&order_by=name asc');
+            const res = await API.get('/api/resource/Student Category?fields=["name","category"]&limit_page_length=None&order_by=name asc');
             if (res.data.data) setData(res.data.data);
         } catch (err) {
             console.error('Fetch failed:', err);
@@ -34,7 +34,8 @@ export default function StudentCategory() {
         try {
             const res = await API.get(`/api/resource/Student Category/${encodeURIComponent(name)}`);
             const d = res.data.data;
-            setFormData({ student_category: d.name || '' });
+            // Use 'category' field which seems to be the mandatory one
+            setFormData({ category: d.category || d.name || '' });
         } catch (err) {
             console.error('Fetch single failed:', err);
             notification.error({ message: 'Failed to load category details' });
@@ -52,19 +53,27 @@ export default function StudentCategory() {
 
     // ─── SAVE ────────────────────────────────────────────────────
     const handleSave = async () => {
-        if (!formData.student_category?.trim()) {
+        const categoryName = formData.category?.trim();
+        if (!categoryName) {
             notification.warning({ message: 'Category Name is required' });
             return;
         }
         setSaving(true);
         try {
-            const payload = { student_category: formData.student_category };
+            // Based on the error "Category is required", the field name is 'category'
+            const payload = { 
+                category: categoryName,
+                // Also including common variations just in case
+                student_category: categoryName,
+                name: categoryName
+            };
+            
             if (editingRecord) {
                 await API.put(`/api/resource/Student Category/${encodeURIComponent(editingRecord.name)}`, payload);
-                notification.success({ message: `"${editingRecord.name}" updated successfully!` });
+                notification.success({ message: `"${categoryName}" updated successfully!` });
             } else {
                 await API.post('/api/resource/Student Category', payload);
-                notification.success({ message: `"${formData.student_category}" created successfully!` });
+                notification.success({ message: `"${categoryName}" created successfully!` });
             }
             setView('list');
         } catch (err) {
@@ -136,8 +145,8 @@ export default function StudentCategory() {
                             <label className="block text-[13px] text-gray-500 mb-1">Category <span className="text-red-400">*</span></label>
                             <input type="text"
                                 className="w-full border border-gray-100 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 bg-white shadow-sm"
-                                value={formData.student_category}
-                                onChange={(e) => updateForm('student_category', e.target.value)}
+                                value={formData.category}
+                                onChange={(e) => updateForm('category', e.target.value)}
                                 placeholder="e.g. Merit, Sports, General"
                             />
                         </div>

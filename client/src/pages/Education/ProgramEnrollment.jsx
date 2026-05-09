@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { notification } from 'antd';
+import { notification, Tag } from 'antd';
 import API from '../../services/api';
 
 const emptyForm = () => ({
@@ -64,7 +64,7 @@ const ProgramEnrollment = () => {
     const fetchDropdowns = async () => {
         try {
             const [sRes, pRes, yRes, tRes, cRes, hRes, bRes, csRes, fsRes] = await Promise.all([
-                API.get('/api/resource/Student?limit_page_length=None'),
+                API.get('/api/resource/Student?fields=["name","first_name","last_name"]&limit_page_length=None'),
                 API.get('/api/resource/Program?limit_page_length=None'),
                 API.get('/api/resource/Academic Year?limit_page_length=None'),
                 API.get('/api/resource/Academic Term?limit_page_length=None'),
@@ -75,7 +75,10 @@ const ProgramEnrollment = () => {
                 API.get('/api/resource/Fee Schedule?limit_page_length=None'),
             ]);
             setDropdowns({
-                students: sRes.data.data?.map(d => d.name) || [],
+                students: sRes.data.data?.map(d => ({
+                    id: d.name,
+                    name: `${d.first_name || ''} ${d.last_name || ''}`.trim()
+                })) || [],
                 programs: pRes.data.data?.map(d => d.name) || [],
                 academicYears: yRes.data.data?.map(d => d.name) || [],
                 academicTerms: tRes.data.data?.map(d => d.name) || [],
@@ -93,7 +96,7 @@ const ProgramEnrollment = () => {
     const fetchEnrollments = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Program Enrollment?fields=["name","student","program","academic_year","enrollment_date"]&limit_page_length=None&order_by=creation desc';
+            const url = '/api/resource/Program Enrollment?fields=["name","student","student_name","program","academic_year","enrollment_date"]&limit_page_length=None&order_by=creation desc';
             const response = await API.get(url);
             setEnrollments(response.data.data || []);
         } catch (err) {
@@ -243,6 +246,7 @@ const ProgramEnrollment = () => {
             return (
                 (e.name || '').toLowerCase().includes(q) ||
                 (e.student || '').toLowerCase().includes(q) ||
+                (e.student_name || '').toLowerCase().includes(q) ||
                 (e.program || '').toLowerCase().includes(q)
             );
         });
@@ -284,7 +288,10 @@ const ProgramEnrollment = () => {
                                     <td className="px-4 py-3">
                                         <button className="text-blue-600 hover:underline font-semibold" onClick={() => { setEditingRecord(row.name); setView('form'); }}>{row.name}</button>
                                     </td>
-                                    <td className="px-4 py-3 text-gray-900 font-medium">{row.student}</td>
+                                    <td className="px-4 py-3">
+                                        <div className="text-gray-900 font-medium">{row.student_name || row.student}</div>
+                                        <div className="text-[10px] text-gray-400">{row.student}</div>
+                                    </td>
                                     <td className="px-4 py-3 text-gray-600">{row.program}</td>
                                     <td className="px-4 py-3 text-gray-600">{row.enrollment_date}</td>
                                     <td className="px-4 py-3 text-gray-600">{row.academic_year}</td>
@@ -332,7 +339,7 @@ const ProgramEnrollment = () => {
                                         <label className={labelStyle}>Student *</label>
                                         <select className={inputStyle} value={form.student} onChange={e => updateField('student', e.target.value)}>
                                             <option value="">Select Student</option>
-                                            {dropdowns.students.map(s => <option key={s} value={s}>{s}</option>)}
+                                            {dropdowns.students.map(s => <option key={s.id} value={s.id}>{s.id} - {s.name}</option>)}
                                         </select>
                                     </div>
                                     <div>

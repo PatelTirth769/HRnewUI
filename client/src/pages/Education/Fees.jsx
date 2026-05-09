@@ -67,7 +67,7 @@ const Fees = () => {
         try {
             const safeGet = (url) => API.get(url).catch(err => { console.error(`Error fetching ${url}:`, err); return { data: { data: [] } }; });
             const [sRes, pRes, yRes, tRes, fsRes, fshRes, aRes, coRes, ccRes, fcRes] = await Promise.all([
-                safeGet('/api/resource/Student?limit_page_length=None'),
+                safeGet('/api/resource/Student?fields=["name","first_name","last_name"]&limit_page_length=None'),
                 safeGet('/api/resource/Program?limit_page_length=None'),
                 safeGet('/api/resource/Academic Year?limit_page_length=None'),
                 safeGet('/api/resource/Academic Term?limit_page_length=None'),
@@ -79,7 +79,10 @@ const Fees = () => {
                 safeGet('/api/resource/Fee Category?limit_page_length=None'),
             ]);
             setDropdowns({
-                students: sRes.data.data?.map(d => d.name) || [],
+                students: sRes.data.data?.map(d => ({
+                    id: d.name,
+                    name: `${d.first_name || ''} ${d.last_name || ''}`.trim()
+                })) || [],
                 programs: pRes.data.data?.map(d => d.name) || [],
                 academicYears: yRes.data.data?.map(d => d.name) || [],
                 academicTerms: tRes.data.data?.map(d => d.name) || [],
@@ -148,7 +151,7 @@ const Fees = () => {
             const res = await API.get(`/api/resource/Student/${encodeURIComponent(studentId)}`);
             const data = res.data.data;
             if (data) {
-                setForm(prev => ({ ...prev, student_name: data.title || data.student_name }));
+                setForm(prev => ({ ...prev, student_name: `${data.first_name || ''} ${data.last_name || ''}`.trim() }));
             }
         } catch (err) {
             console.error('Failed to fetch student details', err);
@@ -378,7 +381,7 @@ const Fees = () => {
                             <label className={labelStyle}>Student *</label>
                             <select className={inputStyle} value={form.student} onChange={e => updateField('student', e.target.value)}>
                                 <option value="">Select Student</option>
-                                {dropdowns.students.map(s => <option key={s} value={s}>{s}</option>)}
+                                {dropdowns.students.map(s => <option key={s.id} value={s.id}>{s.id} - {s.name}</option>)}
                             </select>
                         </div>
                         <div>

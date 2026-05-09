@@ -341,5 +341,29 @@ router.get('/history/:studentId', async (req, res) => {
     }
 });
 
+/**
+ * GET /history-all
+ * Fetches ALL payment records from schooler_system → data → fee_payments
+ * Used for administrative reporting to show all initiated/completed transactions.
+ */
+router.get('/history-all', async (req, res) => {
+    try {
+        const receiptsCol = db.collection('schooler_system').doc('data').collection('fee_payments');
+        
+        const snapshot = await receiptsCol
+            .orderBy('created_at', 'desc')
+            .limit(1000)
+            .get();
+
+        const history = [];
+        snapshot.forEach(doc => history.push(doc.data()));
+        
+        res.json({ success: true, data: history });
+    } catch (err) {
+        console.error('Fetch All History Error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 module.exports = router;
 

@@ -302,6 +302,7 @@ import FeeCategory from './pages/Education/FeeCategory';
 import FeeSchedule from './pages/Education/FeeSchedule';
 import Fees from './pages/Education/Fees';
 import StudentFeeCollection from './pages/Education/StudentFeeCollection';
+import FeesReport from './pages/Education/FeesReport';
 import ProgramWiseFeeCollection from './pages/Education/ProgramWiseFeeCollection';
 import CourseSchedule from './pages/Education/CourseSchedule';
 // CourseSchedulingTool moved down to standardized tools section
@@ -731,6 +732,7 @@ function App() {
                 <Route path="/education/fee-schedule" element={<FeeSchedule />} />
                 <Route path="/education/fees" element={<Fees />} />
                 <Route path="/education/student-fee-collection" element={<StudentFeeCollection />} />
+                <Route path="/education/fees-report" element={<FeesReport />} />
                 <Route path="/education/program-wise-fee-collection" element={<ProgramWiseFeeCollection />} />
                 <Route path="/education/course-schedule" element={<CourseSchedule />} />
                 <Route path="/education/course-scheduling-tool" element={<CourseSchedulingTool />} />
