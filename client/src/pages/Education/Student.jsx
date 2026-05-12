@@ -159,9 +159,74 @@ const Student = () => {
             notification.warning({ message: 'Student Email Address is required.' });
             return;
         }
+
+        // Validate guardians
+        for (let i = 0; i < form.guardians.length; i++) {
+            const g = form.guardians[i];
+            if (g.is_new && !g.guardian_name) {
+                notification.warning({ message: `Guardian Name is required for Guardian #${i + 1}.` });
+                return;
+            }
+            if (!g.is_new && !g.guardian) {
+                notification.warning({ message: `Please select an existing guardian for Guardian #${i + 1} or remove it.` });
+                return;
+            }
+            if (!g.relation) {
+                notification.warning({ message: `Relation is required for Guardian #${i + 1}.` });
+                return;
+            }
+        }
+
         setSaving(true);
         try {
+            // Process new guardians
+            const finalGuardians = [];
+            for (const g of form.guardians) {
+                if (g.is_new) {
+                    const guardianPayload = {
+                        guardian_name: g.guardian_name,
+                        email_address: g.email_address || null,
+                        mobile_number: g.mobile_number || null,
+                        occupation: g.occupation || null,
+                        designation: g.designation || null,
+                        education: g.education || null,
+                        alternate_number: g.alternate_number || null,
+                        work_address: g.work_address || null,
+                        date_of_birth: g.date_of_birth || null
+                    };
+                    const gRes = await API.post('/api/resource/Guardian', guardianPayload);
+                    const createdGuardian = gRes.data.data;
+                    finalGuardians.push({
+                        guardian: createdGuardian.name,
+                        guardian_name: createdGuardian.guardian_name,
+                        relation: g.relation
+                    });
+                } else {
+                    finalGuardians.push({
+                        guardian: g.guardian,
+                        guardian_name: g.guardian_name,
+                        relation: g.relation
+                    });
+                }
+            }
+
             const payload = { ...form };
+            Object.keys(payload).forEach(key => {
+                if (payload[key] === '') {
+                    payload[key] = null;
+                }
+            });
+            payload.guardians = finalGuardians;
+            
+            // Clean up siblings empty fields
+            if (payload.siblings && payload.siblings.length > 0) {
+                payload.siblings = payload.siblings.map(s => {
+                    const clean = { ...s };
+                    Object.keys(clean).forEach(k => { if (clean[k] === '') clean[k] = null; });
+                    return clean;
+                });
+            }
+
             if (editingRecord) {
                 await API.put(`/api/resource/Student/${encodeURIComponent(editingRecord)}`, payload);
                 notification.success({ message: 'Student updated successfully.' });
@@ -171,8 +236,31 @@ const Student = () => {
             }
             setView('list');
         } catch (err) {
-            console.error('Save error:', err);
-            notification.error({ message: 'Save Failed', description: err.response?.data?._server_messages || err.message });
+            console.error('Save error full details:', err.response?.data);
+            let exactError = 'Unknown error occurred';
+            
+            if (err.response?.data?._server_messages) {
+                try {
+                    const messages = JSON.parse(err.response.data._server_messages);
+                    exactError = JSON.parse(messages[0]).message;
+                } catch (e) {
+                    exactError = err.response.data._server_messages;
+                }
+            } else if (err.response?.data?.message) {
+                exactError = err.response.data.message;
+            } else if (err.response?.data?.exc) {
+                exactError = 'Backend Exception: ' + err.response.data.exc;
+            } else {
+                exactError = err.message;
+            }
+
+            notification.error({ 
+                message: 'Save Failed', 
+                description: String(exactError),
+                duration: 10
+            });
+            alert("Error from ERPNext: " + exactError);
+            
         } finally {
             setSaving(false);
         }
@@ -193,7 +281,20 @@ const Student = () => {
     const addGuardian = () => {
         setForm(prev => ({
             ...prev,
-            guardians: [...prev.guardians, { guardian: '', guardian_name: '', relation: '' }]
+            guardians: [...prev.guardians, { 
+                is_new: true,
+                guardian: '', 
+                guardian_name: '', 
+                relation: '',
+                email_address: '',
+                mobile_number: '',
+                occupation: '',
+                designation: '',
+                education: '',
+                alternate_number: '',
+                work_address: '',
+                date_of_birth: ''
+            }]
         }));
     };
     const updateGuardian = (idx, key, val) => {
@@ -513,46 +614,93 @@ const Student = () => {
                     <div className="space-y-12">
                         <div>
                             <h3 className={sectionTitleStyle}>Guardian Details</h3>
-                            <div className="border border-gray-200 rounded-lg overflow-hidden">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-gray-50 text-gray-600 border-b text-[13px]">
-                                        <tr>
-                                            <th className="px-3 py-2.5 text-left w-12">No.</th>
-                                            <th className="px-3 py-2.5 text-left font-bold text-blue-600">Guardian ID *</th>
-                                            <th className="px-3 py-2.5 text-left">Guardian Name</th>
-                                            <th className="px-3 py-2.5 text-left">Relation</th>
-                                            <th className="px-3 py-2 text-center w-10"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {form.guardians.length === 0 ? (
-                                            <tr><td colSpan="5" className="text-center py-10 text-gray-400 italic">No Guardians Linked</td></tr>
+                            {form.guardians.map((g, idx) => (
+                                <div key={idx} className="mb-6 p-5 border border-gray-200 rounded-lg bg-gray-50/40 relative shadow-sm">
+                                    <button onClick={() => removeGuardian(idx)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 font-bold transition" title="Remove Guardian">✕</button>
+                                    
+                                    <div className="flex gap-6 mb-6 pb-4 border-b border-gray-100">
+                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                            <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!g.is_new} onChange={() => updateGuardian(idx, 'is_new', false)} /> Link Existing Guardian
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                            <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!!g.is_new} onChange={() => updateGuardian(idx, 'is_new', true)} /> Create New Guardian
+                                        </label>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-x-12 gap-y-6">
+                                        <div>
+                                            <label className={labelStyle}>Relation with Student *</label>
+                                            <select className={inputStyle} value={g.relation || ''} onChange={e => updateGuardian(idx, 'relation', e.target.value)}>
+                                                <option value="">Select Relation...</option>
+                                                <option value="Father">Father</option>
+                                                <option value="Mother">Mother</option>
+                                                <option value="Others">Others</option>
+                                            </select>
+                                        </div>
+                                        
+                                        {!g.is_new ? (
+                                            <>
+                                                <div>
+                                                    <label className={labelStyle}>Select Guardian *</label>
+                                                    <select className={inputStyle} value={g.guardian || ''} onChange={e => updateGuardian(idx, 'guardian', e.target.value)}>
+                                                        <option value="">Link Guardian...</option>
+                                                        {guardiansList.map(gl => <option key={gl.name} value={gl.name}>{gl.name} ({gl.guardian_name})</option>)}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className={labelStyle}>Guardian Name</label>
+                                                    <input className={`${inputStyle} bg-gray-100`} value={g.guardian_name || ''} readOnly />
+                                                </div>
+                                            </>
                                         ) : (
-                                            form.guardians.map((g, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
-                                                    <td className="px-3 py-2.5 text-gray-400">{idx + 1}</td>
-                                                    <td className="px-3 py-2.5">
-                                                        <select className="w-full border border-blue-200 rounded px-2 py-1.5 text-sm bg-blue-50/20 shadow-sm focus:outline-none font-medium" value={g.guardian} onChange={e => updateGuardian(idx, 'guardian', e.target.value)}>
-                                                            <option value="">Link Guardian...</option>
-                                                            {guardiansList.map(gl => <option key={gl.name} value={gl.name}>{gl.name} ({gl.guardian_name})</option>)}
-                                                        </select>
-                                                    </td>
-                                                    <td className="px-3 py-2.5">
-                                                        <input className="w-full bg-transparent text-gray-600 font-medium px-2 py-1.5 border-none focus:outline-none" value={g.guardian_name} readOnly />
-                                                    </td>
-                                                    <td className="px-3 py-2.5">
-                                                        <input className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-blue-400" value={g.relation} onChange={e => updateGuardian(idx, 'relation', e.target.value)} placeholder="Father, Mother..." />
-                                                    </td>
-                                                    <td className="px-3 py-2 text-center">
-                                                        <button onClick={() => removeGuardian(idx)} className="text-gray-300 hover:text-red-500 font-bold transition opacity-0 group-hover:opacity-100 italic">✕</button>
-                                                    </td>
-                                                </tr>
-                                            ))
+                                            <>
+                                                <div>
+                                                    <label className={labelStyle}>Guardian Name *</label>
+                                                    <input className={inputStyle} value={g.guardian_name || ''} onChange={e => updateGuardian(idx, 'guardian_name', e.target.value)} placeholder="Full Name" />
+                                                </div>
+                                                <div>
+                                                    <label className={labelStyle}>Email Address</label>
+                                                    <input type="email" className={inputStyle} value={g.email_address || ''} onChange={e => updateGuardian(idx, 'email_address', e.target.value)} placeholder="email@example.com" />
+                                                </div>
+                                                <div>
+                                                    <label className={labelStyle}>Mobile Number</label>
+                                                    <input className={inputStyle} value={g.mobile_number || ''} onChange={e => updateGuardian(idx, 'mobile_number', e.target.value)} placeholder="+91 ..." />
+                                                </div>
+                                                <div>
+                                                    <label className={labelStyle}>Occupation</label>
+                                                    <input className={inputStyle} value={g.occupation || ''} onChange={e => updateGuardian(idx, 'occupation', e.target.value)} placeholder="Occupation" />
+                                                </div>
+                                                <div>
+                                                    <label className={labelStyle}>Designation</label>
+                                                    <input className={inputStyle} value={g.designation || ''} onChange={e => updateGuardian(idx, 'designation', e.target.value)} placeholder="Designation" />
+                                                </div>
+                                                <div>
+                                                    <label className={labelStyle}>Education</label>
+                                                    <input className={inputStyle} value={g.education || ''} onChange={e => updateGuardian(idx, 'education', e.target.value)} placeholder="Qualification" />
+                                                </div>
+                                                <div>
+                                                    <label className={labelStyle}>Alternate Number</label>
+                                                    <input className={inputStyle} value={g.alternate_number || ''} onChange={e => updateGuardian(idx, 'alternate_number', e.target.value)} />
+                                                </div>
+                                                <div>
+                                                    <label className={labelStyle}>Date of Birth</label>
+                                                    <input type="date" className={inputStyle} value={g.date_of_birth || ''} onChange={e => updateGuardian(idx, 'date_of_birth', e.target.value)} />
+                                                </div>
+                                                <div className="col-span-2">
+                                                    <label className={labelStyle}>Work Address</label>
+                                                    <textarea className={`${inputStyle} h-16 resize-none`} value={g.work_address || ''} onChange={e => updateGuardian(idx, 'work_address', e.target.value)} placeholder="Full Address" />
+                                                </div>
+                                            </>
                                         )}
-                                    </tbody>
-                                </table>
-                            </div>
-                            <button onClick={addGuardian} className="mt-3 px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-700 text-[13px] font-medium rounded hover:bg-gray-100 transition shadow-sm">+ Add Guardian</button>
+                                    </div>
+                                </div>
+                            ))}
+                            {form.guardians.length === 0 && (
+                                <div className="text-center py-8 mb-6 text-gray-400 italic border-2 border-dashed border-gray-200 rounded-lg bg-gray-50/30">
+                                    No Guardians Linked
+                                </div>
+                            )}
+                            <button onClick={addGuardian} className="px-4 py-2 bg-white border border-gray-200 text-blue-600 text-[13px] font-semibold rounded-md hover:bg-blue-50 transition shadow-sm">+ Add Guardian</button>
                         </div>
 
                         <div className="pt-8 border-t border-gray-100">

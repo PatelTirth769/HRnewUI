@@ -86,10 +86,12 @@ const LoginPage = () => {
 
       if (response.data.message === 'Logged In') {
         const mongoRole = response.data.mongo_role;
+        const resolvedUserId = response.data.resolved_user_id || values.email;
+        
         // Fetch actual ERPNext roles for this user
         let isHRAdmin = false;
         try {
-          const userRes = await API.get(`/api/resource/User/${encodeURIComponent(values.email)}`);
+          const userRes = await API.get(`/api/resource/User/${encodeURIComponent(resolvedUserId)}`);
           const userData = userRes.data?.data;
           const roles = userData?.roles?.map(r => r.role) || [];
 
@@ -114,7 +116,7 @@ const LoginPage = () => {
 
         // Store basic user info 
         localStorage.setItem('isLogged', 'true');
-        localStorage.setItem('user', values.email);
+        localStorage.setItem('user', resolvedUserId);
         localStorage.setItem('userToken', 'session-active');
         localStorage.setItem('userRole', mongoRole || 'Employee');
         localStorage.setItem('userIsHRAdmin', isHRAdmin ? 'true' : 'false');

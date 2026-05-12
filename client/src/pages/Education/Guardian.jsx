@@ -31,15 +31,10 @@ const Guardian = () => {
     const [loadingForm, setLoadingForm] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // Dynamic dropdown options
-    const [occupations, setOccupations] = useState([]);
-    const [designations, setDesignations] = useState([]);
-
     useEffect(() => {
         if (view === 'list') {
             fetchGuardians();
         } else {
-            fetchDropdownData();
             if (editingRecord) {
                 fetchGuardian(editingRecord);
             } else {
@@ -61,18 +56,6 @@ const Guardian = () => {
         }
     };
 
-    const fetchDropdownData = async () => {
-        try {
-            const [occRes, desigRes] = await Promise.all([
-                API.get('/api/resource/Occupation?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
-                API.get('/api/resource/Designation?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
-            ]);
-            setOccupations((occRes.data.data || []).map(o => o.name));
-            setDesignations((desigRes.data.data || []).map(d => d.name));
-        } catch (err) {
-            console.error('Error fetching dropdown data:', err);
-        }
-    };
 
     const fetchGuardian = async (id) => {
         setLoadingForm(true);
@@ -281,10 +264,7 @@ const Guardian = () => {
                     </div>
                     <div>
                         <label className={labelStyle}>Occupation</label>
-                        <select className={inputStyle} value={form.occupation} onChange={e => updateField('occupation', e.target.value)}>
-                            <option value="">Select Occupation...</option>
-                            {occupations.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
+                        <input className={inputStyle} value={form.occupation} onChange={e => updateField('occupation', e.target.value)} placeholder="Occupation" />
                     </div>
                     <div>
                         <label className={labelStyle}>Mobile Number</label>
@@ -292,10 +272,7 @@ const Guardian = () => {
                     </div>
                     <div>
                         <label className={labelStyle}>Designation</label>
-                        <select className={inputStyle} value={form.designation} onChange={e => updateField('designation', e.target.value)}>
-                            <option value="">Select Designation...</option>
-                            {designations.map(d => <option key={d} value={d}>{d}</option>)}
-                        </select>
+                        <input className={inputStyle} value={form.designation} onChange={e => updateField('designation', e.target.value)} placeholder="Designation" />
                     </div>
                     <div>
                         <label className={labelStyle}>Alternate Number</label>

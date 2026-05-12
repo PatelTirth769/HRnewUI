@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import API from '../../services/api';
 import { notification, Spin, Table, Tag } from 'antd';
 import { FiSearch, FiRefreshCw, FiDownload } from 'react-icons/fi';
 
@@ -18,10 +19,26 @@ export default function RegistrationReport() {
         registrationSource: 'All selected',
         employeeName: 'All selected'
     });
+    const [academicYears, setAcademicYears] = useState([]);
+    const [availablePrograms, setAvailablePrograms] = useState([]);
 
     useEffect(() => {
         fetchData();
+        fetchERPNextData();
     }, []);
+
+    const fetchERPNextData = async () => {
+        try {
+            const [progRes, yearRes] = await Promise.all([
+                API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+            ]);
+            setAvailablePrograms(progRes.data.data?.map(p => p.name) || []);
+            setAcademicYears(yearRes.data.data?.map(y => y.name) || []);
+        } catch (err) {
+            console.error('Error fetching ERPNext data:', err);
+        }
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -40,9 +57,9 @@ export default function RegistrationReport() {
     const filteredData = useMemo(() => {
         if (!criteria) return [];
         return data.filter(d => {
-            const matchesYear = filters.academicYear === 'All selected' || d.academicYear === filters.academicYear;
-            const matchesClass = filters.enquiryClass === 'All selected' || d.class === filters.enquiryClass;
-            const matchesSource = filters.registrationSource === 'All selected' || d.sourceOfEnquiry === filters.registrationSource;
+            const matchesYear = filters.academicYear === 'All selected' || d.academic_year === filters.academicYear;
+            const matchesClass = filters.enquiryClass === 'All selected' || d.program === filters.enquiryClass;
+            const matchesSource = filters.registrationSource === 'All selected' || d.source === filters.registrationSource;
             const matchesEmployee = filters.employeeName === 'All selected' || d.recordedBy === filters.employeeName;
             
             // Rejection logic (if report type is rejection)
@@ -75,8 +92,8 @@ export default function RegistrationReport() {
 
     const columns = [
         { title: 'Reg. Date', dataIndex: 'created_at', key: 'date', render: (val) => val?.toDate ? val.toDate().toLocaleDateString() : new Date(val).toLocaleDateString() },
-        { title: 'Student Name', render: (_, r) => `${r.firstName} ${r.lastName}`, key: 'name' },
-        { title: 'Class', dataIndex: 'class', key: 'class' },
+        { title: 'Student Name', render: (_, r) => `${r.first_name} ${r.last_name}`, key: 'name' },
+        { title: 'Program', dataIndex: 'program', key: 'program' },
         { title: 'Receipt No', dataIndex: 'receiptNo', key: 'receipt' },
         { title: 'Amount', dataIndex: 'feeAmount', key: 'amount', render: (val, r) => `₹${val || 0} (${r.isFeePaid ? 'PAID' : 'UNPAID'})` },
 
@@ -90,7 +107,7 @@ export default function RegistrationReport() {
                 </Tag>
             )
         },
-        { title: 'Source', dataIndex: 'sourceOfEnquiry', key: 'source' }
+        { title: 'Source', dataIndex: 'source', key: 'source' }
     ];
 
     return (
@@ -141,19 +158,15 @@ export default function RegistrationReport() {
                                 <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Academic Year <span className="text-red-500">*</span></label>
                                 <select value={filters.academicYear} onChange={(e) => setFilters({...filters, academicYear: e.target.value})} className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white">
                                     <option>All selected</option>
-                                    <option>2024-2025</option>
-                                    <option>2025-2026</option>
+                                    {academicYears.map(y => <option key={y}>{y}</option>)}
                                 </select>
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Enquiry Class <span className="text-red-500">*</span></label>
+                                <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Enquiry Program <span className="text-red-500">*</span></label>
                                 <select value={filters.enquiryClass} onChange={(e) => setFilters({...filters, enquiryClass: e.target.value})} className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white">
                                     <option>All selected</option>
-                                    <option>Nursery</option>
-                                    <option>LKG</option>
-                                    <option>UKG</option>
-                                    {['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'].map(c => <option key={c}>{c}</option>)}
+                                    {availablePrograms.map(p => <option key={p}>{p}</option>)}
                                 </select>
                             </div>
 

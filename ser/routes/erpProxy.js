@@ -116,27 +116,46 @@ router.all('/:systemCode/*', async (req, res) => {
         // Intercept Login to attach MongoDB Role
         if (targetPath === 'api/method/login' && response.status === 200) {
             console.log(`[Login Intercept] Successful login for user: ${req.body.usr}`);
-            const email = req.body.usr;
+            
+            // Resolve actual user ID from ERPNext because req.body.usr might be a mobile number
+            let resolvedUser = req.body.usr;
+            const erpCookies = response.headers['set-cookie']?.join('; ') || '';
+            
+            try {
+                const loggedUserRes = await axios({
+                    method: 'GET',
+                    url: `${targetBase}/api/method/frappe.auth.get_logged_user`,
+                    headers: { 'Cookie': erpCookies }
+                });
+                if (loggedUserRes.data?.message) {
+                    resolvedUser = loggedUserRes.data.message;
+                    console.log(`[Login Intercept] Resolved identifier ${req.body.usr} to actual user: ${resolvedUser}`);
+                }
+            } catch (err) {
+                console.warn(`[Login Intercept] Failed to resolve actual user ID: ${err.message}`);
+            }
+
+            const email = resolvedUser;
             if (email) {
                 try {
                     let mongoRole = null;
                     let mongoUserExists = false;
+                    let currentMobileNo = null;
 
                     // Use system-aware collection for users
                     const usersCol = getCollection(db, systemCode, 'users');
 
-                    // Try by email first
+                    // Try by email/username first
                     let snapshot = await usersCol.where('email', '==', email).limit(1).get();
+                    if (snapshot.empty) {
+                        snapshot = await usersCol.where('username', '==', email).limit(1).get();
+                    }
+
                     if (!snapshot.empty) {
                         mongoUserExists = true;
-                        mongoRole = snapshot.docs[0].data().role;
-                    } else {
-                        // Try by username
-                        snapshot = await usersCol.where('username', '==', email).limit(1).get();
-                        if (!snapshot.empty) {
-                            mongoUserExists = true;
-                            mongoRole = snapshot.docs[0].data().role;
-                        }
+                        const existingData = snapshot.docs[0].data();
+                        mongoRole = existingData.role;
+                        currentMobileNo = existingData.mobile_no || null;
                     }
 
                     console.log(`[Login Intercept] Attempting to sync roles from ERPNext...`);
@@ -145,12 +164,14 @@ router.all('/:systemCode/*', async (req, res) => {
                             method: 'GET',
                             url: `${targetBase}/api/resource/User/${encodeURIComponent(email)}`,
                             headers: {
-                                'Cookie': response.headers['set-cookie']?.join('; ') || '',
+                                'Cookie': erpCookies,
                             }
                         });
                         
                         console.log(`[Login Intercept] ERPNext User Data fetched.`);
-                        let erpRoles = userRes.data?.data?.roles?.map(r => r.role) || [];
+                        const erpUserData = userRes.data?.data || {};
+                        let erpRoles = erpUserData.roles?.map(r => r.role) || [];
+                        const erpMobileNo = erpUserData.mobile_no || null;
                         
                         // Fallback 1: Try get_roles RPC if array is empty
                         if (erpRoles.length === 0) {
@@ -158,7 +179,7 @@ router.all('/:systemCode/*', async (req, res) => {
                                 const rolesRpc = await axios({
                                     method: 'GET',
                                     url: `${targetBase}/api/method/frappe.core.doctype.user.user.get_roles`,
-                                    headers: { 'Cookie': response.headers['set-cookie']?.join('; ') || '' }
+                                    headers: { 'Cookie': erpCookies }
                                 });
                                 if (rolesRpc.data?.message && Array.isArray(rolesRpc.data.message)) {
                                     erpRoles = rolesRpc.data.message;
@@ -170,22 +191,11 @@ router.all('/:systemCode/*', async (req, res) => {
                         }
 
                         // Fallback 2: Check module_profile or Role Profile
-                        const moduleProfile = userRes.data?.data?.module_profile;
-                        const roleProfileName = userRes.data?.data?.role_profile_name || userRes.data?.data?.role_profile;
+                        const moduleProfile = erpUserData.module_profile;
+                        const roleProfileName = erpUserData.role_profile_name || erpUserData.role_profile;
                         
-                        console.log(`[Login Intercept] Final ERPNext Roles: ${erpRoles.join(', ')} | Profile: ${moduleProfile} | Role Profile: ${roleProfileName}`);
+                        console.log(`[Login Intercept] Final ERPNext Roles: ${erpRoles.join(', ')} | Profile: ${moduleProfile} | Role Profile: ${roleProfileName} | Mobile: ${erpMobileNo}`);
                         
-                        // Debugging snippet: log keys relating to roles/profiles just in case
-                        const roleKeys = Object.keys(userRes.data?.data || {}).filter(k => k.includes('role') || k.includes('profile'));
-                        try {
-                            require('fs').writeFileSync('debug_login_response.json', JSON.stringify({
-                                roleKeys,
-                                roleProfileName,
-                                moduleProfile,
-                                email
-                            }, null, 2));
-                        } catch(e) {}
-
                         // Determine if we got any meaningful data from ERPNext
                         const gotMeaningfulData = erpRoles.length > 0 || (moduleProfile && moduleProfile !== 'Employee' && moduleProfile !== '') || roleProfileName;
                         
@@ -213,27 +223,32 @@ router.all('/:systemCode/*', async (req, res) => {
                         } else if (erpRoles.includes('Guardian') || moduleProfile === 'Guardian') {
                             updatedRole = 'Guardian';
                         } else if (gotMeaningfulData) {
-                            // Only default to Employee if we actually got real data from ERPNext
                             updatedRole = 'Employee';
                         }
-                        // If updatedRole is still null, we got no useful data — preserve existing Firebase role
 
                         if (mongoUserExists) {
+                            const updateData = {};
+                            let needsUpdate = false;
+
                             if (updatedRole && updatedRole !== mongoRole) {
-                                console.log(`[Login Intercept] Role mismatch. Existing: ${mongoRole}, New: ${updatedRole}. Updating Firebase...`);
-                                const querySnapshot = await usersCol.where('email', '==', email).limit(1).get();
-                                if (!querySnapshot.empty) {
-                                    await usersCol.doc(querySnapshot.docs[0].id).update({ 
-                                        role: updatedRole,
-                                        system: systemCode 
-                                    });
-                                    mongoRole = updatedRole;
-                                    console.log(`[Login Intercept] Firebase updated successfully to ${updatedRole} (System: ${systemCode})`);
-                                }
-                            } else if (!updatedRole) {
-                                console.log(`[Login Intercept] No meaningful role data from ERPNext. Preserving existing Firebase role: ${mongoRole}`);
+                                console.log(`[Login Intercept] Role mismatch. Existing: ${mongoRole}, New: ${updatedRole}.`);
+                                updateData.role = updatedRole;
+                                mongoRole = updatedRole;
+                                needsUpdate = true;
+                            }
+                            
+                            if (erpMobileNo && erpMobileNo !== currentMobileNo) {
+                                console.log(`[Login Intercept] Mobile No update. Existing: ${currentMobileNo}, New: ${erpMobileNo}.`);
+                                updateData.mobile_no = erpMobileNo;
+                                needsUpdate = true;
+                            }
+
+                            if (needsUpdate) {
+                                updateData.system = systemCode;
+                                await usersCol.doc(snapshot.docs[0].id).update(updateData);
+                                console.log(`[Login Intercept] Firebase updated successfully.`);
                             } else {
-                                console.log(`[Login Intercept] Roles match (${mongoRole}). No update needed.`);
+                                console.log(`[Login Intercept] Roles and mobile match. No update needed.`);
                             }
                         } else {
                             // New user: if we couldn't detect a role, default to Employee
@@ -242,6 +257,7 @@ router.all('/:systemCode/*', async (req, res) => {
                             await usersCol.add({
                                 email: email,
                                 username: email,
+                                mobile_no: erpMobileNo,
                                 role: roleToCreate,
                                 system: systemCode,
                                 status: 'active',
@@ -253,9 +269,6 @@ router.all('/:systemCode/*', async (req, res) => {
                         }
                     } catch (syncErr) {
                         console.error('[Login Intercept] Role Sync Failed:', syncErr.message);
-                        if (syncErr.response) {
-                            console.error('[Login Intercept] Role Sync Error Data:', JSON.stringify(syncErr.response.data, null, 2));
-                        }
                         if (mongoUserExists) {
                             console.log(`[Login Intercept] Fallback: Using existing Firebase role: ${mongoRole}`);
                         }
@@ -263,6 +276,7 @@ router.all('/:systemCode/*', async (req, res) => {
 
                     if (mongoRole && typeof response.data === 'object') {
                         response.data.mongo_role = mongoRole;
+                        response.data.resolved_user_id = email; // Actual email/ID from ERPNext
                     }
                 } catch (mongoErr) {
                     console.error('Error during login interception:', mongoErr);

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { notification, Spin, Tabs, Modal } from 'antd';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import API from '../../services/api';
 import { FiPlus, FiArrowLeft, FiSave, FiUser, FiUsers, FiBriefcase, FiLink, FiEdit2, FiTrash2, FiSearch, FiDownload, FiRefreshCw, FiX, FiFileText, FiCheckCircle } from 'react-icons/fi';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -82,22 +83,21 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
     const [selectedRegistration, setSelectedRegistration] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [admFee, setAdmFee] = useState(0);
-    const [availableClasses, setAvailableClasses] = useState(['Nursery', 'LKG', 'UKG', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th']);
+    const [availableClasses, setAvailableClasses] = useState([]);
+    const [academicYears, setAcademicYears] = useState([]);
 
 
     const initFormData = {
         admissionNo: '',
-        admissionDate: new Date().toISOString().split('T')[0],
-        academicYear: '2025-2026',
-        class: '',
-        firstName: '',
-        lastName: '',
+        admission_date: new Date().toISOString().split('T')[0],
+        academic_year: '2025-2026',
+        program: '',
+        first_name: '',
+        last_name: '',
         gender: '',
-        birthDate: '',
+        date_of_birth: '',
         mobile: '',
         email: '',
-        fatherName: '',
-        motherName: '',
         enquiryCode: '',
         registrationCode: '',
         status: 'Confirmed',
@@ -111,18 +111,35 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
 
     const [formData, setFormData] = useState(initFormData);
 
+    const fetchERPNextData = async () => {
+        try {
+            const [progRes, yearRes] = await Promise.all([
+                API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+            ]);
+            const programs = progRes.data.data?.map(p => p.name) || [];
+            const years = yearRes.data.data?.map(y => y.name) || [];
+            setAcademicYears(years);
+            await fetchRestrictions(programs);
+        } catch (err) {
+            console.error('Error fetching ERPNext data:', err);
+        }
+    };
+
     useEffect(() => {
-        fetchRestrictions();
+        fetchERPNextData();
         if (view === 'list') fetchRegistrations();
     }, [view]);
 
-    const fetchRestrictions = async () => {
+    const fetchRestrictions = async (programs) => {
         try {
-            const snap = await getDocs(collection(db, 'schooler_system/enquiry_management/class_restrictions'));
+            const snap = await getDocs(collection(db, 'schooler_system/enquiry_management/program_restrictions'));
             const restricted = snap.docs.filter(d => d.data().isDisabled).map(d => d.id);
-            const all = ['Nursery', 'LKG', 'UKG', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'];
-            setAvailableClasses(all.filter(c => !restricted.includes(c)));
-        } catch (err) { console.error('Restriction fetch failed'); }
+            setAvailableClasses(programs.filter(c => !restricted.includes(c)));
+        } catch (err) { 
+            console.error('Restriction fetch failed', err);
+            setAvailableClasses(programs);
+        }
     };
 
 
@@ -141,18 +158,16 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
         setFormData({
             ...initFormData,
             admissionNo: `ADM-${Date.now().toString().slice(-6)}`,
-            class: reg.class,
-            firstName: reg.firstName,
-            lastName: reg.lastName,
+            program: reg.program,
+            first_name: reg.first_name,
+            last_name: reg.last_name,
             gender: reg.gender,
-            birthDate: reg.birthDate,
-            mobile: reg.smsNumber1 || reg.mobile,
-            email: reg.email,
-            fatherName: reg.fatherName,
-            motherName: reg.motherName,
+            date_of_birth: reg.date_of_birth,
+            mobile: reg.student_mobile_number || reg.mobile,
+            email: reg.student_email_id || reg.email,
             enquiryCode: reg.enquiryCode || '-',
             registrationCode: reg.registrationNo || reg.id,
-            academicYear: reg.academicYear
+            academic_year: reg.academic_year
         });
         fetchAdmFee();
         setView('form');
@@ -172,23 +187,89 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
     };
 
     const handleSave = async () => {
-        if (!formData.firstName || !formData.class) {
-            notification.warning({ message: 'Missing Fields' });
+        if (!formData.first_name || !formData.program) {
+            notification.warning({ message: 'Missing Fields', description: 'First Name and Program are required.' });
             return;
         }
         setSaving(true);
         try {
-            // Save to admissions
+            // 1. Sync with ERPNext if needed (creating Student and Guardian)
+            let erpNextStudentName = null;
+            try {
+                let linkedGuardians = [];
+                for (const g of selectedRegistration?.guardians || []) {
+                    if (g.is_new) {
+                        const guardianPayload = {
+                            guardian_name: g.guardian_name,
+                            email_address: g.email_address || null,
+                            mobile_number: g.mobile_number || null,
+                            occupation: g.occupation || null,
+                            designation: g.designation || null,
+                            education: g.education || null,
+                            alternate_number: g.alternate_number || null,
+                            work_address: g.work_address || null,
+                            date_of_birth: g.date_of_birth || null,
+                            user: g.user || null
+                        };
+                        try {
+                            const gRes = await API.post('/api/resource/Guardian', guardianPayload);
+                            const createdGuardian = gRes.data.data;
+                            linkedGuardians.push({
+                                guardian: createdGuardian.name,
+                                guardian_name: createdGuardian.guardian_name,
+                                relation: g.relation
+                            });
+                        } catch (gErr) {
+                            console.error('Guardian creation failed:', gErr);
+                        }
+                    } else {
+                        linkedGuardians.push({
+                            guardian: g.guardian,
+                            guardian_name: g.guardian_name,
+                            relation: g.relation
+                        });
+                    }
+                }
+
+                const studentPayload = {
+                    first_name: formData.first_name || selectedRegistration?.first_name,
+                    middle_name: selectedRegistration?.middle_name || null,
+                    last_name: formData.last_name || selectedRegistration?.last_name || null,
+                    student_email_id: formData.email || selectedRegistration?.student_email_id || null,
+                    student_mobile_number: formData.mobile || selectedRegistration?.student_mobile_number || null,
+                    gender: formData.gender || selectedRegistration?.gender || null,
+                    date_of_birth: formData.date_of_birth || selectedRegistration?.date_of_birth || null,
+                    blood_group: selectedRegistration?.blood_group || null,
+                    address_line_1: selectedRegistration?.address_line_1 || selectedRegistration?.perm_address || null,
+                    city: selectedRegistration?.city || selectedRegistration?.perm_city || null,
+                    state: selectedRegistration?.state || selectedRegistration?.perm_state || null,
+                    pincode: selectedRegistration?.pincode || selectedRegistration?.perm_pincode || null,
+                    academic_year: formData.academic_year || selectedRegistration?.academic_year,
+                    program: formData.program || selectedRegistration?.program,
+                    status: 'Admitted',
+                    guardians: linkedGuardians
+                };
+                const sRes = await API.post('/api/resource/Student', studentPayload);
+                erpNextStudentName = sRes.data.data.name;
+                notification.info({ message: 'ERPNext Sync', description: `Student Admitted in ERPNext: ${erpNextStudentName}` });
+            } catch (erpErr) {
+                console.error('ERPNext Admission sync failed:', erpErr);
+                notification.warning({ message: 'ERPNext Sync Partial', description: 'Student/Guardian record might not have been created in ERPNext.' });
+            }
+
+            // 2. Save to Firebase Final Admissions
             await addDoc(collection(db, ADMISSIONS_PATH), { 
                 ...formData, 
+                erp_student_id: erpNextStudentName,
                 registrationId: selectedRegistration?.id,
                 created_at: serverTimestamp(), 
                 updated_at: serverTimestamp() 
             });
             
-            // Optionally update registration status to 'Admitted'
+            // Update registration status to 'Admitted'
             if (selectedRegistration) {
                 await updateDoc(doc(db, REGISTRATIONS_PATH, selectedRegistration.id), {
+                    status: 'Converted',
                     admissionStatus: 'Admitted',
                     updated_at: serverTimestamp()
                 });
@@ -197,14 +278,17 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
             notification.success({ message: 'Admission Confirmed!' });
             setView('list');
             fetchRegistrations();
-        } catch (err) { notification.error({ message: err.message }); }
-        finally { setSaving(false); }
+        } catch (err) { 
+            notification.error({ message: 'Admission Failed', description: err.message }); 
+        } finally { 
+            setSaving(false); 
+        }
     };
 
     const filteredData = useMemo(() => {
         const term = searchQuery.toLowerCase();
         return registrations.filter(d => 
-            (d.firstName || '').toLowerCase().includes(term) || 
+            (d.first_name || '').toLowerCase().includes(term) || 
             (d.registrationNo || '').toLowerCase().includes(term) ||
             (d.enquiryCode || '').toLowerCase().includes(term)
         );
@@ -230,9 +314,9 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                         <SectionHeader title="1. Admission Metadata" color="red" />
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <InputField label="Admission No" disabled value={formData.admissionNo} />
-                            <InputField label="Admission Date" type="date" value={formData.admissionDate} onChange={(v) => setFormData({...formData, admissionDate: v})} />
-                            <SelectField label="Academic Year" value={formData.academicYear} options={['2025-2026', '2024-2025']} onChange={(v) => setFormData({...formData, academicYear: v})} />
-                            <SelectField label="Final Admission Class" required value={formData.class} options={availableClasses} onChange={(v) => setFormData({...formData, class: v})} />
+                            <InputField label="Admission Date" type="date" value={formData.admission_date} onChange={(v) => setFormData({...formData, admission_date: v})} />
+                            <SelectField label="Academic Year" value={formData.academic_year} options={academicYears} onChange={(v) => setFormData({...formData, academic_year: v})} />
+                            <SelectField label="Final Admission Program" required value={formData.program} options={availableClasses} onChange={(v) => setFormData({...formData, program: v})} />
 
                             <InputField label="Enquiry Code" disabled value={formData.enquiryCode} />
                             <InputField label="Registration Code" disabled value={formData.registrationCode} />
@@ -240,14 +324,12 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                     </div>
 
                     <div>
-                        <SectionHeader title="2. Student & Parent Verification" color="green" />
+                        <SectionHeader title="2. Student Verification" color="green" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <InputField label="First Name" required value={formData.firstName} onChange={(v) => setFormData({...formData, firstName: v})} />
-                            <InputField label="Last Name" value={formData.lastName} onChange={(v) => setFormData({...formData, lastName: v})} />
+                            <InputField label="First Name" required value={formData.first_name} onChange={(v) => setFormData({...formData, first_name: v})} />
+                            <InputField label="Last Name" value={formData.last_name} onChange={(v) => setFormData({...formData, last_name: v})} />
                             <SelectField label="Gender" value={formData.gender} options={['Male', 'Female', 'Other']} onChange={(v) => setFormData({...formData, gender: v})} />
-                            <InputField label="Date of Birth" type="date" value={formData.birthDate} onChange={(v) => setFormData({...formData, birthDate: v})} />
-                            <InputField label="Father's Name" value={formData.fatherName} onChange={(v) => setFormData({...formData, fatherName: v})} />
-                            <InputField label="Mother's Name" value={formData.motherName} onChange={(v) => setFormData({...formData, motherName: v})} />
+                            <InputField label="Date of Birth" type="date" value={formData.date_of_birth} onChange={(v) => setFormData({...formData, date_of_birth: v})} />
                         </div>
                     </div>
 
@@ -315,11 +397,11 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                         <thead>
                             <tr className="bg-gray-50/50">
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Student Name</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Admission Class</th>
+                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Admission Program</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Academic Year</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Enquiry Code</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Registration Code</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Mobile No.</th>
+                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Mobile Number</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Registration Date</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Date of Birth</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center">Action</th>
@@ -333,9 +415,9 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                             ) : (
                                 filteredData.map((row) => (
                                     <tr key={row.id} className="hover:bg-blue-50/40 transition-all group">
-                                        <td className="px-6 py-4 font-bold text-gray-900">{row.firstName} {row.lastName}</td>
-                                        <td className="px-6 py-4 font-black text-blue-600 uppercase text-[11px]">{row.class}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-600">{row.academicYear}</td>
+                                        <td className="px-6 py-4 font-bold text-gray-900">{row.first_name} {row.last_name}</td>
+                                        <td className="px-6 py-4 font-black text-blue-600 uppercase text-[11px]">{row.program}</td>
+                                        <td className="px-6 py-4 font-medium text-gray-600">{row.academic_year}</td>
                                         <td className="px-6 py-4">
                                             <span className="font-mono text-[11px] font-bold text-purple-600 bg-purple-50 rounded-md px-2 py-0.5">
                                                 {row.enquiryCode || '-'}
@@ -346,9 +428,9 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                                                 {row.registrationNo || row.id}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 font-medium text-gray-700">{row.smsNumber1 || row.mobile || '-'}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-500">{row.registrationDate || '-'}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-500">{row.birthDate || '-'}</td>
+                                        <td className="px-6 py-4 font-medium text-gray-700">{row.student_mobile_number || row.mobile || '-'}</td>
+                                        <td className="px-6 py-4 font-medium text-gray-500">{row.registration_date || '-'}</td>
+                                        <td className="px-6 py-4 font-medium text-gray-500">{row.date_of_birth || '-'}</td>
                                         <td className="px-6 py-4 text-center">
                                             <button 
                                                 onClick={() => handleConvert(row)}

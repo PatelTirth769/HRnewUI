@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { notification, Spin, Tabs } from 'antd';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import API from '../../services/api';
 import { FiPlus, FiArrowLeft, FiSave, FiUser, FiUsers, FiBriefcase, FiLink, FiEdit2, FiTrash2, FiSearch, FiDownload, FiRefreshCw, FiX, FiFileText } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
@@ -78,53 +79,53 @@ const generatePDF = (record) => {
 
     // 1. Student Details
     addSection('1. Student Academic & Basic Details', {
-        'Academic Year': record.academicYear,
-        'Class': record.class,
-        'Registration Date': record.registrationDate,
-        'Full Name': `${record.firstName} ${record.middleName || ''} ${record.lastName || ''}`,
+        'Academic Year': record.academic_year,
+        'Program': record.program,
+        'Registration Date': record.registration_date,
+        'Full Name': `${record.first_name} ${record.middle_name || ''} ${record.last_name || ''}`,
         'Gender': record.gender,
-        'Date of Birth': record.birthDate,
-        'Place of Birth': record.placeOfBirth,
+        'Date of Birth': record.date_of_birth,
+        'Place of Birth': record.place_of_birth,
         'Caste / Religion': `${record.caste || '-'} / ${record.religion || '-'}`,
-        'Blood Group': record.bloodGroup || '-',
-        'Communication Mobile': record.smsNumber1,
-        'Email Address': record.email,
-        'Emergency Contact': record.emergencyMobile
+        'Blood Group': record.blood_group || '-',
+        'Communication Mobile': record.student_mobile_number,
+        'Email Address': record.student_email_id,
+        'Emergency Contact': record.emergency_mobile_number
     });
 
-    // 2. Parent Information
+    // 2. Father & Mother Details
     addSection('2. Father & Mother Details', {
-        'Father Name': record.fatherName || '-',
-        'Father Qualification': record.fatherQualification,
-        'Father Occupation': `${record.fatherOccupation || '-'} (${record.fatherCompanyName || '-'})`,
-        'Father Mobile / Email': `${record.fatherMobile || '-'} / ${record.fatherEmail || '-'}`,
-        'Father Aadhar': record.fatherAadhar,
-        'Mother Name': record.motherName || '-',
-        'Mother Qualification': record.motherQualification,
-        'Mother Occupation': `${record.motherOccupation || '-'} (${record.motherCompanyName || '-'})`,
-        'Mother Mobile / Email': `${record.motherMobile || '-'} / ${record.motherEmail || '-'}`,
-        'Mother Aadhar': record.motherAadhar,
-        'Annual Income (F/M)': `${record.fatherIncomeAnnual || '-'} / ${record.motherIncomeAnnual || '-'}`
+        'Father Name': record.father_name || '-',
+        'Father Education': record.father_education,
+        'Father Occupation': `${record.father_occupation || '-'} (${record.father_company_name || '-'})`,
+        'Father Mobile / Email': `${record.father_mobile_number || '-'} / ${record.father_email_id || '-'}`,
+        'Father Aadhar': record.father_aadhar_number,
+        'Mother Name': record.mother_name || '-',
+        'Mother Education': record.mother_education,
+        'Mother Occupation': `${record.mother_occupation || '-'} (${record.mother_company_name || '-'})`,
+        'Mother Mobile / Email': `${record.mother_mobile_number || '-'} / ${record.mother_email_id || '-'}`,
+        'Mother Aadhar': record.mother_aadhar_number,
+        'Annual Income (F/M)': `${record.father_income_annual || '-'} / ${record.mother_income_annual || '-'}`
     });
 
     // 3. Guardian & Address
     addSection('3. Guardian & Contact Information', {
-        'Guardian Name': record.guardianName || '-',
-        'Guardian Mobile': record.guardianMobile,
-        'Guardian Address': record.guardianAddress,
-        'Residential Address': record.fatherResidentialAddress || record.motherResidentialAddress || '-'
+        'Guardian Name': record.guardian_name || '-',
+        'Guardian Mobile': record.guardian_mobile_number,
+        'Guardian Address': record.guardian_address,
+        'Residential Address': record.father_residential_address || record.mother_residential_address || '-'
     });
 
-    // 4. Office Use & Previous School
+    // 4. Office Use & Previous Academic History
     addSection('4. Office Use & Previous Academic History', {
-        'Previous School': record.prevSchoolName,
-        'Previous Class / Marks': `${record.prevClass || '-'} / ${record.examMarks || '-'}%`,
-        'School Affiliation': record.lastSchoolAffiliated,
-        'TC/LC Number & Date': `${record.prevSchoolLCTC || '-'} (${record.lctcIssueDate || '-'})`,
-        'Student Aadhar No': record.studentAadhar,
-        'PEN Number': record.penNumber,
-        'ABHA Number': record.abhaNumber,
-        'Single Girl Child / EWS': `${record.singleGirlChild || 'No'} / ${record.belongingEWS || 'No'}`
+        'Previous School': record.prev_school_name,
+        'Previous Program / Marks': `${record.prev_program || '-'} / ${record.exam_marks || '-'}%`,
+        'School Affiliation': record.last_school_affiliated,
+        'TC/LC Number & Date': `${record.prev_school_lctc || '-'} (${record.lctc_issue_date || '-'})`,
+        'Student Aadhar No': record.student_aadhar_number,
+        'PEN Number': record.pen_number,
+        'ABHA Number': record.abha_number,
+        'Single Girl Child / EWS': `${record.single_girl_child || 'No'} / ${record.belonging_ews || 'No'}`
     });
 
     // 5. Document Checklist
@@ -224,49 +225,49 @@ const FEES_PATH = 'schooler_system/enquiry_management/form_fee_setup';
 export default function RegistrationForm({ initialView = 'list' }) {
     const initFormData = {
         // Student Detail
-        academicYear: '2025-2026',
-        class: '',
-        registrationDate: new Date().toISOString().split('T')[0],
-        firstName: '',
-        middleName: '',
-        lastName: '',
-        fullName: '',
+        academic_year: '2025-2026',
+        program: '',
+        registration_date: new Date().toISOString().split('T')[0],
+        first_name: '',
+        middle_name: '',
+        last_name: '',
+        student_full_name: '',
         gender: '',
-        birthDate: '',
-        placeOfBirth: '',
+        date_of_birth: '',
+        place_of_birth: '',
         caste: '',
-        subCaste: '',
+        sub_caste: '',
         category: '',
         religion: '',
-        motherTongue: '',
-        bloodGroup: '',
-        fatherName: '',
-        motherName: '',
-        address: '',
+        mother_tongue: '',
+        blood_group: '',
+        father_name: '',
+        mother_name: '',
+        address_line_1: '',
         state: '',
         city: '',
-        zipcode: '',
-        permAddress: '',
-        permState: '',
-        permCity: '',
-        permZipcode: '',
+        pincode: '',
+        perm_address: '',
+        perm_state: '',
+        perm_city: '',
+        perm_pincode: '',
         sameAsCurrent: false,
-        smsNumber1: '',
-        email: '',
-        altMobile: '',
-        altEmail: '',
-        emergencyMobile: '',
+        student_mobile_number: '',
+        student_email_id: '',
+        alt_mobile: '',
+        alt_email: '',
+        emergency_mobile_number: '',
         smsNumber: '',
-        sourceOfEnquiry: '',
-        followUpDate: '',
-        registrationFormNo: '',
-        enquiryStatus: 'Open',
-        isRegistrationFormGiven: false,
-        sendSMS: false,
-        sendEmail: false,
+        source: '',
+        follow_up_date: '',
+        registration_form_no: '',
+        status: 'Open',
+        is_registration_form_given: false,
+        send_sms: false,
+        send_email: false,
         remarks: '',
-        referenceBy: '',
-        campusVisit: 'No',
+        referred_by: '',
+        campus_visit: 'No',
         registrationNo: '',
         // Fee fields
         feeAmount: 0,
@@ -275,52 +276,24 @@ export default function RegistrationForm({ initialView = 'list' }) {
         paymentMode: 'Cash',
 
         // Parent Detail Details
-        singleParent: '',
-        fatherQualification: '',
-        fatherOccupation: '',
-        fatherCompanyName: '',
-        fatherDesignation: '',
-        fatherMobile: '',
-        fatherEmail: '',
-        fatherAadhar: '',
-        fatherOfficeAddress: '',
-        fatherResidentialAddress: '',
-        motherQualification: '',
-        motherOccupation: '',
-        motherCompanyName: '',
-        motherDesignation: '',
-        motherMobile: '',
-        motherEmail: '',
-        motherAadhar: '',
-        motherOfficeAddress: '',
-        motherResidentialAddress: '',
-        parentsAnniversaryDate: '',
-        fatherIncomeAnnual: '',
-        motherIncomeAnnual: '',
-        phoneNoR: '',
-        guardianName: '',
-        guardianEmail: '',
-        guardianMobile: '',
-        guardianAddress: '',
-        guardianState: '',
-        guardianCity: '',
-        guardianZipcode: '',
+        single_parent: '',
+        guardians: [],
 
         // Office Use Detail
-        prevSchoolName: '',
-        reasonForLeaving: '',
-        prevClass: '',
-        schoolAddress: '',
-        examMarks: '',
-        lastSchoolAffiliated: '',
-        prevSchoolLCTC: '',
-        lctcIssueDate: '',
-        studentAadhar: '',
-        singleGirlChild: '',
-        speciallyAbled: '',
-        belongingEWS: '',
-        penNumber: '',
-        abhaNumber: '',
+        prev_school_name: '',
+        reason_for_leaving: '',
+        prev_program: '',
+        school_address: '',
+        exam_marks: '',
+        last_school_affiliated: '',
+        prev_school_lctc: '',
+        lctc_issue_date: '',
+        student_aadhar_number: '',
+        single_girl_child: '',
+        specially_abled: '',
+        belonging_ews: '',
+        pen_number: '',
+        abha_number: '',
 
         // Document Detail (New for Registration)
         documents: [
@@ -345,12 +318,32 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const [regFee, setRegFee] = useState(0);
     const [formData, setFormData] = useState(initFormData);
     const [selectedSibling, setSelectedSibling] = useState('');
-    const [availableClasses, setAvailableClasses] = useState(['Nursery', 'LKG', 'UKG', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th']);
+    const [availableClasses, setAvailableClasses] = useState([]);
+    const [academicYears, setAcademicYears] = useState([]);
+    const [guardiansList, setGuardiansList] = useState([]);
 
     const navigate = useNavigate();
 
+    const fetchERPNextData = async () => {
+        try {
+            const [progRes, yearRes, guardianRes] = await Promise.all([
+                API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Guardian?fields=["name","guardian_name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
+            ]);
+            const programs = progRes.data.data?.map(p => p.name) || [];
+            const years = yearRes.data.data?.map(y => y.name) || [];
+            
+            setAcademicYears(years);
+            setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name })));
+            await fetchRestrictions(programs);
+        } catch (err) {
+            console.error('Error fetching ERPNext data:', err);
+        }
+    };
+
     useEffect(() => {
-        fetchRestrictions();
+        fetchERPNextData();
         if (view === 'list') fetchData();
         else {
             fetchRegFee();
@@ -359,13 +352,15 @@ export default function RegistrationForm({ initialView = 'list' }) {
         }
     }, [view, editingRecord]);
 
-    const fetchRestrictions = async () => {
+    const fetchRestrictions = async (programs) => {
         try {
-            const snap = await getDocs(collection(db, 'schooler_system/enquiry_management/class_restrictions'));
+            const snap = await getDocs(collection(db, 'schooler_system/enquiry_management/program_restrictions'));
             const restricted = snap.docs.filter(d => d.data().isDisabled).map(d => d.id);
-            const all = ['Nursery', 'LKG', 'UKG', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'];
-            setAvailableClasses(all.filter(c => !restricted.includes(c)));
-        } catch (err) { console.error('Restriction fetch failed'); }
+            setAvailableClasses(programs.filter(c => !restricted.includes(c)));
+        } catch (err) { 
+            console.error('Restriction fetch failed', err);
+            setAvailableClasses(programs);
+        }
     };
 
 
@@ -402,26 +397,51 @@ export default function RegistrationForm({ initialView = 'list' }) {
     };
 
     const handleSave = async () => {
-        if (!formData.firstName || !formData.class || !formData.smsNumber1) {
-            notification.warning({ message: 'Required Fields Missing', description: 'Please fill in Student Name, Class, and Mobile Number.' });
+        if (!formData.first_name || !formData.program || !formData.student_mobile_number) {
+            notification.warning({ message: 'Required Fields Missing', description: 'Please fill in Student Name, Program, and Mobile Number.' });
             return;
         }
 
         setSaving(true);
         try {
+            // 1. Sync with ERPNext if needed (creating Student and Guardian)
+            let erpNextStudentName = null;
+            try {
+                // Check if program exists in ERPNext
+                if (formData.program && !availableClasses.includes(formData.program)) {
+                    throw new Error(`Program '${formData.program}' not found in ERPNext. Please select a valid program.`);
+                }
+
+                // Validate guardians
+                for (let i = 0; i < (formData.guardians || []).length; i++) {
+                    const g = formData.guardians[i];
+                    if (g.is_new && !g.guardian_name) throw new Error(`Guardian Name is required for Guardian #${i + 1}.`);
+                    if (!g.is_new && !g.guardian) throw new Error(`Please select an existing guardian for Guardian #${i + 1} or remove it.`);
+                    if (!g.relation) throw new Error(`Relation is required for Guardian #${i + 1}.`);
+                }
+
+                // Removed ERPNext sync from Registration stage.
+                // Student and Guardian will only be created during Final Admission.
+            } catch (erpErr) {
+                console.error('Validation failed:', erpErr);
+            }
+
+            // 2. Save to Firebase (local storage)
             const colRef = collection(db, REGISTRATIONS_PATH);
+            const finalData = {
+                ...formData,
+                erp_student_id: erpNextStudentName,
+                updated_at: serverTimestamp()
+            };
+
             if (editingRecord) {
                 const docRef = doc(db, REGISTRATIONS_PATH, editingRecord.id);
-                await updateDoc(docRef, {
-                    ...formData,
-                    updated_at: serverTimestamp()
-                });
+                await updateDoc(docRef, finalData);
                 notification.success({ message: 'Registration Updated Successfully' });
             } else {
                 await addDoc(colRef, {
-                    ...formData,
-                    created_at: serverTimestamp(),
-                    updated_at: serverTimestamp()
+                    ...finalData,
+                    created_at: serverTimestamp()
                 });
                 notification.success({ message: 'Registration Created Successfully' });
             }
@@ -435,7 +455,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
     };
 
     const handleDelete = async (record) => {
-        if (!window.confirm(`Are you sure you want to delete registration for "${record.firstName}"?`)) return;
+        if (!window.confirm(`Are you sure you want to delete registration for "${record.first_name}"?`)) return;
         try {
             const docRef = doc(db, REGISTRATIONS_PATH, record.id);
             await deleteDoc(docRef);
@@ -450,14 +470,51 @@ export default function RegistrationForm({ initialView = 'list' }) {
         const term = searchQuery.trim().toLowerCase();
         if (!term) return data;
         return data.filter(d => 
-            (d.firstName || '').toLowerCase().includes(term) ||
+            (d.first_name || '').toLowerCase().includes(term) ||
             (d.registrationNo || '').toLowerCase().includes(term) ||
-            (d.smsNumber1 || '').toLowerCase().includes(term)
+            (d.student_mobile_number || '').toLowerCase().includes(term)
         );
     }, [data, searchQuery]);
 
     const updateField = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const addGuardian = () => {
+        setFormData(prev => ({
+            ...prev,
+            guardians: [...(prev.guardians || []), { 
+                is_new: true,
+                guardian: '', 
+                guardian_name: '', 
+                relation: '',
+                email_address: '',
+                mobile_number: '',
+                occupation: '',
+                designation: '',
+                education: '',
+                alternate_number: '',
+                work_address: '',
+                date_of_birth: '',
+                user: ''
+            }]
+        }));
+    };
+    
+    const updateGuardian = (idx, key, val) => {
+        setFormData(prev => {
+            const g = [...(prev.guardians || [])];
+            g[idx] = { ...g[idx], [key]: val };
+            if (key === 'guardian') {
+                const found = guardiansList.find(gl => gl.name === val);
+                if (found) g[idx].guardian_name = found.guardian_name;
+            }
+            return { ...prev, guardians: g };
+        });
+    };
+    
+    const removeGuardian = (idx) => {
+        setFormData(prev => ({ ...prev, guardians: (prev.guardians || []).filter((_, i) => i !== idx) }));
     };
 
     const updateDocStatus = (index, status) => {
@@ -494,42 +551,42 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 <div className="space-y-4">
                     <SectionHeader title="Academic Detail" color="red" />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <SelectField label="Academic Year" required value={formData.academicYear} options={['2024-2025', '2025-2026']} onChange={(v) => updateField('academicYear', v)} />
-                        <SelectField label="Class" required value={formData.class} options={availableClasses} onChange={(v) => updateField('class', v)} />
+                        <SelectField label="Academic Year" required value={formData.academic_year} options={academicYears} onChange={(v) => updateField('academic_year', v)} />
+                        <SelectField label="Program" required value={formData.program} options={availableClasses} onChange={(v) => updateField('program', v)} />
 
-                        <InputField label="Registration Date" type="date" value={formData.registrationDate} onChange={(v) => updateField('registrationDate', v)} />
+                        <InputField label="Registration Date" type="date" value={formData.registration_date} onChange={(v) => updateField('registration_date', v)} />
                     </div>
 
                     <SectionHeader title="Basic Detail" color="green" />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <InputField label="Student Name/First Name" required value={formData.firstName} onChange={(v) => updateField('firstName', v)} placeholder="Enter Student Name" />
-                        <InputField label="Father Name/Middle Name" value={formData.middleName} onChange={(v) => updateField('middleName', v)} placeholder="Enter Father Name" />
-                        <InputField label="Surname/Last Name" value={formData.lastName} onChange={(v) => updateField('lastName', v)} placeholder="Enter Surname" />
+                        <InputField label="First Name" required value={formData.first_name} onChange={(v) => updateField('first_name', v)} placeholder="Enter First Name" />
+                        <InputField label="Middle Name" value={formData.middle_name} onChange={(v) => updateField('middle_name', v)} placeholder="Enter Middle Name" />
+                        <InputField label="Last Name" value={formData.last_name} onChange={(v) => updateField('last_name', v)} placeholder="Enter Last Name" />
                     </div>
                     <div className="mt-4">
-                        <InputField label="Student Full Name as per marksheet" value={formData.fullName} onChange={(v) => updateField('fullName', v)} placeholder="Enter Student Full Name" />
+                        <InputField label="Student Full Name" value={formData.student_full_name} onChange={(v) => updateField('student_full_name', v)} placeholder="Enter Student Full Name" />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                         <SelectField label="Gender" required value={formData.gender} options={['Male', 'Female', 'Other']} onChange={(v) => updateField('gender', v)} />
-                        <InputField label="Birth Date" type="date" value={formData.birthDate} onChange={(v) => updateField('birthDate', v)} />
-                        <InputField label="Place of Birth" value={formData.placeOfBirth} onChange={(v) => updateField('placeOfBirth', v)} placeholder="Enter Place of Birth" />
+                        <InputField label="Date of Birth" type="date" value={formData.date_of_birth} onChange={(v) => updateField('date_of_birth', v)} />
+                        <InputField label="Place of Birth" value={formData.place_of_birth} onChange={(v) => updateField('place_of_birth', v)} placeholder="Enter Place of Birth" />
                         <SelectField label="Caste" value={formData.caste} options={['General', 'OBC', 'SC', 'ST']} onChange={(v) => updateField('caste', v)} />
                         <SelectField label="Religion" value={formData.religion} options={['Hindu', 'Muslim', 'Christian', 'Sikh', 'Jain']} onChange={(v) => updateField('religion', v)} />
-                        <SelectField label="Blood Group" value={formData.bloodGroup} options={['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']} onChange={(v) => updateField('bloodGroup', v)} />
+                        <SelectField label="Blood Group" value={formData.blood_group} options={['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']} onChange={(v) => updateField('blood_group', v)} />
                     </div>
 
                     <SectionHeader title="Communication" color="red" />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <InputField label="SMS Number1(Communication)" required value={formData.smsNumber1} onChange={(v) => updateField('smsNumber1', v)} placeholder="Enter SMS Number" />
-                        <InputField label="E-Mail(Communication)" type="email" value={formData.email} onChange={(v) => updateField('email', v)} placeholder="enter e-mail" />
-                        <InputField label="Emergency Mobile No." value={formData.emergencyMobile} onChange={(v) => updateField('emergencyMobile', v)} placeholder="Enter Emergency Mobile No." />
+                        <InputField label="Student Mobile Number" required value={formData.student_mobile_number} onChange={(v) => updateField('student_mobile_number', v)} placeholder="Enter Mobile Number" />
+                        <InputField label="Student Email Address" type="email" value={formData.student_email_id} onChange={(v) => updateField('student_email_id', v)} placeholder="Enter Email Address" />
+                        <InputField label="Emergency Mobile Number" value={formData.emergency_mobile_number} onChange={(v) => updateField('emergency_mobile_number', v)} placeholder="Enter Emergency Mobile Number" />
                     </div>
 
                     <SectionHeader title="Additional Information" color="orange" />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <SelectField label="Source Of Enquiry" value={formData.sourceOfEnquiry} options={['Direct', 'Reference', 'Social Media']} onChange={(v) => updateField('sourceOfEnquiry', v)} />
-                        <InputField label="Follow-up Date" type="date" value={formData.followUpDate} onChange={(v) => updateField('followUpDate', v)} />
-                        <SelectField label="Enquiry Status" required value={formData.enquiryStatus} options={['Open', 'Closed', 'Converted']} onChange={(v) => updateField('enquiryStatus', v)} />
+                        <SelectField label="Source" value={formData.source} options={['Direct', 'Reference', 'Social Media']} onChange={(v) => updateField('source', v)} />
+                        <InputField label="Follow-up Date" type="date" value={formData.follow_up_date} onChange={(v) => updateField('follow_up_date', v)} />
+                        <SelectField label="Status" required value={formData.status} options={['Open', 'Closed', 'Converted']} onChange={(v) => updateField('status', v)} />
                         <div className="md:col-span-2">
                             <InputField label="Remarks" value={formData.remarks} onChange={(v) => updateField('remarks', v)} placeholder="Enter Remarks" />
                         </div>
@@ -543,63 +600,82 @@ export default function RegistrationForm({ initialView = 'list' }) {
             children: (
                 <div className="space-y-6">
                     <div className="max-w-md">
-                        <SelectField label="Single Parent?" value={formData.singleParent} options={['Yes', 'No']} onChange={(v) => updateField('singleParent', v)} placeholder="Single Parent?" />
+                        <SelectField label="Single Parent?" value={formData.single_parent} options={['Yes', 'No']} onChange={(v) => updateField('single_parent', v)} placeholder="Single Parent?" />
                     </div>
 
-                    <SectionHeader title="Father Detail" color="green" />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <InputField label="Qualification" value={formData.fatherQualification} onChange={(v) => updateField('fatherQualification', v)} placeholder="Enter Qualification" />
-                        <InputField label="Occupation" value={formData.fatherOccupation} onChange={(v) => updateField('fatherOccupation', v)} placeholder="Enter Occupation" />
-                        <InputField label="Company Name" value={formData.fatherCompanyName} onChange={(v) => updateField('fatherCompanyName', v)} placeholder="Enter Company Name" />
-                        <InputField label="Designation" value={formData.fatherDesignation} onChange={(v) => updateField('fatherDesignation', v)} placeholder="Enter Designation" />
-                        <InputField label="Father Mobile No." value={formData.fatherMobile} onChange={(v) => updateField('fatherMobile', v)} placeholder="Enter Father Mobile No." />
-                        <InputField label="Email Id" value={formData.fatherEmail} onChange={(v) => updateField('fatherEmail', v)} placeholder="Enter Email Id" />
-                    </div>
-                    <div className="mt-4">
-                        <InputField label="Father Aadhar Card Number" value={formData.fatherAadhar} onChange={(v) => updateField('fatherAadhar', v)} placeholder="Enter Father Aadhar Card Number" />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <InputField label="Office Address" type="textarea" value={formData.fatherOfficeAddress} onChange={(v) => updateField('fatherOfficeAddress', v)} placeholder="Enter Office Address" />
-                        <InputField label="Residential Address" type="textarea" value={formData.fatherResidentialAddress} onChange={(v) => updateField('fatherResidentialAddress', v)} placeholder="Enter Residential Address" />
-                    </div>
+                    <div>
+                        <h3 className="font-semibold text-gray-800 text-sm mb-4 uppercase tracking-wider border-b-2 border-blue-500 pb-1 w-fit">Guardian Details</h3>
+                        {(formData.guardians || []).map((g, idx) => (
+                            <div key={idx} className="mb-6 p-5 border border-gray-200 rounded-lg bg-gray-50/40 relative shadow-sm">
+                                <button onClick={() => removeGuardian(idx)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 font-bold transition" title="Remove Guardian">✕</button>
+                                
+                                <div className="flex gap-6 mb-6 pb-4 border-b border-gray-100">
+                                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                        <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!g.is_new} onChange={() => updateGuardian(idx, 'is_new', false)} /> Link Existing Guardian
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                        <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!!g.is_new} onChange={() => updateGuardian(idx, 'is_new', true)} /> Create New Guardian
+                                    </label>
+                                </div>
 
-                    <SectionHeader title="Mother Detail" color="orange" />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <InputField label="Qualification" value={formData.motherQualification} onChange={(v) => updateField('motherQualification', v)} placeholder="Enter Qualification" />
-                        <InputField label="Occupation" value={formData.motherOccupation} onChange={(v) => updateField('motherOccupation', v)} placeholder="Enter Occupation" />
-                        <InputField label="Company Name" value={formData.motherCompanyName} onChange={(v) => updateField('motherCompanyName', v)} placeholder="Enter Company Name" />
-                        <InputField label="Designation" value={formData.motherDesignation} onChange={(v) => updateField('motherDesignation', v)} placeholder="Enter Designation" />
-                        <InputField label="Mother Mobile No." value={formData.motherMobile} onChange={(v) => updateField('motherMobile', v)} placeholder="Enter Mother Mobile No." />
-                        <InputField label="Email Id" value={formData.motherEmail} onChange={(v) => updateField('motherEmail', v)} placeholder="Enter Email Id" />
-                    </div>
-                    <div className="mt-4">
-                        <InputField label="Mother Aadhar Card Number" value={formData.motherAadhar} onChange={(v) => updateField('motherAadhar', v)} placeholder="Enter Mother Aadhar Card Number" />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <InputField label="Office Address" type="textarea" value={formData.motherOfficeAddress} onChange={(v) => updateField('motherOfficeAddress', v)} placeholder="Enter Office Address" />
-                        <InputField label="Residential Address" type="textarea" value={formData.motherResidentialAddress} onChange={(v) => updateField('motherResidentialAddress', v)} placeholder="Enter Residential Address" />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8 pt-4 border-t border-gray-100">
-                        <InputField label="Parents Anniversary Date" type="date" value={formData.parentsAnniversaryDate} onChange={(v) => updateField('parentsAnniversaryDate', v)} />
-                        <InputField label="Father Income(Annual)" value={formData.fatherIncomeAnnual} onChange={(v) => updateField('fatherIncomeAnnual', v)} placeholder="Enter Father Income" />
-                        <InputField label="Mother Income(Annual)" value={formData.motherIncomeAnnual} onChange={(v) => updateField('motherIncomeAnnual', v)} placeholder="Enter Mother Income" />
-                        <InputField label="Phone No (R)" value={formData.phoneNoR} onChange={(v) => updateField('phoneNoR', v)} placeholder="Enter Phone No (R)" />
-                    </div>
-
-                    <SectionHeader title="Guardian Detail" color="brown" />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <InputField label="Guardian Name" value={formData.guardianName} onChange={(v) => updateField('guardianName', v)} placeholder="Enter Guardian Name" />
-                        <InputField label="Guardian Email id" value={formData.guardianEmail} onChange={(v) => updateField('guardianEmail', v)} placeholder="Enter guardian email id" />
-                        <InputField label="Guardian Mobile No." value={formData.guardianMobile} onChange={(v) => updateField('guardianMobile', v)} placeholder="Enter Guardian Mobile No." />
-                    </div>
-                    <div className="mt-4">
-                        <InputField label="Guardian Address" type="textarea" value={formData.guardianAddress} onChange={(v) => updateField('guardianAddress', v)} placeholder="Enter Guardian Address" />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                        <SelectField label="State" value={formData.guardianState} options={['Gujarat', 'Maharashtra']} onChange={(v) => updateField('guardianState', v)} />
-                        <SelectField label="City" value={formData.guardianCity} options={['Ahmedabad', 'Surat']} onChange={(v) => updateField('guardianCity', v)} />
-                        <InputField label="Zipcode" value={formData.guardianZipcode} onChange={(v) => updateField('guardianZipcode', v)} placeholder="Enter Zipcode" />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                                    <div>
+                                        <label className="text-[13px] font-semibold text-gray-700 mb-1 block">Relation with Student *</label>
+                                        <select className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" value={g.relation || ''} onChange={e => updateGuardian(idx, 'relation', e.target.value)}>
+                                            <option value="">Select Relation...</option>
+                                            <option value="Father">Father</option>
+                                            <option value="Mother">Mother</option>
+                                            <option value="Others">Others</option>
+                                        </select>
+                                    </div>
+                                    
+                                    {!g.is_new ? (
+                                        <>
+                                            <div>
+                                                <label className="text-[13px] font-semibold text-gray-700 mb-1 block">Select Guardian *</label>
+                                                <select className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" value={g.guardian || ''} onChange={e => updateGuardian(idx, 'guardian', e.target.value)}>
+                                                    <option value="">Link Guardian...</option>
+                                                    {guardiansList.map(gl => <option key={gl.name} value={gl.name}>{gl.name} ({gl.guardian_name})</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <InputField label="Guardian Name" value={g.guardian_name || ''} disabled={true} />
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <InputField label="Guardian Name *" value={g.guardian_name || ''} onChange={v => updateGuardian(idx, 'guardian_name', v)} placeholder="Full Name" />
+                                            <InputField label="Email Address" type="email" value={g.email_address || ''} onChange={v => updateGuardian(idx, 'email_address', v)} placeholder="email@example.com" />
+                                            <InputField label="Mobile Number" value={g.mobile_number || ''} onChange={v => updateGuardian(idx, 'mobile_number', v)} placeholder="+91 ..." />
+                                            <InputField label="Alternate Number" value={g.alternate_number || ''} onChange={v => updateGuardian(idx, 'alternate_number', v)} />
+                                            <InputField label="Date of Birth" type="date" value={g.date_of_birth || ''} onChange={v => updateGuardian(idx, 'date_of_birth', v)} />
+                                            <InputField label="User Id" value={g.user || ''} onChange={v => updateGuardian(idx, 'user', v)} placeholder="User ID" />
+                                            <div>
+                                                <label className="text-[13px] font-semibold text-gray-700 mb-1 block">Education</label>
+                                                <input className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" value={g.education || ''} onChange={e => updateGuardian(idx, 'education', e.target.value)} placeholder="Qualification" />
+                                            </div>
+                                            <div>
+                                                <label className="text-[13px] font-semibold text-gray-700 mb-1 block">Occupation</label>
+                                                <input className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" value={g.occupation || ''} onChange={e => updateGuardian(idx, 'occupation', e.target.value)} placeholder="Occupation" />
+                                            </div>
+                                            <div>
+                                                <label className="text-[13px] font-semibold text-gray-700 mb-1 block">Designation</label>
+                                                <input className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" value={g.designation || ''} onChange={e => updateGuardian(idx, 'designation', e.target.value)} placeholder="Designation" />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <InputField label="Work Address" type="textarea" value={g.work_address || ''} onChange={v => updateGuardian(idx, 'work_address', v)} placeholder="Full Address" />
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                        {(formData.guardians || []).length === 0 && (
+                            <div className="text-center py-8 mb-6 text-gray-400 italic border-2 border-dashed border-gray-200 rounded-lg bg-gray-50/30">
+                                No Guardians Added
+                            </div>
+                        )}
+                        <button onClick={addGuardian} className="px-4 py-2 bg-white border border-gray-200 text-blue-600 text-[13px] font-semibold rounded-md hover:bg-blue-50 transition shadow-sm">+ Add Guardian</button>
                     </div>
                 </div>
             )
@@ -630,11 +706,11 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         <InputField label="Student Adhar Card Number" value={formData.studentAadhar} onChange={(v) => updateField('studentAadhar', v)} placeholder="Enter Student Adhar Card Number" />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                        <SelectField label="Single Girl Child?" value={formData.singleGirlChild} options={['Yes', 'No']} onChange={(v) => updateField('singleGirlChild', v)} placeholder="Single Girl Child?" />
-                        <SelectField label="Specially Abled (Divyangjan)?" value={formData.speciallyAbled} options={['Yes', 'No']} onChange={(v) => updateField('speciallyAbled', v)} placeholder="Specially Abled (Divyangjan)?" />
-                        <SelectField label="Belonging to the EWS?" value={formData.belongingEWS} options={['Yes', 'No']} onChange={(v) => updateField('belongingEWS', v)} placeholder="Belonging to the EWS?" />
-                        <InputField label="Personal Education Number(PEN)" value={formData.penNumber} onChange={(v) => updateField('penNumber', v)} placeholder="Enter Personal Education Number" />
-                        <InputField label="ABHA Number" value={formData.abhaNumber} onChange={(v) => updateField('abhaNumber', v)} placeholder="Enter ABHA Number" />
+                        <SelectField label="Single Girl Child?" value={formData.single_girl_child} options={['Yes', 'No']} onChange={(v) => updateField('single_girl_child', v)} placeholder="Single Girl Child?" />
+                        <SelectField label="Specially Abled (Divyangjan)?" value={formData.specially_abled} options={['Yes', 'No']} onChange={(v) => updateField('specially_abled', v)} placeholder="Specially Abled (Divyangjan)?" />
+                        <SelectField label="Belonging to the EWS?" value={formData.belonging_ews} options={['Yes', 'No']} onChange={(v) => updateField('belonging_ews', v)} placeholder="Belonging to the EWS?" />
+                        <InputField label="Personal Education Number(PEN)" value={formData.pen_number} onChange={(v) => updateField('pen_number', v)} placeholder="Enter Personal Education Number" />
+                        <InputField label="ABHA Number" value={formData.abha_number} onChange={(v) => updateField('abha_number', v)} placeholder="Enter ABHA Number" />
                     </div>
                 </div>
             )
@@ -839,12 +915,12 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-[12px]">
+<table className="w-full text-left text-[12px]">
                         <thead>
                             <tr className="bg-gray-50/50">
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Registration Code</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Student Name</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Class</th>
+                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Program</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Academic Year</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Mobile No.</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Date of Registration</th>
@@ -872,15 +948,15 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                 filteredData.map((row) => (
                                     <tr key={row.id} className="hover:bg-blue-50/30 transition-all cursor-pointer group" onClick={() => { setEditingRecord(row); setView('form'); }}>
                                         <td className="px-6 py-4 font-bold text-blue-600 tracking-tight">{row.registrationNo}</td>
-                                        <td className="px-6 py-4 font-bold text-gray-900 tracking-tight">{row.firstName} {row.lastName}</td>
-                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.class || '-'}</td>
-                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.academicYear || '-'}</td>
-                                        <td className="px-6 py-4 text-gray-600 font-bold">{row.smsNumber1 || '-'}</td>
-                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.registrationDate || '-'}</td>
-                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.birthDate || '-'}</td>
+                                        <td className="px-6 py-4 font-bold text-gray-900 tracking-tight">{row.first_name} {row.last_name}</td>
+                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.program || '-'}</td>
+                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.academic_year || '-'}</td>
+                                        <td className="px-6 py-4 text-gray-600 font-bold">{row.student_mobile_number || '-'}</td>
+                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.registration_date || '-'}</td>
+                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.date_of_birth || '-'}</td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${row.enquiryStatus === 'Converted' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                {row.enquiryStatus || 'Open'}
+                                            <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${row.status === 'Converted' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                {row.status || 'Open'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
