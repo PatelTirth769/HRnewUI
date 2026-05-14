@@ -22,6 +22,7 @@ import API from '../../services/api';
 import axios from 'axios';
 import html2pdf from 'html2pdf.js';
 import FeeReceiptTemplate from './FeeReceiptTemplate';
+import { generateAdmissionReceipt } from '../Enquiry/AdmissionFeeReceipt';
 import { useRef } from 'react';
 
 const { Title, Text } = Typography;
@@ -113,13 +114,19 @@ const StudentDashboard = () => {
       const profile = fullRes.data?.data;
       const studentId = student.name;
 
-      // Fetch paid terms from Firebase
+      // Fetch paid terms from Firebase (Standard Terms + Admission/Registration Fees)
       try {
-        const historyRes = await axios.get(`/local-api/payment/history/${encodeURIComponent(studentId)}`);
-        if (historyRes.data.success && historyRes.data.data) {
-          const paidMap = {};
-          const verifiedHistory = [];
-          historyRes.data.data.forEach(payment => {
+        const [historyRes, admHistoryRes] = await Promise.allSettled([
+          axios.get(`/local-api/payment/history/${encodeURIComponent(studentId)}`),
+          axios.get('/local-api/admission-payment/history-all')
+        ]);
+
+        const paidMap = {};
+        const verifiedHistory = [];
+
+        // 1. Process standard term fee payments
+        if (historyRes.status === 'fulfilled' && historyRes.value.data?.success && historyRes.value.data?.data) {
+          historyRes.value.data.data.forEach(payment => {
             if (payment.status === 'verified' && payment.fees_category) {
               verifiedHistory.push(payment);
               paidMap[payment.fees_category] = {
@@ -131,11 +138,47 @@ const StudentDashboard = () => {
               };
             }
           });
-          setPaidTerms(paidMap);
-          setPaymentHistory(verifiedHistory);
         }
+
+        // 2. Process admission and registration fee payments matching this student/email
+        if (admHistoryRes.status === 'fulfilled' && admHistoryRes.value.data?.success && admHistoryRes.value.data?.data) {
+          const cleanStudentName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim().toLowerCase();
+          const cleanEmail = (profile?.student_email_id || email).trim().toLowerCase();
+
+          admHistoryRes.value.data.data.forEach(admPay => {
+            if (admPay.status === 'verified') {
+              const payStudentName = (admPay.student_name || '').trim().toLowerCase();
+              const payParentEmail = (admPay.parent_email || '').trim().toLowerCase();
+              
+              // Match logic: verify if the payment corresponds to the active user profile
+              if (
+                (payParentEmail && payParentEmail === cleanEmail) ||
+                (payStudentName && cleanStudentName && payStudentName.includes(cleanStudentName)) ||
+                (admPay.admission_no && admPay.admission_no === studentId)
+              ) {
+                const categoryLabel = admPay.fee_name || admPay.fee_type || 'Admission Fee';
+                // Keep admission/registration fee records separate from the academic term fees paidMap calculation
+                // so they show up beautifully under transaction records but do not incorrectly reduce the term fee pending sum.
+                const mappedRecord = {
+                  ...admPay,
+                  fees_category: categoryLabel,
+                  payment_id: admPay.receipt_no || admPay.payment_id || admPay.order_id,
+                  amount: admPay.amount,
+                  verified_at: admPay.verified_at || admPay.receipt_date || admPay.created_at
+                };
+                // Only push if not already added to avoid transaction duplicates
+                if (!verifiedHistory.some(h => h.payment_id === mappedRecord.payment_id)) {
+                  verifiedHistory.push(mappedRecord);
+                }
+              }
+            }
+          });
+        }
+
+        setPaidTerms(paidMap);
+        setPaymentHistory(verifiedHistory);
       } catch (err) {
-        console.warn('[StudentDashboard] Could not fetch payment history:', err.message);
+        console.warn('[StudentDashboard] Could not fetch complete payment history streams:', err.message);
       }
 
       // Parallel Data Fetch with Individual Error Handling
@@ -408,6 +451,29 @@ const StudentDashboard = () => {
   };
 
   const handleDownloadReceipt = (record) => {
+    // Intercept admission or registration fee payments to render identical PDF layout as Enquiry module
+    const isAdmissionStream = record.fee_type || record.fee_name || record.receipt_no?.includes('ADM-');
+    if (isAdmissionStream) {
+      const activeGuardian = (profile && profile.guardians && profile.guardians.length > 0) ? profile.guardians[0].guardian_name : '';
+      generateAdmissionReceipt({
+        receipt_no: record.receipt_no || record.payment_id || record.order_id || 'N/A',
+        student_name: record.student_name || profile?.student_name || `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim(),
+        registration_no: record.registration_no || '',
+        admission_no: record.admission_no || profile?.name || '',
+        program: record.program || profile?.program || '',
+        academic_year: record.academic_year || '2026-2027',
+        fee_type: record.fee_type || 'Admission',
+        fee_name: record.fee_name || record.fees_category || 'Admission Fee',
+        amount: record.amount,
+        payment_mode: record.payment_mode || 'ONLINE',
+        payment_id: record.payment_id || record.order_id || '',
+        receipt_date: record.verified_at || record.receipt_date || record.created_at || new Date().toISOString(),
+        parent_name: record.parent_name || activeGuardian || '',
+        parent_mobile: record.parent_mobile || profile?.student_mobile_number || ''
+      });
+      return;
+    }
+
     const dateObj = new Date(record.verified_at || record.created_at);
     const formattedDate = dateObj.toLocaleDateString('en-GB') + ' ' + dateObj.toLocaleTimeString('en-US');
     

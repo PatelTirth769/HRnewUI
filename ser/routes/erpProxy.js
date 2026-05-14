@@ -113,6 +113,18 @@ router.all('/:systemCode/*', async (req, res) => {
 
         const response = await axios(axiosConfig);
 
+        // --- PROVISIONING SUCCESS LOG INTERCEPTION ---
+        if (response.status >= 200 && response.status < 300 && req.method.toUpperCase() === 'POST') {
+            if (targetPath.startsWith('api/resource/Guardian')) {
+                console.log(`✅ [ERPNext Provisioning] Guardian created successfully: ${response.data?.data?.name || response.data?.data?.guardian_name || 'Success'}`);
+            } else if (targetPath.startsWith('api/resource/Student')) {
+                console.log(`✅ [ERPNext Provisioning] Student created successfully: ${response.data?.data?.name || response.data?.data?.first_name || 'Success'}`);
+            } else if (targetPath.startsWith('api/resource/User')) {
+                console.log(`✅ [ERPNext Provisioning] User account created successfully: ${response.data?.data?.name || req.body?.email || 'Success'}`);
+            }
+        }
+        // ---------------------------------------------
+
         // Intercept Login to attach MongoDB Role
         if (targetPath === 'api/method/login' && response.status === 200) {
             console.log(`[Login Intercept] Successful login for user: ${req.body.usr}`);

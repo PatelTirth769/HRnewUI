@@ -350,6 +350,7 @@ import DownloadAdmissionForm from './pages/Enquiry/DownloadAdmissionForm';
 import EnquiryReport from './pages/Enquiry/EnquiryReport';
 import RegistrationReport from './pages/Enquiry/RegistrationReport';
 import AdmissionReport from './pages/Enquiry/AdmissionReport';
+import AdmissionFeesReport from './pages/Enquiry/AdmissionFeesReport';
 import EnquiryCustomReport from './pages/Enquiry/EnquiryCustomReport';
 import RegistrationCustomReport from './pages/Enquiry/RegistrationCustomReport';
 import ClassRestrictionSetup from './pages/Enquiry/ClassRestrictionSetup';
@@ -868,6 +869,7 @@ function App() {
                 <Route path="/enquiry/reports/enquiry" element={<EnquiryReport />} />
                 <Route path="/enquiry/reports/registration" element={<RegistrationReport />} />
                 <Route path="/enquiry/reports/admission" element={<AdmissionReport />} />
+                <Route path="/enquiry/reports/admission-fees" element={<AdmissionFeesReport />} />
                 <Route path="/enquiry/reports/enquiry-custom" element={<EnquiryCustomReport />} />
                 <Route path="/enquiry/reports/registration-custom" element={<RegistrationCustomReport />} />
                 <Route path="/enquiry/setup/class-restriction" element={<ClassRestrictionSetup />} />

@@ -864,6 +864,7 @@ export const moduleNavigation = {
                     { label: 'Enquiry Report', path: '/enquiry/reports/enquiry' },
                     { label: 'Registration Report', path: '/enquiry/reports/registration' },
                     { label: 'Admission Report', path: '/enquiry/reports/admission' },
+                    { label: 'Admission Fees Report', path: '/enquiry/reports/admission-fees' },
                     { label: 'Enquiry Custom Report', path: '/enquiry/reports/enquiry-custom' },
                     { label: 'Registration Custom Report', path: '/enquiry/reports/registration-custom' },
 

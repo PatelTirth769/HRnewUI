@@ -11,6 +11,8 @@ const emptyForm = () => ({
     first_name: '',
     naming_series: 'EDU-STU-.YYYY.-',
     middle_name: '',
+    gr_number: '',
+    roll_number: '',
     joining_date: new Date().toISOString().slice(0, 10),
     last_name: '',
     program: '',
@@ -80,7 +82,7 @@ const Student = () => {
     const fetchStudents = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Student?fields=["name","first_name","middle_name","last_name","student_email_id","student_mobile_number","joining_date","enabled","gender","program"]&limit_page_length=None&order_by=modified desc';
+            const url = '/api/resource/Student?fields=["name","first_name","middle_name","last_name","student_email_id","student_mobile_number","joining_date","enabled","gender","program","gr_number","roll_number"]&limit_page_length=None&order_by=modified desc';
             const response = await API.get(url);
             setStudents(response.data.data || []);
         } catch (err) {
@@ -117,6 +119,8 @@ const Student = () => {
                 first_name: d.first_name || '',
                 naming_series: d.naming_series || 'EDU-STU-.YYYY.-',
                 middle_name: d.middle_name || '',
+                gr_number: d.gr_number || '',
+                roll_number: d.roll_number || '',
                 joining_date: d.joining_date || '',
                 last_name: d.last_name || '',
                 user: d.user || '',
@@ -341,7 +345,9 @@ const Student = () => {
                 (s.name || '').toLowerCase().includes(search.toLowerCase()) ||
                 (s.first_name || '').toLowerCase().includes(search.toLowerCase()) ||
                 (s.last_name || '').toLowerCase().includes(search.toLowerCase()) ||
-                (s.student_email_id || '').toLowerCase().includes(search.toLowerCase())
+                (s.student_email_id || '').toLowerCase().includes(search.toLowerCase()) ||
+                (s.gr_number || '').toLowerCase().includes(search.toLowerCase()) ||
+                (s.roll_number || '').toLowerCase().includes(search.toLowerCase())
             );
             const matchesProgram = !selectedProgram || s.program === selectedProgram;
             return matchesSearch && matchesProgram;
@@ -385,6 +391,8 @@ const Student = () => {
                             <tr>
                                 <th className="px-4 py-3 font-medium text-gray-600">ID</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Status</th>
+                                <th className="px-4 py-3 font-medium text-gray-600">GR No.</th>
+                                <th className="px-4 py-3 font-medium text-gray-600">Roll No.</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">First Name</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Last Name</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Email</th>
@@ -394,10 +402,10 @@ const Student = () => {
                         </thead>
                         <tbody>
                             {loadingList ? (
-                                <tr><td colSpan="7" className="text-center py-10 text-gray-400 italic">Fetching from ERPNext...</td></tr>
+                                <tr><td colSpan="9" className="text-center py-10 text-gray-400 italic">Fetching from ERPNext...</td></tr>
                             ) : filtered.length === 0 ? (
                                 <tr>
-                                    <td colSpan="7" className="text-center py-16 text-gray-500">
+                                    <td colSpan="9" className="text-center py-16 text-gray-500">
                                         <p className="text-lg font-medium mb-1">No Students Found</p>
                                         <p className="text-sm">Try adjusting your search or add a new student.</p>
                                     </td>
@@ -417,6 +425,8 @@ const Student = () => {
                                                 {row.enabled ? 'Active/Enabled' : 'Disabled'}
                                             </span>
                                         </td>
+                                        <td className="px-4 py-3 text-gray-700 font-bold">{row.gr_number || '-'}</td>
+                                        <td className="px-4 py-3 text-gray-700 font-bold">{row.roll_number || '-'}</td>
                                         <td className="px-4 py-3 text-gray-900 font-medium">{row.first_name || '-'}</td>
                                         <td className="px-4 py-3 text-gray-600 font-medium">{row.last_name || '-'}</td>
                                         <td className="px-4 py-3 text-gray-500 italic">{row.student_email_id || '-'}</td>
@@ -504,36 +514,44 @@ const Student = () => {
                         <div className="grid grid-cols-2 gap-x-12 gap-y-6">
                             <div>
                                 <label className={labelStyle}>First Name *</label>
-                                <input className={inputStyle} value={form.first_name} onChange={e => updateField('first_name', e.target.value)} placeholder="First Name" />
+                                <input className={inputStyle} value={form.first_name || ''} onChange={e => updateField('first_name', e.target.value)} placeholder="First Name" />
                             </div>
                             <div>
                                 <label className={labelStyle}>Naming Series</label>
-                                <select className={inputStyle} value={form.naming_series} onChange={e => updateField('naming_series', e.target.value)}>
+                                <select className={inputStyle} value={form.naming_series || ''} onChange={e => updateField('naming_series', e.target.value)}>
                                     <option value="EDU-STU-.YYYY.-">EDU-STU-.YYYY.-</option>
                                 </select>
                             </div>
                             <div>
                                 <label className={labelStyle}>Middle Name</label>
-                                <input className={inputStyle} value={form.middle_name} onChange={e => updateField('middle_name', e.target.value)} />
+                                <input className={inputStyle} value={form.middle_name || ''} onChange={e => updateField('middle_name', e.target.value)} />
                             </div>
                             <div>
                                 <label className={labelStyle}>Joining Date</label>
-                                <input type="date" className={inputStyle} value={form.joining_date} onChange={e => updateField('joining_date', e.target.value)} />
+                                <input type="date" className={inputStyle} value={form.joining_date || ''} onChange={e => updateField('joining_date', e.target.value)} />
                             </div>
                             <div>
-                                <label className={labelStyle}>Last Name</label>
-                                <input className={inputStyle} value={form.last_name} onChange={e => updateField('last_name', e.target.value)} placeholder="Last Name" />
+                                <label className={labelStyle}>GR Number</label>
+                                <input className={inputStyle} value={form.gr_number || ''} onChange={e => updateField('gr_number', e.target.value)} placeholder="GR Number" />
+                            </div>
+                            <div>
+                                <label className={labelStyle}>User ID (Optional)</label>
+                                <input className={inputStyle} value={form.user || ''} onChange={e => updateField('user', e.target.value)} placeholder="ERPNext User ID" />
+                            </div>
+                            <div>
+                                <label className={labelStyle}>Roll Number</label>
+                                <input className={inputStyle} value={form.roll_number || ''} onChange={e => updateField('roll_number', e.target.value)} placeholder="Roll Number" />
                             </div>
                             <div>
                                 <label className={labelStyle}>Program</label>
-                                <select className={inputStyle} value={form.program} onChange={e => updateField('program', e.target.value)}>
+                                <select className={inputStyle} value={form.program || ''} onChange={e => updateField('program', e.target.value)}>
                                     <option value="">Select Program...</option>
                                     {programs.map(p => <option key={p} value={p}>{p}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className={labelStyle}>User ID (Optional)</label>
-                                <input className={inputStyle} value={form.user} onChange={e => updateField('user', e.target.value)} placeholder="ERPNext User ID" />
+                                <label className={labelStyle}>Last Name</label>
+                                <input className={inputStyle} value={form.last_name || ''} onChange={e => updateField('last_name', e.target.value)} placeholder="Last Name" />
                             </div>
                         </div>
 

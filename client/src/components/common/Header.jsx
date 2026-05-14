@@ -70,128 +70,43 @@ const Header = ({ onModuleClick }) => {
           </>
         ) : (
           <>
-            {/* Dynamic module tabs loaded from database via ser backend */}
-            {isAdmin && !navLoading && (() => {
-              const HR_GROUP_KEYS = ['hr', 'recruitment', 'performance', 'shiftAttendance', 'leave'];
-              const allModules = Object.values(navData).sort((a, b) => (a.order || 0) - (b.order || 0));
-              
-              let hrFound = false;
-              return allModules.reduce((acc, mod) => {
-                if (!isAdmin && employeeHiddenModules.has(mod.moduleKey)) return acc;
-                if (mod.adminOnly && !isAdmin) return acc;
-
-                // If it's part of the HR group
-                if (HR_GROUP_KEYS.includes(mod.moduleKey)) {
-                  if (mod.moduleKey === 'hr') {
-                    hrFound = true;
-                    const subModules = allModules.filter(m => HR_GROUP_KEYS.includes(m.moduleKey));
-                    acc.push(
-                      <div key="hr-dropdown" className="nav-dropdown-group">
-                        <div 
-                          className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors"
-                          onClick={() => onModuleClick('hr')}
-                        >
-                          Management
-                        </div>
-                        <div className="nav-dropdown-content">
-                          {subModules.map(sub => (
-                            <div 
-                              key={sub.moduleKey} 
-                              className="nav-dropdown-item"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onModuleClick(sub.moduleKey);
-                              }}
-                            >
-                              {sub.title === 'ERP Payroll' ? 'Payroll' : sub.title}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  }
-                  // Skip other HR group items as they are now in the dropdown
-                  return acc;
-                }
-
-                // If it's the Master module
-                if (mod.moduleKey === 'master') {
-                  acc.push(
-                    <div key="master-dropdown" className="nav-dropdown-group">
-                      <div 
-                        className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors"
-                        onClick={() => onModuleClick('master')}
-                      >
-                        Master
-                      </div>
-                      <div className="nav-dropdown-content">
-                        <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('master'); }}>
-                          Master Data
-                        </div>
-                        <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/dashboard'); }}>
-                          Dashboard
-                        </div>
-                        <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/approver'); }}>
-                          Approvers
-                        </div>
-                        <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/reports'); }}>
-                          Reports
-                        </div>
-                      </div>
-                    </div>
-                  );
-                  return acc;
-                }
-
-                acc.push(
-                  <div
-                    key={mod.moduleKey}
-                    className="cursor-pointer hover:text-blue-600 truncate transition-colors"
-                    onClick={() => onModuleClick(mod.moduleKey)}
-                  >
-                    {mod.title === 'ERP Payroll' ? 'Payroll' : mod.title}
-                  </div>
-                );
-                return acc;
-              }, []);
-            })()}
-
-            {(isAdmin || isStudent || isInstructor || isGuardian) && <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Education</div>}
-            {isAdmin && <div onClick={() => onModuleClick('selling')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Selling</div>}
-            {isAdmin && <div onClick={() => onModuleClick('buying')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Buying</div>}
-            {isAdmin && <div onClick={() => onModuleClick('stock')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Stock</div>}
-            
-            {isAdmin && (
-              <div key="more-dropdown" className="nav-dropdown-group">
-                <div className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors">
-                  More
-                </div>
-                <div className="nav-dropdown-content">
-                  <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('transport'); }}>
-                    Transport Management
-                  </div>
-                  <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('enquiry'); }}>
-                    Enquiry Module
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <Link 
-              to={isStudent ? "/student-dashboard" : isInstructor ? "/instructor-dashboard" : isGuardian ? "/guardian-dashboard" : "/employee-self-service"} 
-              target={(isStudent || isInstructor || isGuardian) ? "_self" : "_blank"} 
-              rel="noopener noreferrer" 
-              className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold"
-            >
-              {(isStudent || isInstructor || isGuardian) ? "Dashboard" : "Self Service"}
-            </Link>
-            {!isAdmin && isInventory && (
-              <div onClick={() => onModuleClick('assets')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Assets</div>
-            )}
-            {!isAdmin && isAccounts && (
+            {isAdmin ? (
               <>
-                <div onClick={() => onModuleClick('erpPayroll')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Payroll</div>
-                <div onClick={() => onModuleClick('accounting')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Accounting</div>
+                <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Education</div>
+                <div key="more-dropdown" className="nav-dropdown-group">
+                  <div className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors">
+                    More
+                  </div>
+                  <div className="nav-dropdown-content">
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('transport'); }}>
+                      Transport Management
+                    </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('enquiry'); }}>
+                      Enquiry Module
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {(isStudent || isInstructor || isGuardian) && <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Education</div>}
+                <Link 
+                  to={isStudent ? "/student-dashboard" : isInstructor ? "/instructor-dashboard" : isGuardian ? "/guardian-dashboard" : "/employee-self-service"} 
+                  target={(isStudent || isInstructor || isGuardian) ? "_self" : "_blank"} 
+                  rel="noopener noreferrer" 
+                  className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold"
+                >
+                  {(isStudent || isInstructor || isGuardian) ? "Dashboard" : "Self Service"}
+                </Link>
+                {isInventory && (
+                  <div onClick={() => onModuleClick('assets')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Assets</div>
+                )}
+                {isAccounts && (
+                  <>
+                    <div onClick={() => onModuleClick('erpPayroll')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Payroll</div>
+                    <div onClick={() => onModuleClick('accounting')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Accounting</div>
+                  </>
+                )}
               </>
             )}
           </>

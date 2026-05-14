@@ -1,17 +1,38 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { notification, Spin, Tabs } from 'antd';
+import { notification, Spin, Tabs, Modal } from 'antd';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import API from '../../services/api';
-import { FiPlus, FiArrowLeft, FiSave, FiUser, FiUsers, FiBriefcase, FiLink, FiEdit2, FiTrash2, FiSearch, FiDownload, FiRefreshCw, FiX, FiFileText } from 'react-icons/fi';
+import axios from 'axios';
+import { FiPlus, FiArrowLeft, FiSave, FiUser, FiUsers, FiBriefcase, FiLink, FiEdit2, FiTrash2, FiSearch, FiDownload, FiRefreshCw, FiX, FiFileText, FiCreditCard, FiCheckCircle } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import schoolLogo from '../../assets/images/SSVLOGO.png';
+import { generateAdmissionReceipt } from './AdmissionFeeReceipt';
 
 
 
-const generatePDF = (record) => {
+const getOptimizedFormLogoUrl = async (src) => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 100;
+            canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, 100, 100);
+            ctx.drawImage(img, 0, 0, 100, 100);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = () => resolve(src);
+        img.src = src;
+    });
+};
+
+const generatePDF = async (record) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -19,9 +40,11 @@ const generatePDF = (record) => {
     doc.setFillColor(86, 94, 125);
     doc.rect(0, 0, pageWidth, 40, 'F');
 
-    // School Logo
+    // School Logo - compressed via canvas to eliminate uncompressed 32MB PDF payloads
     try {
-        doc.addImage(schoolLogo, 'PNG', 15, 8, 24, 24);
+        const optLogo = await getOptimizedFormLogoUrl(schoolLogo);
+        const format = optLogo.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
+        doc.addImage(optLogo, format, 15, 8, 24, 24, undefined, 'FAST');
     } catch (e) {
         console.warn('Could not add logo to PDF:', e);
     }
@@ -297,11 +320,15 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
         // Document Detail (New for Registration)
         documents: [
-            { name: 'Birth Certificate', status: 'Pending', remarks: '' },
-            { name: 'Aadhar Card', status: 'Pending', remarks: '' },
-            { name: 'Last Year Marksheet', status: 'Pending', remarks: '' },
-            { name: 'Passport Size Photo', status: 'Pending', remarks: '' },
-            { name: 'Transfer Certificate (TC)', status: 'Pending', remarks: '' }
+            { name: 'Student Photo', status: 'Pending', fileUrl: '', fileName: '' },
+            { name: 'Parent Photo', status: 'Pending', fileUrl: '', fileName: '' },
+            { name: 'Birth Certificate', status: 'Pending', fileUrl: '', fileName: '' },
+            { name: 'Previous School LC', status: 'Pending', fileUrl: '', fileName: '' },
+            { name: 'Previous School Last Marksheet', status: 'Pending', fileUrl: '', fileName: '' },
+            { name: 'Student Aadhar Card', status: 'Pending', fileUrl: '', fileName: '' },
+            { name: 'Parents Aadhar Card', status: 'Pending', fileUrl: '', fileName: '' },
+            { name: 'Migration Report', status: 'Pending', fileUrl: '', fileName: '' },
+            { name: 'Caste Certificate', status: 'Pending', fileUrl: '', fileName: '' }
         ],
 
         // Sibling Info
@@ -321,8 +348,167 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const [availableClasses, setAvailableClasses] = useState([]);
     const [academicYears, setAcademicYears] = useState([]);
     const [guardiansList, setGuardiansList] = useState([]);
+    const [paymentProcessing, setPaymentProcessing] = useState(false);
+    const [previewModal, setPreviewModal] = useState({ visible: false, url: '', name: '', type: '' });
 
     const navigate = useNavigate();
+
+    // Load Razorpay checkout script
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        document.body.appendChild(script);
+        return () => { try { document.body.removeChild(script); } catch(e) {} };
+    }, []);
+
+    // Razorpay online payment handler
+    const handleOnlinePayment = async () => {
+        if (!formData.first_name || !formData.program) {
+            notification.warning({ message: 'Missing Fields', description: 'Please fill Student Name and Program before payment.' });
+            return;
+        }
+        const payAmount = parseFloat(formData.feeAmount || regFee);
+        if (payAmount < 1) {
+            notification.warning({ message: 'Invalid Amount', description: 'Fee amount must be at least ₹1.' });
+            return;
+        }
+        setPaymentProcessing(true);
+        try {
+            // 1. Create order
+            const orderRes = await axios.post('/local-api/admission-payment/create-order', {
+                student_name: `${formData.first_name} ${formData.middle_name || ''} ${formData.last_name || ''}`.trim(),
+                registration_no: formData.registrationNo,
+                program: formData.program,
+                academic_year: formData.academic_year,
+                fee_type: 'Registration',
+                fee_name: 'Registration Fee',
+                amount: payAmount,
+                parent_name: (formData.guardians?.[0]?.guardian_name) || formData.father_name || '',
+                parent_mobile: formData.student_mobile_number || '',
+                parent_email: formData.student_email_id || '',
+            });
+            if (!orderRes.data.success) throw new Error(orderRes.data.message);
+            const { order_id, key_id } = orderRes.data;
+
+            // 2. Open Razorpay
+            const options = {
+                key: key_id,
+                amount: orderRes.data.amount,
+                currency: 'INR',
+                name: 'SSV CAMPUS - CBSE',
+                description: 'Registration Fee Payment',
+                order_id: order_id,
+                handler: async (response) => {
+                    try {
+                        const verifyRes = await axios.post('/local-api/admission-payment/verify-payment', {
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                            student_name: `${formData.first_name} ${formData.middle_name || ''} ${formData.last_name || ''}`.trim(),
+                            registration_no: formData.registrationNo,
+                            program: formData.program,
+                            academic_year: formData.academic_year,
+                            fee_type: 'Registration',
+                            fee_name: 'Registration Fee',
+                            amount: payAmount,
+                            parent_name: (formData.guardians?.[0]?.guardian_name) || '',
+                            parent_mobile: formData.student_mobile_number || '',
+                            parent_email: formData.student_email_id || '',
+                        });
+                        if (verifyRes.data.success) {
+                            setFormData(prev => ({
+                                ...prev,
+                                isFeePaid: true,
+                                receiptNo: verifyRes.data.receipt_no || response.razorpay_payment_id,
+                                paymentMode: 'Online',
+                                paymentId: response.razorpay_payment_id,
+                                orderId: response.razorpay_order_id,
+                                paymentDate: new Date().toISOString(),
+                            }));
+                            notification.success({ message: '✅ Payment Successful!', description: `Receipt: ${verifyRes.data.receipt_no}` });
+                        }
+                    } catch (vErr) {
+                        notification.error({ message: 'Verification Failed', description: vErr.message });
+                    }
+                    setPaymentProcessing(false);
+                },
+                prefill: {
+                    name: `${formData.first_name} ${formData.last_name || ''}`.trim(),
+                    email: formData.student_email_id || '',
+                    contact: formData.student_mobile_number || '',
+                },
+                theme: { color: '#1e3a8a' },
+                modal: { ondismiss: () => setPaymentProcessing(false) }
+            };
+            const rzp = new window.Razorpay(options);
+            rzp.open();
+        } catch (err) {
+            notification.error({ message: 'Payment Failed', description: err.message });
+            setPaymentProcessing(false);
+        }
+    };
+
+    // Manual (Cash/Cheque) payment handler
+    const handleManualPayment = async () => {
+        if (!formData.first_name || !formData.program) {
+            notification.warning({ message: 'Missing Fields', description: 'Please fill Student Name and Program.' });
+            return;
+        }
+        const payAmount = parseFloat(formData.feeAmount || regFee);
+        if (payAmount < 1) { notification.warning({ message: 'Invalid Amount' }); return; }
+        if (!formData.paymentMode || formData.paymentMode === 'Online') {
+            notification.warning({ message: 'Select Mode', description: 'Choose Cash or Cheque for manual payment.' }); return;
+        }
+        setPaymentProcessing(true);
+        try {
+            const res = await axios.post('/local-api/admission-payment/record-manual', {
+                student_name: `${formData.first_name} ${formData.middle_name || ''} ${formData.last_name || ''}`.trim(),
+                registration_no: formData.registrationNo,
+                program: formData.program,
+                academic_year: formData.academic_year,
+                fee_type: 'Registration',
+                fee_name: 'Registration Fee',
+                amount: payAmount,
+                payment_mode: formData.paymentMode,
+                manual_receipt_no: formData.receiptNo || '',
+                parent_name: (formData.guardians?.[0]?.guardian_name) || '',
+                parent_mobile: formData.student_mobile_number || '',
+                parent_email: formData.student_email_id || '',
+            });
+            if (res.data.success) {
+                setFormData(prev => ({
+                    ...prev,
+                    isFeePaid: true,
+                    receiptNo: res.data.receipt_no,
+                    paymentId: res.data.payment_id,
+                    paymentDate: new Date().toISOString(),
+                }));
+                notification.success({ message: '✅ Payment Recorded!', description: `Receipt: ${res.data.receipt_no}` });
+            }
+        } catch (err) {
+            notification.error({ message: 'Recording Failed', description: err.message });
+        } finally { setPaymentProcessing(false); }
+    };
+
+    // Download receipt PDF
+    const handleDownloadReceipt = (record) => {
+        generateAdmissionReceipt({
+            receipt_no: record.receiptNo || record.receipt_no || 'N/A',
+            student_name: `${record.first_name || ''} ${record.middle_name || ''} ${record.last_name || ''}`.trim(),
+            registration_no: record.registrationNo || '',
+            program: record.program || '',
+            academic_year: record.academic_year || '',
+            fee_type: 'Registration',
+            fee_name: 'Registration Fee',
+            amount: record.feeAmount || 0,
+            payment_mode: record.paymentMode || 'ONLINE',
+            payment_id: record.paymentId || record.receiptNo || '',
+            receipt_date: record.paymentDate || record.created_at || new Date().toISOString(),
+            parent_name: record.guardians?.[0]?.guardian_name || '',
+            parent_mobile: record.student_mobile_number || '',
+        });
+    };
 
     const fetchERPNextData = async () => {
         try {
@@ -347,8 +533,15 @@ export default function RegistrationForm({ initialView = 'list' }) {
         if (view === 'list') fetchData();
         else {
             fetchRegFee();
-            if (!editingRecord) setFormData({ ...initFormData, registrationNo: `REG-${Date.now().toString().slice(-6)}` });
-            else setFormData(editingRecord);
+            if (!editingRecord) {
+                setFormData({ ...initFormData, registrationNo: `REG-${Date.now().toString().slice(-6)}` });
+            } else {
+                const mergedDocs = initFormData.documents.map(defaultDoc => {
+                    const existing = (editingRecord.documents || []).find(d => d.name === defaultDoc.name);
+                    return existing ? { ...defaultDoc, ...existing } : defaultDoc;
+                });
+                setFormData({ ...editingRecord, documents: mergedDocs });
+            }
         }
     }, [view, editingRecord]);
 
@@ -518,9 +711,115 @@ export default function RegistrationForm({ initialView = 'list' }) {
     };
 
     const updateDocStatus = (index, status) => {
-        const newDocs = [...formData.documents];
-        newDocs[index].status = status;
+        const newDocs = [...(formData.documents || [])];
+        if (newDocs[index]) {
+            newDocs[index].status = status;
+        }
         setFormData(prev => ({ ...prev, documents: newDocs }));
+    };
+
+    const handleQuickVerifyAllDocs = () => {
+        setFormData(prev => {
+            const updatedDocs = (prev.documents || []).map(doc => {
+                const hasFiles = (doc.files && doc.files.length > 0) || doc.fileUrl;
+                return {
+                    ...doc,
+                    status: hasFiles ? 'Verified' : doc.status
+                };
+            });
+            return { ...prev, documents: updatedDocs };
+        });
+        notification.success({ message: '⚡ All Uploaded Documents Verified Instantly!' });
+    };
+
+    const handleFileUpload = async (index, fileList) => {
+        if (!fileList || fileList.length === 0) return;
+        
+        const validTypes = ['image/jpeg', 'image/jpg', 'application/pdf'];
+        const maxSize = 5 * 1024 * 1024;
+        
+        const newFiles = [];
+        for (let i = 0; i < fileList.length; i++) {
+            const file = fileList[i];
+            if (!validTypes.includes(file.type)) {
+                notification.error({ 
+                    message: 'Invalid File Format', 
+                    description: `Skipped "${file.name}": Only JPG, JPEG, and PDF files are supported.` 
+                });
+                continue;
+            }
+            if (file.size > maxSize) {
+                notification.error({ 
+                    message: 'File Too Large', 
+                    description: `Skipped "${file.name}": Maximum file size is 5 MB.` 
+                });
+                continue;
+            }
+
+            const base64Data = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(file);
+            });
+
+            newFiles.push({
+                fileName: file.name,
+                fileUrl: base64Data,
+                uploadedAt: new Date().toISOString()
+            });
+        }
+
+        if (newFiles.length === 0) return;
+
+        setFormData(prev => {
+            const updatedDocs = [...(prev.documents || [])];
+            if (updatedDocs[index]) {
+                const doc = updatedDocs[index];
+                const existingFiles = doc.files ? [...doc.files] : (doc.fileUrl ? [{ fileName: doc.fileName, fileUrl: doc.fileUrl, uploadedAt: doc.uploadedAt }] : []);
+                updatedDocs[index] = {
+                    ...doc,
+                    status: 'Submitted',
+                    files: [...existingFiles, ...newFiles],
+                    fileUrl: existingFiles.length > 0 ? existingFiles[0].fileUrl : newFiles[0].fileUrl,
+                    fileName: existingFiles.length > 0 ? existingFiles[0].fileName : newFiles[0].fileName,
+                };
+            }
+            return { ...prev, documents: updatedDocs };
+        });
+        notification.success({ message: `Successfully uploaded ${newFiles.length} file(s)!` });
+    };
+
+    const handleRemoveFile = (docIndex, fileIndex) => {
+        setFormData(prev => {
+            const updatedDocs = [...(prev.documents || [])];
+            if (updatedDocs[docIndex]) {
+                const doc = updatedDocs[docIndex];
+                const existingFiles = doc.files ? [...doc.files] : (doc.fileUrl ? [{ fileName: doc.fileName, fileUrl: doc.fileUrl, uploadedAt: doc.uploadedAt }] : []);
+                
+                const remainingFiles = existingFiles.filter((_, idx) => idx !== fileIndex);
+                
+                updatedDocs[docIndex] = {
+                    ...doc,
+                    status: remainingFiles.length > 0 ? doc.status : 'Pending',
+                    files: remainingFiles,
+                    fileUrl: remainingFiles.length > 0 ? remainingFiles[0].fileUrl : '',
+                    fileName: remainingFiles.length > 0 ? remainingFiles[0].fileName : ''
+                };
+            }
+            return { ...prev, documents: updatedDocs };
+        });
+        notification.info({ message: 'File removed.' });
+    };
+
+    const handleViewDocument = (fileUrl, fileName) => {
+        if (!fileUrl) return;
+        const isPdf = fileUrl.startsWith('data:application/pdf') || fileName?.toLowerCase().endsWith('.pdf');
+        setPreviewModal({
+            visible: true,
+            url: fileUrl,
+            name: fileName || 'Document Preview',
+            type: isPdf ? 'pdf' : 'image'
+        });
     };
 
     const addSibling = () => {
@@ -720,32 +1019,131 @@ export default function RegistrationForm({ initialView = 'list' }) {
             label: <span className="flex items-center gap-2"><FiFileText /> Document Detail</span>,
             children: (
                 <div className="space-y-6">
-                    <SectionHeader title="Required Documents" color="blue" />
+                    {/* Professional Guidelines Note in Red */}
+                    <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl">
+                        <p className="text-xs font-bold text-red-700 uppercase tracking-wider">⚠️ Important Upload Guidelines</p>
+                        <p className="text-xs text-red-600 mt-1 font-medium">
+                            Supported file formats: <span className="font-bold">JPG, JPEG, PDF</span>. Maximum allowed file size: <span className="font-bold">5 MB</span> per document. Please ensure all uploaded documents are clear and legible.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center justify-between border-b-2 border-blue-500 pb-2 mt-6">
+                        <h3 className="text-sm font-bold uppercase tracking-tight text-blue-700">Student & Supporting Documents</h3>
+                        {editingRecord && (
+                            <button 
+                                type="button"
+                                onClick={handleQuickVerifyAllDocs}
+                                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-lg shadow transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                                title="Instantly marks all uploaded documents as Verified"
+                            >
+                                ⚡ Quick Verify All Uploaded Docs
+                            </button>
+                        )}
+                    </div>
                     <div className="bg-gray-50/30 rounded-xl border border-gray-100 overflow-hidden">
                         <table className="w-full text-left text-sm">
                             <thead>
                                 <tr className="bg-gray-100/50">
                                     <th className="px-6 py-3 font-bold text-gray-600">Document Name</th>
                                     <th className="px-6 py-3 font-bold text-gray-600">Status</th>
-                                    <th className="px-6 py-3 font-bold text-gray-600">Upload</th>
+                                    <th className="px-6 py-3 font-bold text-gray-600">Upload / Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {formData.documents.map((doc, i) => (
-                                    <tr key={i} className="bg-white hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4 font-semibold text-gray-700">{doc.name}</td>
-                                        <td className="px-6 py-4">
-                                            <SelectField 
-                                                value={doc.status} 
-                                                options={['Submitted', 'Pending', 'Verified']} 
-                                                onChange={(v) => updateDocStatus(i, v)} 
-                                            />
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <input type="file" className="text-xs text-gray-500 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
-                                        </td>
-                                    </tr>
-                                ))}
+                                {(formData.documents || []).map((doc, i) => {
+                                    const existingFiles = doc.files ? doc.files : (doc.fileUrl ? [{ fileName: doc.fileName, fileUrl: doc.fileUrl, uploadedAt: doc.uploadedAt }] : []);
+                                    return (
+                                        <tr key={i} className="bg-white hover:bg-gray-50 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="font-semibold text-gray-800">{doc.name}</div>
+                                                {/* List of successfully uploaded files */}
+                                                {existingFiles.length > 0 && (
+                                                    <div className="flex flex-col gap-1.5 mt-2">
+                                                        {existingFiles.map((f, fIdx) => (
+                                                            <div key={fIdx} className="flex items-center justify-between bg-green-50/60 border border-green-200/60 rounded-lg px-2.5 py-1 max-w-xs">
+                                                                <span className="text-[11px] text-green-700 font-medium truncate flex-1 mr-2" title={f.fileName}>
+                                                                    📎 {f.fileName?.length > 20 ? f.fileName.slice(0, 17) + '...' : f.fileName}
+                                                                </span>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => handleViewDocument(f.fileUrl, f.fileName)}
+                                                                        className="text-blue-600 hover:text-blue-800 font-bold text-[10px] bg-white hover:bg-blue-50 border border-blue-200/80 px-2 py-0.5 rounded shadow-2xs transition-all cursor-pointer"
+                                                                    >
+                                                                        View
+                                                                    </button>
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => handleRemoveFile(i, fIdx)}
+                                                                        className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-all"
+                                                                        title="Remove this file"
+                                                                    >
+                                                                        <FiTrash2 className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 w-40 align-top">
+                                                <SelectField 
+                                                    value={doc.status} 
+                                                    options={['Submitted', 'Pending', 'Verified']} 
+                                                    onChange={(v) => updateDocStatus(i, v)} 
+                                                />
+                                            </td>
+                                            <td className="px-6 py-4 align-top">
+                                                <div className="flex flex-col gap-3">
+                                                    <label className="cursor-pointer block">
+                                                        <span className="text-[9px] font-bold text-gray-400 block uppercase tracking-wider mb-1">
+                                                            {existingFiles.length > 0 ? '+ Add More Images/Pages' : 'Upload File(s)'}
+                                                        </span>
+                                                        <input 
+                                                            type="file" 
+                                                            multiple
+                                                            accept=".jpg,.jpeg,.pdf"
+                                                            onChange={(e) => handleFileUpload(i, e.target.files)}
+                                                            className="text-xs text-gray-500 file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer transition-all max-w-[200px]" 
+                                                        />
+                                                    </label>
+
+                                                    {/* Mini Visual Preview Gallery Box */}
+                                                    {existingFiles.length > 0 && (
+                                                        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100/80">
+                                                            {existingFiles.map((f, fIdx) => {
+                                                                const isPdf = f.fileUrl?.startsWith('data:application/pdf') || f.fileName?.toLowerCase().endsWith('.pdf');
+                                                                return (
+                                                                    <div 
+                                                                        key={fIdx} 
+                                                                        onClick={() => handleViewDocument(f.fileUrl, f.fileName)}
+                                                                        className="relative group w-11 h-11 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center cursor-pointer shadow-2xs hover:border-blue-400 transition-all"
+                                                                        title={`Click to preview: ${f.fileName}`}
+                                                                    >
+                                                                        {isPdf ? (
+                                                                            <span className="text-[9px] font-black text-red-600 flex flex-col items-center">
+                                                                                📄<span className="text-[8px] scale-90">PDF</span>
+                                                                            </span>
+                                                                        ) : (
+                                                                            <img 
+                                                                                src={f.fileUrl} 
+                                                                                alt="thumbnail" 
+                                                                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                                                                            />
+                                                                        )}
+                                                                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                            <span className="text-[8px] text-white font-bold">VIEW</span>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -805,50 +1203,114 @@ export default function RegistrationForm({ initialView = 'list' }) {
         },
         {
             key: '6',
-            label: <span className="flex items-center gap-2"><FiBriefcase /> Fee & Payment</span>,
+            label: <span className="flex items-center gap-2"><FiCreditCard /> Fee & Payment</span>,
             children: (
                 <div className="space-y-6">
-                    <SectionHeader title="Form Fee Details" color="green" />
-                    <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100 flex items-center justify-between">
+                    <SectionHeader title="Registration Fee Payment" color="green" />
+                    {/* Fee Amount Banner */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 flex items-center justify-between">
                         <div>
                             <p className="text-sm font-bold text-blue-800">Applicable Registration Fee</p>
-                            <p className="text-[11px] text-blue-600 italic">This fee is automatically fetched from Form Fee Setup</p>
+                            <p className="text-[11px] text-blue-600 italic">Auto-fetched from Form Fee Setup</p>
                         </div>
-                        <div className="text-2xl font-black text-blue-700">
-                            ₹ {regFee}
+                        <div className="text-3xl font-black text-blue-700">₹ {regFee || formData.feeAmount || 0}</div>
+                    </div>
+
+                    {/* Payment Status */}
+                    {formData.isFeePaid && (
+                        <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-4">
+                            <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center"><FiCheckCircle className="text-white w-6 h-6" /></div>
+                            <div className="flex-1">
+                                <p className="text-sm font-black text-green-800">Payment Successful</p>
+                                <p className="text-[12px] text-green-600">Receipt: <span className="font-bold">{formData.receiptNo}</span> | Mode: {formData.paymentMode} | Date: {formData.paymentDate ? new Date(formData.paymentDate).toLocaleDateString('en-IN') : '-'}</p>
+                            </div>
+                            <button onClick={() => handleDownloadReceipt(formData)} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-all flex items-center gap-2 shadow-sm">
+                                <FiDownload /> Receipt
+                            </button>
                         </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-                        <InputField 
-                            label="Fee Amount (₹)" 
-                            type="number" 
-                            value={formData.feeAmount} 
-                            onChange={(v) => updateField('feeAmount', v)} 
-                        />
-                        <SelectField 
-                            label="Payment Status" 
-                            value={formData.isFeePaid ? 'Paid' : 'Unpaid'} 
-                            options={['Paid', 'Unpaid']} 
-                            onChange={(v) => updateField('isFeePaid', v === 'Paid')} 
-                        />
-                        <InputField 
-                            label="Receipt Number" 
-                            value={formData.receiptNo} 
-                            onChange={(v) => updateField('receiptNo', v)} 
-                            placeholder="Enter Receipt No." 
-                        />
-                        <SelectField 
-                            label="Payment Mode" 
-                            value={formData.paymentMode} 
-                            options={['Cash', 'Online', 'Cheque']} 
-                            onChange={(v) => updateField('paymentMode', v)} 
-                        />
-                    </div>
+                    )}
+
+                    {!formData.isFeePaid && (
+                        <>
+                            {/* Fee Amount */}
+                            <div className="max-w-xs">
+                                <InputField label="Fee Amount (₹)" type="number" value={formData.feeAmount} onChange={(v) => updateField('feeAmount', v)} />
+                            </div>
+
+                            {/* Online Payment */}
+                            <div className="bg-white border-2 border-blue-200 rounded-xl p-6">
+                                <h4 className="text-sm font-black text-gray-800 mb-3 flex items-center gap-2"><FiCreditCard className="text-blue-600" /> Pay Online (Razorpay)</h4>
+                                <p className="text-[12px] text-gray-500 mb-4">Secure payment via UPI, Debit/Credit Card, Net Banking</p>
+                                <button onClick={handleOnlinePayment} disabled={paymentProcessing} className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-black hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg flex items-center gap-2 disabled:opacity-50">
+                                    {paymentProcessing ? <Spin size="small" /> : <FiCreditCard />} Pay ₹{formData.feeAmount || regFee || 0} Online
+                                </button>
+                            </div>
+
+                            {/* Manual Payment */}
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6">
+                                <h4 className="text-sm font-black text-gray-800 mb-3">💵 Record Cash / Cheque Payment</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <SelectField label="Payment Mode" value={formData.paymentMode} options={['Cash', 'Cheque']} onChange={(v) => updateField('paymentMode', v)} />
+                                    <InputField label="Manual Receipt Ref (optional)" value={formData.receiptNo} onChange={(v) => updateField('receiptNo', v)} placeholder="Cheque No / Ref" />
+                                    <div className="flex items-end">
+                                        <button onClick={handleManualPayment} disabled={paymentProcessing} className="px-6 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold hover:bg-gray-900 transition-all flex items-center gap-2 disabled:opacity-50">
+                                            {paymentProcessing ? <Spin size="small" /> : null} Record Payment
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
             )
         }
     ];
+
+    const renderPreviewModal = (
+        <Modal
+            title={<span className="font-bold text-blue-900 flex items-center gap-2">📄 {previewModal.name}</span>}
+            open={previewModal.visible}
+            footer={null}
+            onCancel={() => setPreviewModal({ visible: false, url: '', name: '', type: '' })}
+            width={800}
+            centered
+            destroyOnClose
+        >
+            <div className="flex flex-col items-center justify-center p-2 min-h-[300px]">
+                {previewModal.type === 'pdf' ? (
+                    <div className="w-full flex flex-col items-center gap-4">
+                        <iframe 
+                            src={previewModal.url} 
+                            title={previewModal.name}
+                            className="w-full h-[600px] border border-gray-200 rounded-lg shadow-inner" 
+                        />
+                        <a 
+                            href={previewModal.url} 
+                            download={previewModal.name || 'document.pdf'}
+                            className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-lg shadow hover:bg-blue-700 transition-all flex items-center gap-2"
+                        >
+                            <FiDownload /> Download PDF File
+                        </a>
+                    </div>
+                ) : (
+                    <div className="w-full flex flex-col items-center gap-4">
+                        <img 
+                            src={previewModal.url} 
+                            alt={previewModal.name} 
+                            className="max-w-full max-h-[70vh] object-contain rounded border border-gray-100 shadow-sm" 
+                        />
+                        <a 
+                            href={previewModal.url} 
+                            download={previewModal.name || 'document-image'}
+                            className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg shadow hover:bg-blue-700 transition-all flex items-center gap-2 text-xs"
+                        >
+                            <FiDownload /> Download Original Image
+                        </a>
+                    </div>
+                )}
+            </div>
+        </Modal>
+    );
 
     if (view === 'form') {
         return (
@@ -871,6 +1333,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 <div className="bg-white p-6 shadow-xl rounded-b-xl border-x border-b border-gray-100">
                     <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} className="custom-enquiry-tabs" />
                 </div>
+                {renderPreviewModal}
             </div>
         );
     }
@@ -925,6 +1388,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Mobile No.</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Date of Registration</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Date of Birth</th>
+                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Fee Status</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Status</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Download</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right">Action</th>
@@ -955,17 +1419,34 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                         <td className="px-6 py-4 text-gray-600 font-medium">{row.registration_date || '-'}</td>
                                         <td className="px-6 py-4 text-gray-600 font-medium">{row.date_of_birth || '-'}</td>
                                         <td className="px-6 py-4">
+                                            <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${row.isFeePaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                                {row.isFeePaid ? '✅ PAID' : '⏳ UNPAID'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4">
                                             <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${row.status === 'Converted' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
                                                 {row.status || 'Open'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); generatePDF(row); }}
-                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all"
-                                            >
-                                                <FiDownload className="w-4 h-4" />
-                                            </button>
+                                            <div className="flex items-center gap-1">
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); generatePDF(row); }}
+                                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all"
+                                                    title="Download Registration Form"
+                                                >
+                                                    <FiFileText className="w-4 h-4" />
+                                                </button>
+                                                {row.isFeePaid && (
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); handleDownloadReceipt(row); }}
+                                                        className="p-1.5 text-green-500 hover:text-green-700 hover:bg-green-50 rounded-md transition-all"
+                                                        title="Download Fee Receipt"
+                                                    >
+                                                        <FiDownload className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
@@ -986,6 +1467,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 .custom-enquiry-tabs .ant-tabs-tab-active { color: #2563eb !important; }
                 .custom-enquiry-tabs .ant-tabs-ink-bar { height: 3px !important; background: #2563eb !important; }
             `}} />
+            {renderPreviewModal}
         </div>
     );
 }

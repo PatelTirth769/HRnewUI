@@ -3,10 +3,152 @@ import { notification, Spin, Tabs, Modal } from 'antd';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import API from '../../services/api';
+import axios from 'axios';
 import { FiPlus, FiArrowLeft, FiSave, FiUser, FiUsers, FiBriefcase, FiLink, FiEdit2, FiTrash2, FiSearch, FiDownload, FiRefreshCw, FiX, FiFileText, FiCheckCircle } from 'react-icons/fi';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import schoolLogo from '../../assets/images/SSVLOGO.png';
+
+const getOptimizedAdmissionLogoUrl = async (src) => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 100;
+            canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, 100, 100);
+            ctx.drawImage(img, 0, 0, 100, 100);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = () => resolve(src);
+        img.src = src;
+    });
+};
+
+const generateAdmissionFormPDF = async (record) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Header Background
+    doc.setFillColor(30, 58, 138); // Premium Deep Blue
+    doc.rect(0, 0, pageWidth, 40, 'F');
+
+    // School Logo - Pre-compressed via canvas to guarantee sub-50KB file size
+    try {
+        const optLogo = await getOptimizedAdmissionLogoUrl(schoolLogo);
+        const format = optLogo.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
+        doc.addImage(optLogo, format, 15, 8, 24, 24, undefined, 'FAST');
+    } catch (e) {
+        console.warn('Could not add logo to PDF:', e);
+    }
+
+    // Title
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SSV Campus - CBSE', 45, 23);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('COMPLETE STUDENT ADMISSION RECORD', 45, 31);
+
+    // Admission Info Box
+    doc.setFillColor(245, 245, 245);
+    doc.rect(135, 45, 60, 25, 'F');
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(9);
+    doc.text('Admission Status:', 140, 53);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(22, 101, 52); // Green
+    doc.text('CONFIRMED / ADMITTED', 140, 60);
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(8);
+    doc.text(`Reg: ${record.registrationNo || record.id || '-'}`, 140, 66);
+
+    let currentY = 80;
+
+    const addSection = (title, data) => {
+        if (currentY > 245) {
+            doc.addPage();
+            currentY = 20;
+        }
+        
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 58, 138);
+        doc.text(title.toUpperCase(), 20, currentY);
+        doc.setLineWidth(0.3);
+        doc.setDrawColor(200, 200, 200);
+        doc.line(20, currentY + 2, pageWidth - 20, currentY + 2);
+        
+        const tableData = Object.entries(data).map(([label, value]) => [label, value || '-']);
+        autoTable(doc, {
+            startY: currentY + 5,
+            head: [],
+            body: tableData,
+            theme: 'striped',
+            styles: { fontSize: 9, cellPadding: 2 },
+            columnStyles: { 0: { fontStyle: 'bold', width: 65, fillColor: [250, 250, 250], textColor: [50, 50, 50] } },
+            margin: { left: 20, right: 20 }
+        });
+        currentY = doc.lastAutoTable.finalY + 12;
+    };
+
+    // 1. Student Academic & Personal Details
+    addSection('1. Student Academic & Basic Details', {
+        'Student Full Name': `${record.first_name || ''} ${record.middle_name || ''} ${record.last_name || ''}`.trim(),
+        'Program / Class': record.program,
+        'Academic Year': record.academic_year,
+        'Date of Birth': record.date_of_birth,
+        'Gender': record.gender,
+        'Student Contact Number': record.student_mobile_number || record.mobile || '-',
+        'Student Email Address': record.student_email_id || '-',
+        'Enquiry Reference': record.enquiryCode && record.enquiryCode !== '-' ? record.enquiryCode : 'N/A',
+        'Registration Reference': record.registrationNo || record.id || 'N/A'
+    });
+
+    // 2. Parent & Guardian Details
+    const primaryGuardian = record.guardians?.[0] || {};
+    addSection('2. Parent & Guardian Information', {
+        'Father Name': record.father_name || primaryGuardian.guardian_name || '-',
+        'Father Contact': record.father_mobile_number || primaryGuardian.mobile_number || '-',
+        'Father Occupation': record.father_occupation || primaryGuardian.occupation || '-',
+        'Mother Name': record.mother_name || '-',
+        'Mother Contact': record.mother_mobile_number || '-',
+        'Primary Guardian Name': primaryGuardian.guardian_name || record.father_name || '-',
+        'Guardian Relation': primaryGuardian.relation || 'Father',
+        'Residential / Work Address': record.father_residential_address || primaryGuardian.work_address || record.guardian_address || '-'
+    });
+
+    // 3. Registration Fee Details
+    addSection('3. Registration Fee Details', {
+        'Fee Category': 'Registration Fee',
+        'Payment Status': 'PAID & VERIFIED',
+        'Registration Reference': record.registrationNo || record.id || 'N/A'
+    });
+
+    // 4. Final Verification Summary
+    addSection('4. Office Administration Summary', {
+        'Admission Processing Status': 'COMPLETED / ADMITTED',
+        'Administration Review Remarks': record.remarks || record.admissionRemarks || 'Documents verified perfectly. Standard quota entry approved.',
+        'Record Initialized On': record.created_at ? new Date(record.created_at).toLocaleDateString() : new Date().toLocaleDateString()
+    });
+
+    // Footer
+    const finalY = doc.internal.pageSize.getHeight() - 22;
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Official Document Dossier | Exported: ${new Date().toLocaleString()}`, 20, finalY + 5);
+    doc.setDrawColor(150, 150, 150);
+    doc.line(pageWidth - 75, finalY, pageWidth - 20, finalY);
+    doc.setTextColor(20, 20, 20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Principal / Administrator Sign', pageWidth - 70, finalY + 5);
+
+    doc.save(`Admission_Form_${record.first_name || 'Student'}_${record.registrationNo || 'Record'}.pdf`);
+};
 
 const InputField = ({ label, value, required = false, onChange, type = 'text', placeholder = '', disabled = false }) => (
     <div className="flex flex-col gap-1">
@@ -73,7 +215,6 @@ const SectionHeader = ({ title, color = 'blue' }) => {
 // Firebase collection paths
 const REGISTRATIONS_PATH = 'schooler_system/enquiry_management/registrations';
 const ADMISSIONS_PATH = 'schooler_system/enquiry_management/final_admissions';
-const FEES_PATH = 'schooler_system/enquiry_management/form_fee_setup';
 
 export default function FinalAdmissionForm({ initialView = 'list' }) {
     const [view, setView] = useState(initialView);
@@ -82,7 +223,6 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
     const [saving, setSaving] = useState(false);
     const [selectedRegistration, setSelectedRegistration] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [admFee, setAdmFee] = useState(0);
     const [availableClasses, setAvailableClasses] = useState([]);
     const [academicYears, setAcademicYears] = useState([]);
 
@@ -169,21 +309,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
             registrationCode: reg.registrationNo || reg.id,
             academic_year: reg.academic_year
         });
-        fetchAdmFee();
         setView('form');
-    };
-
-    const fetchAdmFee = async () => {
-        try {
-            const q = query(collection(db, FEES_PATH));
-            const snap = await getDocs(q);
-            const fees = snap.docs.map(d => d.data());
-            const activeAdmFee = fees.find(f => f.feeType === 'Admission' && f.status === 'Active');
-            if (activeAdmFee) {
-                setAdmFee(activeAdmFee.amount);
-                setFormData(prev => ({ ...prev, feeAmount: activeAdmFee.amount }));
-            }
-        } catch (err) { console.error('Fee fetch error:', err); }
     };
 
     const handleSave = async () => {
@@ -197,45 +323,140 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
             let erpNextStudentName = null;
             try {
                 let linkedGuardians = [];
-                for (const g of selectedRegistration?.guardians || []) {
+                const baseGuardiansList = selectedRegistration?.guardians?.length > 0 ? selectedRegistration.guardians : [
+                    {
+                        is_new: true,
+                        guardian_name: selectedRegistration?.parent_name || selectedRegistration?.father_name || `Parent of ${formData.first_name || 'Student'}`,
+                        relation: 'Others',
+                        mobile_number: formData.mobile || selectedRegistration?.student_mobile_number || null,
+                        email_address: ''
+                    }
+                ];
+                const guardiansArray = baseGuardiansList;
+                for (let i = 0; i < guardiansArray.length; i++) {
+                    const g = guardiansArray[i];
+                    const cleanGName = (g.guardian_name || 'guardian').replace(/\s+/g, '').toLowerCase();
+                    const baseGEmail = g.email_address || g.user;
+                    const gEmail = baseGEmail ? baseGEmail.trim() : `${cleanGName}.${Date.now().toString().slice(-4)}${i}@guardian.ssvschool.edu.in`;
+
+                    let finalGuardianName = g.guardian;
+                    let finalGuardianDisplayName = g.guardian_name || `Parent of ${formData.first_name || 'Student'}`;
+
                     if (g.is_new) {
                         const guardianPayload = {
-                            guardian_name: g.guardian_name,
-                            email_address: g.email_address || null,
+                            guardian_name: g.guardian_name || finalGuardianDisplayName,
+                            email_address: gEmail,
                             mobile_number: g.mobile_number || null,
                             occupation: g.occupation || null,
                             designation: g.designation || null,
                             education: g.education || null,
                             alternate_number: g.alternate_number || null,
                             work_address: g.work_address || null,
-                            date_of_birth: g.date_of_birth || null,
-                            user: g.user || null
+                            date_of_birth: g.date_of_birth || null
                         };
-                        try {
-                            const gRes = await API.post('/api/resource/Guardian', guardianPayload);
-                            const createdGuardian = gRes.data.data;
-                            linkedGuardians.push({
-                                guardian: createdGuardian.name,
-                                guardian_name: createdGuardian.guardian_name,
-                                relation: g.relation
-                            });
-                        } catch (gErr) {
-                            console.error('Guardian creation failed:', gErr);
+                        
+                        let gAttempts = 0;
+                        while (gAttempts < 15 && !finalGuardianName) {
+                            gAttempts++;
+                            try {
+                                const gRes = await API.post('/api/resource/Guardian', guardianPayload);
+                                const createdGuardian = gRes.data.data;
+                                finalGuardianName = createdGuardian.name;
+                                finalGuardianDisplayName = createdGuardian.guardian_name;
+                                linkedGuardians.push({
+                                    guardian: finalGuardianName,
+                                    guardian_name: finalGuardianDisplayName,
+                                    relation: g.relation || 'Others'
+                                });
+                                console.log(`[ERPNext Guardian Sync] Created Guardian doc on attempt ${gAttempts}:`, finalGuardianName);
+                            } catch (gErr) {
+                                const status = gErr.response?.status;
+                                const errStr = JSON.stringify(gErr.response?.data || {});
+                                console.warn(`[ERPNext Guardian Sync] Attempt ${gAttempts} failed:`, gErr.response?.data || gErr.message);
+                                
+                                if (status === 409 || errStr.includes('DuplicateEntryError') || errStr.includes('Duplicate entry')) {
+                                    if (gAttempts < 15) {
+                                        await new Promise(r => setTimeout(r, 150));
+                                        continue;
+                                    }
+                                }
+                                
+                                // Bulletproof Fallback: cleanly encoded query string to check if Guardian already exists by guardian_name
+                                try {
+                                    const safeFilters = encodeURIComponent(JSON.stringify([["guardian_name", "like", `%${guardianPayload.guardian_name}%`]]));
+                                    const sq = await API.get(`/api/resource/Guardian?filters=${safeFilters}&limit_page_length=1`);
+                                    if (sq.data.data?.length > 0) {
+                                        finalGuardianName = sq.data.data[0].name;
+                                        linkedGuardians.push({
+                                            guardian: finalGuardianName,
+                                            guardian_name: guardianPayload.guardian_name,
+                                            relation: g.relation || 'Others'
+                                        });
+                                        console.log('[ERPNext Guardian Sync] Fallback resolution: Found and linked existing Guardian doc:', finalGuardianName);
+                                        break;
+                                    }
+                                } catch (lookupErr) {
+                                    console.warn('[ERPNext Guardian Sync] Fallback search also yielded no result.');
+                                }
+                                break;
+                            }
                         }
                     } else {
                         linkedGuardians.push({
                             guardian: g.guardian,
                             guardian_name: g.guardian_name,
-                            relation: g.relation
+                            relation: g.relation || 'Others'
                         });
                     }
+
+                    // Synchronize and auto-create the Guardian User account mapped with the correct role profiles and mobile number for seamless login
+                    if (finalGuardianDisplayName) {
+                        try {
+                            const gUserPayload = {
+                                mobile_no: g.mobile_number || null,
+                                role_profile_name: 'Guardian',
+                                module_profile: 'Guardian'
+                            };
+                            try {
+                                await API.put(`/api/resource/User/${encodeURIComponent(gEmail)}`, gUserPayload);
+                                console.log('[ERPNext Guardian User Sync] Successfully mapped Guardian profiles to existing User:', gEmail);
+                            } catch (guErr) {
+                                if (guErr.response?.status === 404) {
+                                    await API.post('/api/resource/User', {
+                                        email: gEmail,
+                                        first_name: finalGuardianDisplayName,
+                                        send_welcome_email: 1,
+                                        ...gUserPayload
+                                    });
+                                    console.log('[ERPNext Guardian User Sync] Explicitly auto-created User record for Guardian:', gEmail);
+                                } else {
+                                    console.warn('[ERPNext Guardian User Sync] Non-404 status response:', guErr.message);
+                                }
+                            }
+
+                            // Securely map the user account back to the Guardian doc to ensure perfect login association and consistency
+                            if (finalGuardianName) {
+                                await API.put(`/api/resource/Guardian/${encodeURIComponent(finalGuardianName)}`, {
+                                    user: gEmail,
+                                    email_address: gEmail
+                                }).catch(() => {});
+                            }
+                        } catch (gUserSyncErr) {
+                            console.warn('[ERPNext Guardian User Sync] Gracefully caught sync error:', gUserSyncErr.message);
+                        }
+                    }
                 }
+
+                const baseEmail = formData.email || selectedRegistration?.student_email_id;
+                const cleanFirstName = (formData.first_name || selectedRegistration?.first_name || 'student').replace(/\s+/g, '').toLowerCase();
+                // Ensure a non-empty string is ALWAYS sent to avoid Error 500 in backend autoname strip()
+                const safeEmail = baseEmail ? baseEmail.trim() : `${cleanFirstName}.${Date.now().toString().slice(-5)}@ssvschool.edu.in`;
 
                 const studentPayload = {
                     first_name: formData.first_name || selectedRegistration?.first_name,
                     middle_name: selectedRegistration?.middle_name || null,
                     last_name: formData.last_name || selectedRegistration?.last_name || null,
-                    student_email_id: formData.email || selectedRegistration?.student_email_id || null,
+                    student_email_id: safeEmail,
                     student_mobile_number: formData.mobile || selectedRegistration?.student_mobile_number || null,
                     gender: formData.gender || selectedRegistration?.gender || null,
                     date_of_birth: formData.date_of_birth || selectedRegistration?.date_of_birth || null,
@@ -249,12 +470,88 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                     status: 'Admitted',
                     guardians: linkedGuardians
                 };
-                const sRes = await API.post('/api/resource/Student', studentPayload);
-                erpNextStudentName = sRes.data.data.name;
-                notification.info({ message: 'ERPNext Sync', description: `Student Admitted in ERPNext: ${erpNextStudentName}` });
+
+                // Implement sequential auto-retry up to 40 times to rapidly push through backend primary key sequence lag (Error 409)
+                let attempts = 0;
+                const maxAttempts = 40;
+                let lastSyncErr = null;
+
+                while (attempts < maxAttempts && !erpNextStudentName) {
+                    attempts++;
+                    try {
+                        // Pass the original safeEmail exactly on every attempt so the created Student doc retains the authentic email address
+                        const currentPayload = {
+                            ...studentPayload,
+                            student_email_id: safeEmail
+                        };
+                        const sRes = await API.post('/api/resource/Student', currentPayload);
+                        erpNextStudentName = sRes.data.data.name;
+                        notification.success({ 
+                            message: 'ERPNext Sync Successful', 
+                            description: `Student Created in ERPNext: ${erpNextStudentName}${attempts > 1 ? ` (auto-recovered sequence lag after ${attempts} attempts)` : ''}` 
+                        });
+
+                        // Explicitly update the Student record via PUT to guarantee child table (guardians) linkage parity with Student master storage
+                        if (linkedGuardians.length > 0) {
+                            await API.put(`/api/resource/Student/${encodeURIComponent(erpNextStudentName)}`, {
+                                guardians: linkedGuardians
+                            }).catch(childErr => console.warn('[ERPNext Guardian Link Sync] Warning during explicit PUT linkage:', childErr.message));
+                            console.log('[ERPNext Guardian Link Sync] Successfully applied child table guardians linking to Student record.');
+                        }
+
+                        // Instantly map Student profile settings to the corresponding ERPNext User account
+                        try {
+                            const userPayload = {
+                                mobile_no: formData.mobile || selectedRegistration?.student_mobile_number || null,
+                                role_profile_name: 'Student',
+                                module_profile: 'Student'
+                            };
+                            try {
+                                // Try updating the User account if Frappe's backend trigger auto-created it
+                                await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, userPayload);
+                                console.log('[ERPNext User Sync] Automatically applied mobile number, role profile, and module profile to User record.');
+                            } catch (uErr) {
+                                // Fallback: if User record does not exist yet, explicitly create it with properties populated
+                                if (uErr.response?.status === 404) {
+                                    await API.post('/api/resource/User', {
+                                        email: safeEmail,
+                                        first_name: formData.first_name || selectedRegistration?.first_name || 'Student',
+                                        last_name: formData.last_name || selectedRegistration?.last_name || null,
+                                        send_welcome_email: 1,
+                                        ...userPayload
+                                    });
+                                    console.log('[ERPNext User Sync] Explicitly created new User record mapped with Student permissions.');
+                                } else {
+                                    console.warn('[ERPNext User Sync] Non-404 update response:', uErr.message);
+                                }
+                            }
+                        } catch (profileSyncErr) {
+                            console.warn('[ERPNext User Sync] Gracefully caught sync override error:', profileSyncErr.message);
+                        }
+                    } catch (err) {
+                        lastSyncErr = err;
+                        const status = err.response?.status;
+                        const errStr = JSON.stringify(err.response?.data || {});
+                        console.warn(`[ERPNext Sync] Attempt ${attempts}/${maxAttempts} failed:`, err.response?.data || err.message);
+                        
+                        // If it's a primary key/duplicate entry error due to backend tabSeries lag, loop and retry to auto-increment the server sequence
+                        if (status === 409 || errStr.includes('DuplicateEntryError') || errStr.includes('Duplicate entry')) {
+                            if (attempts < maxAttempts) {
+                                await new Promise(r => setTimeout(r, 120));
+                                continue;
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                if (!erpNextStudentName && lastSyncErr) {
+                    throw lastSyncErr;
+                }
             } catch (erpErr) {
                 console.error('ERPNext Admission sync failed:', erpErr);
-                notification.warning({ message: 'ERPNext Sync Partial', description: 'Student/Guardian record might not have been created in ERPNext.' });
+                const errMsg = erpErr.response?.data?.exception || erpErr.response?.data?._server_messages || erpErr.message;
+                notification.warning({ message: 'ERPNext Sync Partial', description: `Student creation skipped/failed: ${typeof errMsg === 'string' ? errMsg.slice(0, 100) : 'Check server logs'}` });
             }
 
             // 2. Save to Firebase Final Admissions
@@ -338,23 +635,6 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                         <InputField label="Admission Remarks" type="textarea" placeholder="Enter any specific notes for this admission..." value={formData.remarks} onChange={(v) => setFormData({...formData, remarks: v})} />
                     </div>
 
-                    <div>
-                        <SectionHeader title="4. Payment Verification" color="orange" />
-                        <div className="bg-orange-50/50 p-6 rounded-xl border border-orange-100 flex items-center justify-between mb-6">
-                            <div>
-                                <p className="text-sm font-bold text-orange-800">Applicable Admission Fee</p>
-                                <p className="text-[11px] text-orange-600 italic">Pre-set in Form Fee Setup</p>
-                            </div>
-                            <div className="text-2xl font-black text-orange-700">
-                                ₹ {admFee}
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <InputField label="Fee Amount (₹)" type="number" value={formData.feeAmount} onChange={(v) => setFormData({...formData, feeAmount: v})} />
-                            <SelectField label="Payment Status" value={formData.isFeePaid ? 'Paid' : 'Unpaid'} options={['Paid', 'Unpaid']} onChange={(v) => setFormData({...formData, isFeePaid: v === 'Paid'})} />
-                            <InputField label="Receipt No" value={formData.receiptNo} onChange={(v) => setFormData({...formData, receiptNo: v})} placeholder="Enter Receipt No" />
-                        </div>
-                    </div>
                 </div>
             </div>
         );
@@ -395,50 +675,64 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead>
-                            <tr className="bg-gray-50/50">
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Student Name</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Admission Program</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Academic Year</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Enquiry Code</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Registration Code</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Mobile Number</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Registration Date</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Date of Birth</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center">Action</th>
+                            <tr className="bg-gray-50/80 border-b border-gray-100">
+                                <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Student Details</th>
+                                <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Program</th>
+                                <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Academic Year</th>
+                                <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Reference Codes</th>
+                                <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Date of Birth</th>
+                                <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px] text-center">Action</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-50">
                             {loading ? (
-                                <tr><td colSpan={9} className="px-6 py-12 text-center"><Spin /></td></tr>
+                                <tr><td colSpan={6} className="px-4 py-12 text-center"><Spin /></td></tr>
                             ) : filteredData.length === 0 ? (
-                                <tr><td colSpan={9} className="px-6 py-16 text-center text-gray-400 font-medium italic">No matching records found</td></tr>
+                                <tr><td colSpan={6} className="px-4 py-16 text-center text-gray-400 font-medium italic">No matching records found</td></tr>
                             ) : (
                                 filteredData.map((row) => (
                                     <tr key={row.id} className="hover:bg-blue-50/40 transition-all group">
-                                        <td className="px-6 py-4 font-bold text-gray-900">{row.first_name} {row.last_name}</td>
-                                        <td className="px-6 py-4 font-black text-blue-600 uppercase text-[11px]">{row.program}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-600">{row.academic_year}</td>
-                                        <td className="px-6 py-4">
-                                            <span className="font-mono text-[11px] font-bold text-purple-600 bg-purple-50 rounded-md px-2 py-0.5">
-                                                {row.enquiryCode || '-'}
-                                            </span>
+                                        <td className="px-4 py-3.5">
+                                            <div className="font-bold text-gray-900">{row.first_name} {row.last_name}</div>
+                                            <div className="text-[11px] text-gray-400 font-medium mt-0.5">{row.student_mobile_number || row.mobile || 'No mobile'}</div>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <span className="font-mono text-[11px] font-bold text-green-600 bg-green-50 rounded-md px-2 py-0.5">
-                                                {row.registrationNo || row.id}
-                                            </span>
+                                        <td className="px-4 py-3.5 font-black text-blue-600 uppercase text-[11px]">{row.program}</td>
+                                        <td className="px-4 py-3.5 font-medium text-gray-600 text-xs">{row.academic_year}</td>
+                                        <td className="px-4 py-3.5">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="font-mono text-[10px] font-bold text-green-700 bg-green-50 rounded px-1.5 py-0.5 w-max border border-green-100/50">
+                                                    Reg: {row.registrationNo || row.id}
+                                                </span>
+                                                {row.enquiryCode && row.enquiryCode !== '-' && (
+                                                    <span className="font-mono text-[10px] font-medium text-purple-600 bg-purple-50 rounded px-1.5 py-0.5 w-max border border-purple-100/50">
+                                                        Enq: {row.enquiryCode}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
-                                        <td className="px-6 py-4 font-medium text-gray-700">{row.student_mobile_number || row.mobile || '-'}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-500">{row.registration_date || '-'}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-500">{row.date_of_birth || '-'}</td>
-                                        <td className="px-6 py-4 text-center">
-                                            <button 
-                                                onClick={() => handleConvert(row)}
-                                                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all shadow-sm ${row.admissionStatus === 'Admitted' ? 'bg-green-100 text-green-700 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'}`}
-                                                disabled={row.admissionStatus === 'Admitted'}
-                                            >
-                                                {row.admissionStatus === 'Admitted' ? 'Admitted' : 'Add Admission'}
-                                            </button>
+                                        <td className="px-4 py-3.5 font-medium text-gray-500 text-xs">{row.date_of_birth || '-'}</td>
+                                        <td className="px-4 py-3.5 text-center">
+                                            {row.admissionStatus === 'Admitted' ? (
+                                                <div className="flex items-center justify-center gap-1.5">
+                                                    <span className="px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-wider bg-green-100 text-green-700 border border-green-200/60 shadow-2xs">
+                                                        Admitted
+                                                    </span>
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); generateAdmissionFormPDF(row); }}
+                                                        className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-600 border border-blue-200 rounded-md text-[11px] font-black tracking-tight transition-all shadow-2xs hover:shadow flex items-center gap-1 cursor-pointer active:scale-95"
+                                                        title="Download Completed Admission Form Dossier"
+                                                    >
+                                                        <FiFileText className="w-3.5 h-3.5 text-blue-500" /> Form
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button 
+                                                    onClick={() => handleConvert(row)}
+                                                    className="px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all shadow-sm bg-blue-600 text-white hover:bg-blue-700 active:scale-95"
+                                                >
+                                                    Add Admission
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))
