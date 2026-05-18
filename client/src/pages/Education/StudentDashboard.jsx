@@ -16,7 +16,8 @@ import {
   LockOutlined,
   CreditCardOutlined,
   RightOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  TableOutlined
 } from '@ant-design/icons';
 import API from '../../services/api';
 import axios from 'axios';
@@ -31,6 +32,7 @@ const StudentDashboard = () => {
   const [userEmail, setUserEmail] = useState(localStorage.getItem('user')?.trim() || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedDayFilter, setSelectedDayFilter] = useState('');
   const [studentData, setStudentData] = useState({
     profile: null,
     attendance: 0,
@@ -38,7 +40,9 @@ const StudentDashboard = () => {
     assignments: 0,
     fees: 0,
     schedule: [],
+    fullSchedule: [],
     notifications: [],
+    studentGroups: [],
     permissions: {
       fees: true,
       attendance: true,
@@ -114,6 +118,9 @@ const StudentDashboard = () => {
       const profile = fullRes.data?.data;
       const studentId = student.name;
 
+      // Fetch Student Group memberships
+      let studentGroups = [];
+
       // Fetch paid terms from Firebase (Standard Terms + Admission/Registration Fees)
       try {
         const [historyRes, admHistoryRes] = await Promise.allSettled([
@@ -182,7 +189,7 @@ const StudentDashboard = () => {
       }
 
       // Parallel Data Fetch with Individual Error Handling
-      const [attRes, enrRes, feeRes, assRes, schRes] = await Promise.allSettled([
+      const [attRes, enrRes, feeRes, assRes] = await Promise.allSettled([
         API.get('/api/resource/Student Attendance', { params: { filters: JSON.stringify([["student", "=", studentId]]), limit_page_length: 1000 } }),
         API.get('/api/resource/Program Enrollment', { 
           params: { 
@@ -196,22 +203,14 @@ const StudentDashboard = () => {
             fields: JSON.stringify(["name", "outstanding_amount"]) // Minimal fields
           } 
         }),
-        API.get('/api/resource/Assessment Result', { params: { filters: JSON.stringify([["student", "=", studentId]]) } }),
-        API.get('/api/resource/Course Schedule', { 
-          params: { 
-            filters: JSON.stringify([["schedule_date", "=", new Date().toISOString().split('T')[0]]]), 
-            fields: JSON.stringify(["course", "from_time", "to_time", "room"]), 
-            order_by: 'from_time asc' 
-          } 
-        })
+        API.get('/api/resource/Assessment Result', { params: { filters: JSON.stringify([["student", "=", studentId]]) } })
       ]);
 
       const permissions = {
         attendance: attRes.status === 'fulfilled',
         enrollment: enrRes.status === 'fulfilled',
         fees: feeRes.status === 'fulfilled' || feeRes.reason?.response?.status === 403,
-        assessments: assRes.status === 'fulfilled',
-        schedule: schRes.status === 'fulfilled'
+        assessments: assRes.status === 'fulfilled'
       };
 
       const attendanceList = attRes.status === 'fulfilled' ? (attRes.value.data?.data || []) : [];
@@ -220,6 +219,114 @@ const StudentDashboard = () => {
       
       const enrollmentData = enrRes.status === 'fulfilled' ? (enrRes.value.data?.data || []) : [];
       console.log('[FeeDebug] Enrollment Data:', enrollmentData);
+
+      // --- Fallback Student Group Fetching ---
+      // Since ERPNext restricts direct child table access (Student Group Student) for students (causing 403s),
+      // we extract the student group/batch from their Program Enrollment record.
+      console.log('=== STUDENT GROUP DIAGNOSTICS ===');
+      console.log('1. Extracted Enrollment Data:', enrollmentData);
+      console.log('2. Extracted Profile Data:', profile);
+
+      if (enrollmentData.length > 0) {
+        try {
+          const enrollmentName = enrollmentData[0].name;
+          const fullEnrRes = await API.get(`/api/resource/Program Enrollment/${encodeURIComponent(enrollmentName)}`);
+          const enrDoc = fullEnrRes.data?.data || {};
+          
+          console.log('3. Full Program Enrollment Document Fields:', {
+             student_group: enrDoc.student_group,
+             student_batch_name: enrDoc.student_batch_name,
+             student_batch: enrDoc.student_batch
+          });
+
+          const fallbackGroup = enrDoc.student_group || enrDoc.student_batch_name || enrDoc.student_batch;
+          if (fallbackGroup) {
+            studentGroups.push(fallbackGroup);
+            console.log('4. SUCCESS! Found group in Enrollment:', fallbackGroup);
+          } else if (profile?.student_group || profile?.student_batch) {
+             studentGroups.push(profile.student_group || profile.student_batch);
+             console.log('4. SUCCESS! Found group in Student Profile:', profile.student_group || profile.student_batch);
+          } else {
+             console.log('4. FAILED: No batch or group assigned to this student in ERPNext Program Enrollment or Profile.');
+          }
+        } catch(e) {
+          console.error('3. FAILED to fetch full program enrollment details:', e.message);
+        }
+      } else {
+         console.log('3. FAILED: Student has no active Program Enrollments to extract group from.');
+         if (profile?.student_group || profile?.student_batch) {
+             studentGroups.push(profile.student_group || profile.student_batch);
+             console.log('4. SUCCESS! Found group directly on Student Profile.');
+         }
+      }
+      // --- Fallback 1: Query Student Group doctype directly ---
+      // If User Permissions are configured in ERPNext, querying Student Group directly 
+      // will return only the groups this student is a member of.
+      try {
+        const sgRes = await API.get('/api/resource/Student Group', {
+           params: {
+             limit_page_length: 100,
+             filters: JSON.stringify([["Student Group Student", "student", "=", studentId]]),
+             fields: '["name"]'
+           }
+        });
+        if (sgRes.data?.data && sgRes.data.data.length > 0) {
+           const groups = sgRes.data.data.map(g => g.name);
+           console.log('6. Found Student Groups via direct query:', groups);
+           studentGroups.push(...groups);
+        } else {
+           console.log('6. Direct Student Group query returned empty.');
+        }
+      } catch (e) {
+        console.error('5. FAILED direct Student Group query:', e.message);
+      }
+
+      console.log('===================================');
+
+      // --- Course Schedule Fetching ---
+      // Now that we have definitively determined the student's groups, we fetch their specific schedule.
+      let schRes;
+      let scheduleStatus = false;
+      try {
+         const scheduleFilters = [["schedule_date", "=", new Date().toISOString().split('T')[0]]];
+         if (studentGroups.length > 0) {
+            scheduleFilters.push(["student_group", "in", studentGroups]);
+         } else {
+            // If the student has no groups, we force an impossible filter so it returns empty,
+            // or we could skip fetching. Let's filter by student_group = 'NONE' so it returns [].
+            scheduleFilters.push(["student_group", "=", "NONE_ASSIGNED_TO_STUDENT"]);
+         }
+
+         schRes = await API.get('/api/resource/Course Schedule', { 
+            params: { 
+               filters: JSON.stringify(scheduleFilters), 
+               fields: JSON.stringify(["course", "from_time", "to_time", "room"]), 
+               order_by: 'from_time asc' 
+            } 
+         });
+         scheduleStatus = true;
+      } catch (e) {
+         console.warn('[StudentDashboard] Failed to fetch filtered Course Schedule:', e.message);
+      }
+      permissions.schedule = scheduleStatus;
+
+      // --- Full Schedule (Time Table) Fetching ---
+      let fullSchedule = [];
+      if (studentGroups.length > 0) {
+        try {
+          const fullSchRes = await API.get('/api/resource/Course Schedule', {
+            params: {
+              filters: JSON.stringify([["student_group", "in", studentGroups]]),
+              fields: JSON.stringify(["name", "course", "from_time", "to_time", "room", "instructor", "schedule_date", "title", "custom_day"]),
+              order_by: 'schedule_date asc, from_time asc',
+              limit_page_length: 100
+            }
+          });
+          fullSchedule = fullSchRes.data?.data || [];
+        } catch (e) {
+          console.warn('[StudentDashboard] Failed to fetch Full Schedule:', e.message);
+        }
+      }
 
       let linkedFeeStructure = (enrollmentData.length > 0 && enrollmentData[0].fee_structure) 
         ? enrollmentData[0].fee_structure 
@@ -280,6 +387,7 @@ const StudentDashboard = () => {
       
       setStudentData({
         profile,
+        studentGroups,
         permissions,
         feeStructure: linkedFeeStructure,
         feeStructureDetails,
@@ -288,7 +396,8 @@ const StudentDashboard = () => {
         assignments: assRes.status === 'fulfilled' ? (assRes.value.data?.data?.length || 0) : 0,
         fees: feeList.reduce((sum, f) => sum + (f.outstanding_amount || 0), 0),
         feeRecords: feeList,
-        schedule: schRes.status === 'fulfilled' ? (schRes.value.data?.data || []) : [],
+        schedule: scheduleStatus ? (schRes.data?.data || []) : [],
+        fullSchedule,
         notifications: [
           'Academic profile linked successfully.',
           'Always check your schedule for real-time updates.',
@@ -604,6 +713,11 @@ const StudentDashboard = () => {
                       <Descriptions.Item label="Student ID"><Text strong>{profile.name}</Text></Descriptions.Item>
                       <Descriptions.Item label="Joining Date">{profile.joining_date}</Descriptions.Item>
                       <Descriptions.Item label="Program"><Tag color="blue">{profile.program || 'N/A'}</Tag></Descriptions.Item>
+                      <Descriptions.Item label="Student Group">
+                        {studentData.studentGroups && studentData.studentGroups.length > 0 ? (
+                          studentData.studentGroups.map(group => <Tag color="cyan" key={group}>{group}</Tag>)
+                        ) : <Text type="secondary">N/A</Text>}
+                      </Descriptions.Item>
                       <Descriptions.Item label="Fee Structure">
                         <Text strong style={{ color: '#ff4d4f' }}>
                           <WalletOutlined style={{ marginRight: '8px' }} />
@@ -794,6 +908,74 @@ const StudentDashboard = () => {
                         />
                       )
                     }
+                  ]}
+                />
+              </Card>
+            </Tabs.TabPane>
+            <Tabs.TabPane tab={<span><TableOutlined /> Time Table</span>} key="5">
+              <Card 
+                bordered={false} 
+                style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                title={
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                    <span style={{ fontSize: '16px', fontWeight: 700 }}>Weekly Time Table</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '14px', color: '#595959', fontWeight: 500 }}>Filter by Day:</span>
+                      <select 
+                        style={{ 
+                          padding: '6px 12px', 
+                          borderRadius: '8px', 
+                          border: '1px solid #d9d9d9', 
+                          fontSize: '14px', 
+                          fontWeight: 500,
+                          outline: 'none',
+                          cursor: 'pointer',
+                          minWidth: '140px',
+                          background: '#fff'
+                        }}
+                        value={selectedDayFilter}
+                        onChange={(e) => setSelectedDayFilter(e.target.value)}
+                      >
+                        <option value="">All Days</option>
+                        <option value="Monday">Monday</option>
+                        <option value="Tuesday">Tuesday</option>
+                        <option value="Wednesday">Wednesday</option>
+                        <option value="Thursday">Thursday</option>
+                        <option value="Friday">Friday</option>
+                        <option value="Saturday">Saturday</option>
+                        <option value="Sunday">Sunday</option>
+                      </select>
+                    </div>
+                  </div>
+                }
+              >
+                <Table 
+                  dataSource={(studentData.fullSchedule || []).filter(item => !selectedDayFilter || item.custom_day === selectedDayFilter)}
+                  rowKey="name"
+                  pagination={{ pageSize: 10 }}
+                  columns={[
+                    { title: 'ID', dataIndex: 'name', key: 'id', width: 120, ellipsis: true },
+                    { 
+                      title: 'Title', 
+                      key: 'title_display',
+                      render: (rec) => rec.title || rec.course 
+                    },
+                    { title: 'Instructor', dataIndex: 'instructor', key: 'instructor' },
+                    { 
+                      title: 'Day', 
+                      dataIndex: 'custom_day', 
+                      key: 'day',
+                      render: (text) => text ? <Tag color="blue" style={{ fontWeight: 'bold' }}>{text}</Tag> : '-'
+                    },
+                    { 
+                      title: 'Date', 
+                      dataIndex: 'schedule_date', 
+                      key: 'date',
+                      sorter: (a, b) => new Date(a.schedule_date) - new Date(b.schedule_date)
+                    },
+                    { title: 'From Time', dataIndex: 'from_time', key: 'from' },
+                    { title: 'To Time', dataIndex: 'to_time', key: 'to' },
+                    { title: 'Room', dataIndex: 'room', key: 'room' }
                   ]}
                 />
               </Card>

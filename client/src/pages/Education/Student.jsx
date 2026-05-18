@@ -159,10 +159,6 @@ const Student = () => {
             notification.warning({ message: 'First Name is required.' });
             return;
         }
-        if (!form.student_email_id) {
-            notification.warning({ message: 'Student Email Address is required.' });
-            return;
-        }
 
         // Validate guardians
         for (let i = 0; i < form.guardians.length; i++) {
@@ -183,13 +179,21 @@ const Student = () => {
 
         setSaving(true);
         try {
-            // Process new guardians
+            // Process guardians
             const finalGuardians = [];
-            for (const g of form.guardians) {
+            for (let i = 0; i < form.guardians.length; i++) {
+                const g = form.guardians[i];
+                const cleanGName = (g.guardian_name || 'guardian').replace(/\s+/g, '').toLowerCase();
+                const baseGEmail = g.email_address || g.user;
+                const gEmail = baseGEmail ? baseGEmail.trim() : `${cleanGName}.${Date.now().toString().slice(-4)}${i}@guardian.ssvschool.edu.in`;
+
+                let finalGuardianName = g.guardian;
+                let finalGuardianDisplayName = g.guardian_name || `Parent of ${form.first_name || 'Student'}`;
+
                 if (g.is_new) {
                     const guardianPayload = {
-                        guardian_name: g.guardian_name,
-                        email_address: g.email_address || null,
+                        guardian_name: g.guardian_name || finalGuardianDisplayName,
+                        email_address: gEmail,
                         mobile_number: g.mobile_number || null,
                         occupation: g.occupation || null,
                         designation: g.designation || null,
@@ -198,21 +202,103 @@ const Student = () => {
                         work_address: g.work_address || null,
                         date_of_birth: g.date_of_birth || null
                     };
-                    const gRes = await API.post('/api/resource/Guardian', guardianPayload);
-                    const createdGuardian = gRes.data.data;
-                    finalGuardians.push({
-                        guardian: createdGuardian.name,
-                        guardian_name: createdGuardian.guardian_name,
-                        relation: g.relation
-                    });
+                    
+                    let gAttempts = 0;
+                    while (gAttempts < 15 && !finalGuardianName) {
+                        gAttempts++;
+                        try {
+                            const gRes = await API.post('/api/resource/Guardian', guardianPayload);
+                            const createdGuardian = gRes.data.data;
+                            finalGuardianName = createdGuardian.name;
+                            finalGuardianDisplayName = createdGuardian.guardian_name;
+                            finalGuardians.push({
+                                guardian: finalGuardianName,
+                                guardian_name: finalGuardianDisplayName,
+                                relation: g.relation || 'Others'
+                            });
+                            console.log(`[ERPNext Guardian Sync] Created Guardian doc on attempt ${gAttempts}:`, finalGuardianName);
+                        } catch (gErr) {
+                            const status = gErr.response?.status;
+                            const errStr = JSON.stringify(gErr.response?.data || {});
+                            console.warn(`[ERPNext Guardian Sync] Attempt ${gAttempts} failed:`, gErr.response?.data || gErr.message);
+                            
+                            if (status === 409 || errStr.includes('DuplicateEntryError') || errStr.includes('Duplicate entry')) {
+                                if (gAttempts < 15) {
+                                    await new Promise(r => setTimeout(r, 150));
+                                    continue;
+                                }
+                            }
+                            
+                            // Fallback lookup
+                            try {
+                                const safeFilters = encodeURIComponent(JSON.stringify([["guardian_name", "like", `%${guardianPayload.guardian_name}%`]]));
+                                const sq = await API.get(`/api/resource/Guardian?filters=${safeFilters}&limit_page_length=1`);
+                                if (sq.data.data?.length > 0) {
+                                    finalGuardianName = sq.data.data[0].name;
+                                    finalGuardians.push({
+                                        guardian: finalGuardianName,
+                                        guardian_name: guardianPayload.guardian_name,
+                                        relation: g.relation || 'Others'
+                                    });
+                                    console.log('[ERPNext Guardian Sync] Fallback resolution: Found and linked existing Guardian doc:', finalGuardianName);
+                                    break;
+                                }
+                            } catch (lookupErr) {
+                                console.warn('[ERPNext Guardian Sync] Fallback search also yielded no result.');
+                            }
+                            break;
+                        }
+                    }
                 } else {
                     finalGuardians.push({
                         guardian: g.guardian,
                         guardian_name: g.guardian_name,
-                        relation: g.relation
+                        relation: g.relation || 'Others'
                     });
                 }
+
+                // Sync Guardian User account
+                if (finalGuardianDisplayName) {
+                    try {
+                        const gUserPayload = {
+                            mobile_no: g.mobile_number || null,
+                            role_profile_name: 'Guardian',
+                            module_profile: 'Guardian'
+                        };
+                        try {
+                            await API.put(`/api/resource/User/${encodeURIComponent(gEmail)}`, gUserPayload);
+                            console.log('[ERPNext Guardian User Sync] Successfully mapped Guardian profiles to existing User:', gEmail);
+                        } catch (guErr) {
+                            if (guErr.response?.status === 404) {
+                                await API.post('/api/resource/User', {
+                                    email: gEmail,
+                                    first_name: finalGuardianDisplayName,
+                                    send_welcome_email: 1,
+                                    ...gUserPayload
+                                });
+                                console.log('[ERPNext Guardian User Sync] Explicitly auto-created User record for Guardian:', gEmail);
+                            } else {
+                                console.warn('[ERPNext Guardian User Sync] Non-404 status response:', guErr.message);
+                            }
+                        }
+
+                        // Map user account back to the Guardian doc
+                        if (finalGuardianName) {
+                            await API.put(`/api/resource/Guardian/${encodeURIComponent(finalGuardianName)}`, {
+                                user: gEmail,
+                                email_address: gEmail
+                            }).catch(() => {});
+                        }
+                    } catch (gUserSyncErr) {
+                        console.warn('[ERPNext Guardian User Sync] Gracefully caught sync error:', gUserSyncErr.message);
+                    }
+                }
             }
+
+            // Student payload preparation
+            const baseEmail = form.student_email_id;
+            const cleanFirstName = (form.first_name || 'student').replace(/\s+/g, '').toLowerCase();
+            const safeEmail = baseEmail ? baseEmail.trim() : `${cleanFirstName}.${Date.now().toString().slice(-5)}@ssvschool.edu.in`;
 
             const payload = { ...form };
             Object.keys(payload).forEach(key => {
@@ -220,6 +306,7 @@ const Student = () => {
                     payload[key] = null;
                 }
             });
+            payload.student_email_id = safeEmail;
             payload.guardians = finalGuardians;
             
             // Clean up siblings empty fields
@@ -231,13 +318,98 @@ const Student = () => {
                 });
             }
 
+            let erpNextStudentName = null;
+
             if (editingRecord) {
                 await API.put(`/api/resource/Student/${encodeURIComponent(editingRecord)}`, payload);
+                erpNextStudentName = editingRecord;
                 notification.success({ message: 'Student updated successfully.' });
+
+                // Explicitly update Student record with guardians in child table
+                if (finalGuardians.length > 0) {
+                    await API.put(`/api/resource/Student/${encodeURIComponent(erpNextStudentName)}`, {
+                        guardians: finalGuardians
+                    }).catch(childErr => console.warn('[ERPNext Guardian Link Sync] Warning during explicit PUT linkage:', childErr.message));
+                }
             } else {
-                await API.post('/api/resource/Student', payload);
-                notification.success({ message: 'Student created successfully.' });
+                // Implement sequential auto-retry up to 40 times to rapidly push through backend primary key sequence lag (Error 409)
+                let attempts = 0;
+                const maxAttempts = 40;
+                let lastSyncErr = null;
+
+                while (attempts < maxAttempts && !erpNextStudentName) {
+                    attempts++;
+                    try {
+                        const currentPayload = {
+                            ...payload,
+                            student_email_id: safeEmail
+                        };
+                        const sRes = await API.post('/api/resource/Student', currentPayload);
+                        erpNextStudentName = sRes.data.data.name;
+                        notification.success({ 
+                            message: 'Student created successfully.', 
+                            description: `Student Created in ERPNext: ${erpNextStudentName}${attempts > 1 ? ` (auto-recovered sequence lag after ${attempts} attempts)` : ''}` 
+                        });
+
+                        // Explicitly update the Student record via PUT to guarantee child table (guardians) linkage parity with Student master storage
+                        if (finalGuardians.length > 0) {
+                            await API.put(`/api/resource/Student/${encodeURIComponent(erpNextStudentName)}`, {
+                                guardians: finalGuardians
+                            }).catch(childErr => console.warn('[ERPNext Guardian Link Sync] Warning during explicit PUT linkage:', childErr.message));
+                            console.log('[ERPNext Guardian Link Sync] Successfully applied child table guardians linking to Student record.');
+                        }
+                    } catch (err) {
+                        lastSyncErr = err;
+                        const status = err.response?.status;
+                        const errStr = JSON.stringify(err.response?.data || {});
+                        console.warn(`[ERPNext Sync] Attempt ${attempts}/${maxAttempts} failed:`, err.response?.data || err.message);
+                        
+                        // If it's a primary key/duplicate entry error due to backend tabSeries lag, loop and retry to auto-increment the server sequence
+                        if (status === 409 || errStr.includes('DuplicateEntryError') || errStr.includes('Duplicate entry')) {
+                            if (attempts < maxAttempts) {
+                                await new Promise(r => setTimeout(r, 120));
+                                continue;
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                if (!erpNextStudentName && lastSyncErr) {
+                    throw lastSyncErr;
+                }
             }
+
+            // Sync/Create Student User account
+            if (erpNextStudentName) {
+                try {
+                    const userPayload = {
+                        mobile_no: form.student_mobile_number || null,
+                        role_profile_name: 'Student',
+                        module_profile: 'Student'
+                    };
+                    try {
+                        await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, userPayload);
+                        console.log('[ERPNext User Sync] Automatically applied mobile number, role profile, and module profile to User record.');
+                    } catch (uErr) {
+                        if (uErr.response?.status === 404) {
+                            await API.post('/api/resource/User', {
+                                email: safeEmail,
+                                first_name: form.first_name || 'Student',
+                                last_name: form.last_name || null,
+                                send_welcome_email: 1,
+                                ...userPayload
+                            });
+                            console.log('[ERPNext User Sync] Explicitly created new User record mapped with Student permissions.');
+                        } else {
+                            console.warn('[ERPNext User Sync] Non-404 update response:', uErr.message);
+                        }
+                    }
+                } catch (profileSyncErr) {
+                    console.warn('[ERPNext User Sync] Gracefully caught sync override error:', profileSyncErr.message);
+                }
+            }
+
             setView('list');
         } catch (err) {
             console.error('Save error full details:', err.response?.data);

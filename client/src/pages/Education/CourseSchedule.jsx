@@ -8,6 +8,7 @@ const emptyForm = () => ({
     instructor: '',
     room: '',
     schedule_date: new Date().toISOString().split('T')[0],
+    custom_day: '',
     from_time: '',
     to_time: '',
     color: 'blue',
@@ -76,7 +77,7 @@ const CourseSchedule = () => {
     const fetchScheduleList = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Course Schedule?fields=["name","student_group","course","instructor","schedule_date","from_time","to_time"]&limit_page_length=None&order_by=schedule_date desc';
+            const url = '/api/resource/Course Schedule?fields=["name","student_group","course","instructor","schedule_date","from_time","to_time","custom_day"]&limit_page_length=None&order_by=schedule_date desc';
             const response = await API.get(url);
             setScheduleList(response.data.data || []);
         } catch (err) {
@@ -172,15 +173,16 @@ const CourseSchedule = () => {
                                 <th className="px-4 py-3 font-semibold text-gray-600">ID</th>
                                 <th className="px-4 py-3 font-semibold text-gray-600">Student Group</th>
                                 <th className="px-4 py-3 font-semibold text-gray-600">Course</th>
+                                <th className="px-4 py-3 font-semibold text-gray-600">Day</th>
                                 <th className="px-4 py-3 font-semibold text-gray-600">Date</th>
                                 <th className="px-4 py-3 font-semibold text-gray-600">Timing</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loadingList ? (
-                                <tr><td colSpan="5" className="text-center py-10 text-gray-400 italic">Loading...</td></tr>
+                                <tr><td colSpan="6" className="text-center py-10 text-gray-400 italic">Loading...</td></tr>
                             ) : filtered.length === 0 ? (
-                                <tr><td colSpan="5" className="text-center py-10 text-gray-400 italic">No schedule records found.</td></tr>
+                                <tr><td colSpan="6" className="text-center py-10 text-gray-400 italic">No schedule records found.</td></tr>
                             ) : (
                                 filtered.map((row) => (
                                     <tr key={row.name} className="border-b hover:bg-gray-50">
@@ -189,6 +191,7 @@ const CourseSchedule = () => {
                                         </td>
                                         <td className="px-4 py-3">{row.student_group}</td>
                                         <td className="px-4 py-3">{row.course}</td>
+                                        <td className="px-4 py-3 font-medium text-gray-700">{row.custom_day || '-'}</td>
                                         <td className="px-4 py-3">{row.schedule_date}</td>
                                         <td className="px-4 py-3 text-gray-500">{row.from_time} - {row.to_time}</td>
                                     </tr>
@@ -262,18 +265,29 @@ const CourseSchedule = () => {
                         </select>
                     </div>
                     <div>
+                        <label className={labelStyle}>Day</label>
+                        <select className={inputStyle} value={form.custom_day || ''} onChange={e => setForm({ ...form, custom_day: e.target.value })}>
+                            <option value="">Select Day</option>
+                            <option value="Monday">Monday</option>
+                            <option value="Tuesday">Tuesday</option>
+                            <option value="Wednesday">Wednesday</option>
+                            <option value="Thursday">Thursday</option>
+                            <option value="Friday">Friday</option>
+                            <option value="Saturday">Saturday</option>
+                            <option value="Sunday">Sunday</option>
+                        </select>
+                    </div>
+                    <div>
                         <label className={labelStyle}>Schedule Date *</label>
                         <input type="date" className={inputStyle} value={form.schedule_date} onChange={e => setForm({ ...form, schedule_date: e.target.value })} />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className={labelStyle}>From Time *</label>
-                            <input type="time" className={inputStyle} value={form.from_time} onChange={e => setForm({ ...form, from_time: e.target.value })} />
-                        </div>
-                        <div>
-                            <label className={labelStyle}>To Time *</label>
-                            <input type="time" className={inputStyle} value={form.to_time} onChange={e => setForm({ ...form, to_time: e.target.value })} />
-                        </div>
+                    <div>
+                        <label className={labelStyle}>From Time *</label>
+                        <input type="time" className={inputStyle} value={form.from_time} onChange={e => setForm({ ...form, from_time: e.target.value })} />
+                    </div>
+                    <div>
+                        <label className={labelStyle}>To Time *</label>
+                        <input type="time" className={inputStyle} value={form.to_time} onChange={e => setForm({ ...form, to_time: e.target.value })} />
                     </div>
                 </div>
             </div>
