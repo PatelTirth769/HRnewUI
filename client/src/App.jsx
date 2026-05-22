@@ -12,6 +12,7 @@ import Register from './pages/auth/Register';
 import StudentDashboard from './pages/Education/StudentDashboard';
 import InstructorDashboard from './pages/Education/InstructorDashboard';
 import GuardianDashboard from './pages/Education/GuardianDashboard';
+import ImportLogs from './pages/Education/ImportLogs';
 
 import CompanyMaster from './components/company/CompanyMaster';
 import EmployeeMIS from './pages/EmployeeMIS';
@@ -322,6 +323,9 @@ import FinalAssessmentGrades from './pages/Education/FinalAssessmentGrades';
 import AssessmentPlanStatus from './pages/Education/AssessmentPlanStatus';
 import StudentReportGenerationTool from './pages/Education/StudentReportGenerationTool';
 import StudentAttendanceTool from './pages/Education/StudentAttendanceTool';
+import QuickAttendance from './pages/Education/QuickAttendance';
+import HomeworkAssignment from './pages/Homework/HomeworkAssignment';
+import ClassworkAssignment from './pages/Homework/ClassworkAssignment';
 import AssessmentResultTool from './pages/Education/AssessmentResultTool';
 import StudentGroupCreationTool from './pages/Education/StudentGroupCreationTool';
 import ProgramEnrollmentTool from './pages/Education/ProgramEnrollmentTool';
@@ -431,6 +435,10 @@ function App() {
         navigate('/transport/dashboard');
     } else if (moduleKey === 'enquiry') {
         navigate('/enquiry/dashboard');
+    } else if (moduleKey === 'homework') {
+        navigate('/homework/assignments');
+    } else if (moduleKey === 'importLogs') {
+        navigate('/import-logs/students');
     }
   };
 
@@ -738,6 +746,7 @@ function App() {
                 <Route path="/education/course-schedule" element={<CourseSchedule />} />
                 <Route path="/education/course-scheduling-tool" element={<CourseSchedulingTool />} />
                 <Route path="/education/student-attendance" element={<StudentAttendance />} />
+                <Route path="/education/quick-attendance" element={<QuickAttendance />} />
                 <Route path="/education/student-leave-application" element={<StudentLeaveApplication />} />
                 <Route path="/education/student-monthly-attendance-sheet" element={<StudentMonthlyAttendanceSheet />} />
                 <Route path="/education/absent-student-report" element={<AbsentStudentReport />} />
@@ -854,6 +863,10 @@ function App() {
                 <Route path="/transport/reports/student-punch-detail" element={<StudentPunchDetail />} />
                 <Route path="/transport/reports/new-transport-report" element={<NewTransportReport />} />
 
+                {/* Homework Routes */}
+                <Route path="/homework/assignments" element={<HomeworkAssignment />} />
+                <Route path="/homework/classwork" element={<ClassworkAssignment />} />
+
                 {/* Enquiry Routes */}
                 <Route path="/enquiry/dashboard" element={<div className="p-8"><h1 className="text-2xl font-bold">Enquiry Dashboard</h1><p className="mt-4 text-gray-500">Enquiry module content coming soon...</p></div>} />
                 <Route path="/enquiry/add" element={<AddEnquiry />} />
@@ -873,9 +886,8 @@ function App() {
                 <Route path="/enquiry/reports/enquiry-custom" element={<EnquiryCustomReport />} />
                 <Route path="/enquiry/reports/registration-custom" element={<RegistrationCustomReport />} />
                 <Route path="/enquiry/setup/class-restriction" element={<ClassRestrictionSetup />} />
-
-
-
+                {/* Import Logs Routes */}
+                <Route path="/import-logs/students" element={<ImportLogs />} />
 
               </Route> {/* End of Protected Routes */}
 

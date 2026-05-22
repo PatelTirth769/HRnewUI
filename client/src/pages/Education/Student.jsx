@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import * as XLSX from 'xlsx';
+import { db } from '../../config/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const TABS = ['Details', 'Address', 'Relations', 'Customer Details', 'Exit'];
 const BLOOD_GROUPS = ['', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
@@ -42,15 +45,54 @@ const emptyForm = () => ({
 });
 
 const Student = () => {
+    const [api, contextHolder] = notification.useNotification();
     // View state
-    const [view, setView] = useState('list'); // 'list' or 'form'
+    const [view, setView] = useState('list'); // 'list' or 'form' or 'import'
     const [editingRecord, setEditingRecord] = useState(null);
+
+    // --- Data Import States ---
+    const [importView, setImportView] = useState('list'); // 'list' or 'form'
+    const [importList, setImportList] = useState(() => {
+        const stored = localStorage.getItem('student_imports');
+        return stored ? JSON.parse(stored) : [];
+    });
+    const [activeImportRun, setActiveImportRun] = useState(null);
+    const [importType, setImportType] = useState('Insert New Records');
+    const [dontSendEmails, setDontSendEmails] = useState(true);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [importProgress, setImportProgress] = useState(0);
+    const [importing, setImporting] = useState(false);
+    const [importLogs, setImportLogs] = useState([]);
+    const [previewRows, setPreviewRows] = useState([]);
+    const [showTemplateModal, setShowTemplateModal] = useState(false);
+    const [templateFormat, setTemplateFormat] = useState('Excel');
+    const [templateType, setTemplateType] = useState('Blank Template');
+    const [selectedFields, setSelectedFields] = useState({
+        id: true, enabled: false, first_name: true, middle_name: false, gr_number: false, roll_number: false,
+        last_name: false, program: false, naming_series: false, joining_date: false, user_id: false,
+        student_applicant: false, image: false, student_email_address: true, date_of_birth: false, blood_group: false,
+        student_mobile_number: false, gender: false, nationality: false, address_line_1: false, address_line_2: false,
+        pincode: false, city: false, state: false, country: false, customer: false, customer_group: false,
+        date_of_leaving: false, leaving_certificate_number: false, reason_for_leaving: false, student_name: false,
+        guardian_guardian: false, guardian_guardian_name: false, guardian_id: false, guardian_relation: false,
+        guardian_email_address: false, guardian_mobile_number: false, guardian_occupation: false, guardian_designation: false,
+        guardian_education: false, guardian_alternate_number: false, guardian_date_of_birth: false, guardian_work_address: false,
+        sibling_date_of_birth: false, sibling_full_name: false, sibling_gender: false, sibling_id: false,
+        sibling_institution: false, sibling_program: false, sibling_student_id: false, sibling_studying_in_same_institute: false
+    });
+
 
     // List states
     const [students, setStudents] = useState([]);
     const [loadingList, setLoadingList] = useState(true);
     const [search, setSearch] = useState('');
     const [selectedProgram, setSelectedProgram] = useState('');
+    const [pageSize, setPageSize] = useState(20);
+    const [visibleCount, setVisibleCount] = useState(20);
+
+    useEffect(() => {
+        setVisibleCount(pageSize);
+    }, [search, selectedProgram, pageSize]);
 
     // Form states
     const [activeTab, setActiveTab] = useState('Details');
@@ -68,6 +110,9 @@ const Student = () => {
         if (view === 'list') {
             fetchStudents();
             fetchDropdownData(); // For filter dropdown
+        } else if (view === 'import') {
+            fetchImportList();
+            fetchDropdownData();
         } else {
             setActiveTab('Details');
             fetchDropdownData();
@@ -78,6 +123,7 @@ const Student = () => {
             }
         }
     }, [view, editingRecord]);
+
 
     const fetchStudents = async () => {
         try {
@@ -146,7 +192,7 @@ const Student = () => {
             });
         } catch (err) {
             console.error('Error fetching student:', err);
-            notification.error({ message: 'Error', description: 'Failed to load student data.' });
+            api.error({ message: 'Error', description: 'Failed to load student data.' });
         } finally {
             setLoadingForm(false);
         }
@@ -156,7 +202,7 @@ const Student = () => {
 
     const handleSave = async () => {
         if (!form.first_name) {
-            notification.warning({ message: 'First Name is required.' });
+            api.warning({ message: 'First Name is required.' });
             return;
         }
 
@@ -164,15 +210,15 @@ const Student = () => {
         for (let i = 0; i < form.guardians.length; i++) {
             const g = form.guardians[i];
             if (g.is_new && !g.guardian_name) {
-                notification.warning({ message: `Guardian Name is required for Guardian #${i + 1}.` });
+                api.warning({ message: `Guardian Name is required for Guardian #${i + 1}.` });
                 return;
             }
             if (!g.is_new && !g.guardian) {
-                notification.warning({ message: `Please select an existing guardian for Guardian #${i + 1} or remove it.` });
+                api.warning({ message: `Please select an existing guardian for Guardian #${i + 1} or remove it.` });
                 return;
             }
             if (!g.relation) {
-                notification.warning({ message: `Relation is required for Guardian #${i + 1}.` });
+                api.warning({ message: `Relation is required for Guardian #${i + 1}.` });
                 return;
             }
         }
@@ -189,20 +235,19 @@ const Student = () => {
 
                 let finalGuardianName = g.guardian;
                 let finalGuardianDisplayName = g.guardian_name || `Parent of ${form.first_name || 'Student'}`;
-
                 if (g.is_new) {
                     const guardianPayload = {
-                        guardian_name: g.guardian_name || finalGuardianDisplayName,
+                        guardian_name: finalGuardianDisplayName,
                         email_address: gEmail,
-                        mobile_number: g.mobile_number || null,
+                        mobile_number: g.mobile_number ? String(g.mobile_number).trim() : null,
                         occupation: g.occupation || null,
                         designation: g.designation || null,
                         education: g.education || null,
-                        alternate_number: g.alternate_number || null,
-                        work_address: g.work_address || null,
-                        date_of_birth: g.date_of_birth || null
+                        alternate_number: g.alternate_number ? String(g.alternate_number).trim() : null,
+                        date_of_birth: g.date_of_birth || null,
+                        work_address: g.work_address || null
                     };
-                    
+
                     let gAttempts = 0;
                     while (gAttempts < 15 && !finalGuardianName) {
                         gAttempts++;
@@ -261,7 +306,7 @@ const Student = () => {
                 if (finalGuardianDisplayName) {
                     try {
                         const gUserPayload = {
-                            mobile_no: g.mobile_number || null,
+                            mobile_no: g.mobile_number ? String(g.mobile_number).trim() : null,
                             role_profile_name: 'Guardian',
                             module_profile: 'Guardian'
                         };
@@ -323,7 +368,7 @@ const Student = () => {
             if (editingRecord) {
                 await API.put(`/api/resource/Student/${encodeURIComponent(editingRecord)}`, payload);
                 erpNextStudentName = editingRecord;
-                notification.success({ message: 'Student updated successfully.' });
+                api.success({ message: 'Student updated successfully.' });
 
                 // Explicitly update Student record with guardians in child table
                 if (finalGuardians.length > 0) {
@@ -346,7 +391,7 @@ const Student = () => {
                         };
                         const sRes = await API.post('/api/resource/Student', currentPayload);
                         erpNextStudentName = sRes.data.data.name;
-                        notification.success({ 
+                        api.success({ 
                             message: 'Student created successfully.', 
                             description: `Student Created in ERPNext: ${erpNextStudentName}${attempts > 1 ? ` (auto-recovered sequence lag after ${attempts} attempts)` : ''}` 
                         });
@@ -384,7 +429,7 @@ const Student = () => {
             if (erpNextStudentName) {
                 try {
                     const userPayload = {
-                        mobile_no: form.student_mobile_number || null,
+                        mobile_no: form.student_mobile_number ? String(form.student_mobile_number).trim() : null,
                         role_profile_name: 'Student',
                         module_profile: 'Student'
                     };
@@ -430,7 +475,7 @@ const Student = () => {
                 exactError = err.message;
             }
 
-            notification.error({ 
+            api.error({ 
                 message: 'Save Failed', 
                 description: String(exactError),
                 duration: 10
@@ -446,10 +491,10 @@ const Student = () => {
         if (!window.confirm('Are you sure you want to delete this student?')) return;
         try {
             await API.delete(`/api/resource/Student/${encodeURIComponent(editingRecord)}`);
-            notification.success({ message: 'Student deleted.' });
+            api.success({ message: 'Student deleted.' });
             setView('list');
         } catch (err) {
-            notification.error({ message: 'Delete Failed', description: err.message });
+            api.error({ message: 'Delete Failed', description: err.message });
         }
     };
 
@@ -506,6 +551,1326 @@ const Student = () => {
         setForm(prev => ({ ...prev, siblings: prev.siblings.filter((_, i) => i !== idx) }));
     };
 
+    // --- Data Import Logics ---
+    const CheckboxField = ({ name, label, isRed }) => (
+        <label className="flex items-center gap-3 cursor-pointer">
+            <input 
+                type="checkbox" 
+                checked={!!selectedFields[name]} 
+                onChange={(e) => setSelectedFields(prev => ({ ...prev, [name]: e.target.checked }))}
+                className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black accent-black"
+            />
+            <span className={isRed ? "text-red-600 font-medium" : "text-gray-700 font-medium"}>{label}</span>
+        </label>
+    );
+
+
+    const handleDownloadTemplate = async () => {
+        const headers = [];
+        const cols = [];
+        const apiFieldsToFetch = [];
+
+        const orderedFields = [
+            'id', 'enabled', 'first_name', 'middle_name', 'gr_number', 'roll_number', 'last_name', 'program', 'naming_series', 'joining_date', 'user_id', 'student_applicant', 'image', 'student_email_address', 'date_of_birth', 'blood_group',
+            'student_mobile_number', 'gender', 'nationality', 'address_line_1', 'address_line_2', 'pincode', 'city', 'state', 'country', 'customer', 'customer_group', 'date_of_leaving', 'leaving_certificate_number', 'reason_for_leaving', 'student_name',
+            'guardian_guardian', 'guardian_guardian_name', 'guardian_id', 'guardian_relation',
+            'guardian_email_address', 'guardian_mobile_number', 'guardian_occupation', 'guardian_designation',
+            'guardian_education', 'guardian_alternate_number', 'guardian_date_of_birth', 'guardian_work_address',
+            'sibling_date_of_birth', 'sibling_full_name', 'sibling_gender', 'sibling_id', 'sibling_institution', 'sibling_program', 'sibling_student_id', 'sibling_studying_in_same_institute'
+        ];
+
+        const fieldMapping = {
+            id: { label: 'ID', api: 'name', width: 25 }, enabled: { label: 'Enabled', api: 'enabled', width: 10 },
+            first_name: { label: 'First Name', api: 'first_name', width: 20 }, middle_name: { label: 'Middle Name', api: 'middle_name', width: 20 },
+            gr_number: { label: 'GR Number', api: 'gr_number', width: 15 }, roll_number: { label: 'Roll Number', api: 'roll_number', width: 15 },
+            last_name: { label: 'Last Name', api: 'last_name', width: 20 }, program: { label: 'Program', api: 'program', width: 20 },
+            naming_series: { label: 'Naming Series', api: 'naming_series', width: 20 }, joining_date: { label: 'Joining Date', api: 'joining_date', width: 15 },
+            user_id: { label: 'User ID', api: 'user_id', width: 20 }, student_applicant: { label: 'Student Applicant', api: 'student_applicant', width: 20 },
+            image: { label: 'Image', api: 'image', width: 20 }, student_email_address: { label: 'Student Email Address', api: 'student_email_id', width: 25 },
+            date_of_birth: { label: 'Date of Birth', api: 'date_of_birth', width: 15 }, blood_group: { label: 'Blood Group', api: 'blood_group', width: 12 },
+            student_mobile_number: { label: 'Student Mobile Number', api: 'student_mobile_number', width: 15 }, gender: { label: 'Gender', api: 'gender', width: 12 },
+            nationality: { label: 'Nationality', api: 'nationality', width: 15 }, address_line_1: { label: 'Address Line 1', api: 'address_line_1', width: 25 },
+            address_line_2: { label: 'Address Line 2', api: 'address_line_2', width: 25 }, pincode: { label: 'Pincode', api: 'pincode', width: 12 },
+            city: { label: 'City', api: 'city', width: 15 }, state: { label: 'State', api: 'state', width: 15 },
+            country: { label: 'Country', api: 'country', width: 15 }, customer: { label: 'Customer', api: 'customer', width: 20 },
+            customer_group: { label: 'Customer Group', api: 'customer_group', width: 20 }, date_of_leaving: { label: 'Date of Leaving', api: 'date_of_leaving', width: 15 },
+            leaving_certificate_number: { label: 'Leaving Certificate Number', api: 'leaving_certificate_number', width: 20 }, reason_for_leaving: { label: 'Reason For Leaving', api: 'reason_for_leaving', width: 20 },
+            student_name: { label: 'Student Name', api: 'title', width: 25 },
+            guardian_guardian: { label: 'Guardian', api: null, width: 20 }, guardian_guardian_name: { label: 'Guardian Name', api: null, width: 20 },
+            guardian_id: { label: 'ID', api: null, width: 20 }, guardian_relation: { label: 'Relation', api: null, width: 15 },
+            guardian_email_address: { label: 'Guardian Email Address', api: null, width: 25 },
+            guardian_mobile_number: { label: 'Guardian Mobile Number', api: null, width: 15 },
+            guardian_occupation: { label: 'Guardian Occupation', api: null, width: 20 },
+            guardian_designation: { label: 'Guardian Designation', api: null, width: 20 },
+            guardian_education: { label: 'Guardian Education', api: null, width: 20 },
+            guardian_alternate_number: { label: 'Guardian Alternate Number', api: null, width: 15 },
+            guardian_date_of_birth: { label: 'Guardian Date of Birth', api: null, width: 15 },
+            guardian_work_address: { label: 'Guardian Work Address', api: null, width: 25 },
+            sibling_date_of_birth: { label: 'Date of Birth', api: null, width: 15 }, sibling_full_name: { label: 'Full Name', api: null, width: 20 },
+            sibling_gender: { label: 'Gender', api: null, width: 12 }, sibling_id: { label: 'ID', api: null, width: 20 },
+            sibling_institution: { label: 'Institution', api: null, width: 20 }, sibling_program: { label: 'Program', api: null, width: 20 },
+            sibling_student_id: { label: 'Student ID', api: null, width: 20 }, sibling_studying_in_same_institute: { label: 'Studying in Same Institute', api: null, width: 15 }
+        };
+
+        const activeFields = orderedFields.filter(f => selectedFields[f]);
+        
+        activeFields.forEach(f => {
+            headers.push(fieldMapping[f].label);
+            cols.push({ wch: fieldMapping[f].width });
+            if (fieldMapping[f].api) {
+                apiFieldsToFetch.push(fieldMapping[f].api);
+            }
+        });
+
+        if (!apiFieldsToFetch.includes('name') && activeFields.length > 0) {
+            apiFieldsToFetch.push('name');
+        }
+
+        const rows = [headers];
+
+        const getRowData = (rec) => {
+            return activeFields.map(f => {
+                if (!fieldMapping[f].api) return ""; 
+                return rec[fieldMapping[f].api] || "";
+            });
+        };
+
+        if (templateType === '5 Records' || templateType === 'All Records') {
+            api.info({ message: 'Fetching existing student records...', duration: 2 });
+            const limit = templateType === '5 Records' ? 5 : 'None';
+            try {
+                const uniqueApiFields = [...new Set(apiFieldsToFetch)];
+                const sRes = await API.get('/api/resource/Student', {
+                    params: {
+                        fields: JSON.stringify(uniqueApiFields),
+                        limit_page_length: limit,
+                        order_by: 'modified desc'
+                    }
+                });
+                
+                sRes.data.data?.forEach(rec => {
+                    rows.push(getRowData(rec));
+                });
+            } catch (err) {
+                console.error('Error exporting existing student records:', err);
+                api.error({ message: 'Export Failed', description: 'Failed to retrieve student records.' });
+                return;
+            }
+        } else {
+            rows.push(activeFields.map(f => "")); 
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = cols;
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Student");
+        
+        const filename = `Student_Import_Template.${templateFormat === 'CSV' ? 'csv' : 'xlsx'}`;
+        if (templateFormat === 'CSV') {
+            XLSX.writeFile(wb, filename, { bookType: 'csv' });
+        } else {
+            XLSX.writeFile(wb, filename);
+        }
+        api.success({ message: `Template ${filename} downloaded successfully.` });
+        setShowTemplateModal(false);
+    };
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setSelectedFile(file);
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                
+                if (jsonData.length === 0) {
+                    api.error({ message: 'Error', description: 'The file is empty.' });
+                    return;
+                }
+                
+                setPreviewRows(jsonData);
+                api.success({ message: 'File parsed successfully.', description: `Found ${jsonData.length} rows.` });
+            } catch (err) {
+                console.error(err);
+                api.error({ message: 'Parsing Failed', description: 'Failed to read spreadsheet file.' });
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    const fetchImportList = async () => {
+        try {
+            const res = await API.get('/api/resource/Data Import', {
+                params: {
+                    filters: JSON.stringify([["reference_doctype", "=", "Student"]]),
+                    fields: JSON.stringify(["name", "status", "reference_doctype", "import_type", "creation", "import_file"]),
+                    limit_page_length: 'None',
+                    order_by: 'creation desc'
+                }
+            });
+
+            const basicList = res.data.data || [];
+
+            const logRes = await API.get('/api/resource/Data Import Log', {
+                params: {
+                    fields: JSON.stringify(["data_import", "success"]),
+                    limit_page_length: 'None'
+                }
+            });
+            const allLogs = logRes.data.data || [];
+
+            const countsMap = {};
+            allLogs.forEach(l => {
+                if (!l.data_import) return;
+                if (!countsMap[l.data_import]) {
+                    countsMap[l.data_import] = { success: 0, fail: 0, total: 0 };
+                }
+                countsMap[l.data_import].total++;
+                if (l.success === 1) {
+                    countsMap[l.data_import].success++;
+                } else {
+                    countsMap[l.data_import].fail++;
+                }
+            });
+
+            const list = basicList.map(d => {
+                const counts = countsMap[d.name] || { success: 0, fail: 0, total: 0 };
+                return {
+                    id: d.name,
+                    status: d.status || 'Success',
+                    docType: d.reference_doctype,
+                    importType: d.import_type,
+                    importFile: d.import_file ? d.import_file.split('/').pop() : 'Uploaded File.xlsx',
+                    time: new Date(d.creation).toLocaleString(),
+                    successCount: counts.success,
+                    failureCount: counts.fail,
+                    totalRecords: counts.total,
+                    logs: []
+                };
+            });
+
+            setImportList(list);
+        } catch (err) {
+            console.error('Error fetching Data Import list from ERPNext:', err);
+            const stored = localStorage.getItem('student_imports');
+            if (stored) setImportList(JSON.parse(stored));
+        }
+    };
+
+    const handleSelectImportRun = async (row) => {
+        if (activeImportRun?.id === row.id) {
+            setActiveImportRun(null);
+            return;
+        }
+
+        if (row.logs && row.logs.length > 0) {
+            setActiveImportRun(row);
+            return;
+        }
+
+        try {
+            api.info({ message: 'Fetching import logs...', duration: 1.5 });
+            const logRes = await API.get('/api/resource/Data Import Log', {
+                params: {
+                    filters: JSON.stringify([["data_import", "=", row.id]]),
+                    fields: JSON.stringify(["row_indexes", "success", "docname", "messages"]),
+                    limit_page_length: 'None',
+                    order_by: 'creation asc'
+                }
+            });
+
+            const fetchedLogs = logRes.data.data?.map(l => {
+                let rowNum = "?";
+                try {
+                    const rowIndexes = JSON.parse(l.row_indexes || "[]");
+                    rowNum = rowIndexes[0] || "?";
+                } catch (e) {
+                    rowNum = l.row_indexes || "?";
+                }
+                const isSuccess = l.success === 1;
+                
+                let errMsg = "";
+                try {
+                    const parsedMessages = JSON.parse(l.messages);
+                    errMsg = Array.isArray(parsedMessages) ? parsedMessages.join(", ") : parsedMessages;
+                } catch (e) {
+                    errMsg = l.messages || "";
+                }
+
+                if (typeof errMsg === 'string' && (errMsg.startsWith('[') || errMsg.startsWith('"'))) {
+                    try {
+                        const parsed = JSON.parse(errMsg);
+                        errMsg = Array.isArray(parsed) ? parsed.join(", ") : parsed;
+                    } catch (e) {}
+                }
+
+                return {
+                    type: isSuccess ? 'success' : 'error',
+                    msg: isSuccess 
+                        ? `Row ${rowNum}: Successfully created/updated record ${l.docname}`
+                        : `Row ${rowNum}: Failed - ${errMsg}`
+                };
+            }) || [];
+
+            const updatedRow = { ...row, logs: fetchedLogs };
+            setImportList(prev => prev.map(item => item.id === row.id ? updatedRow : item));
+            setActiveImportRun(updatedRow);
+
+            if (fetchedLogs.length === 0) {
+                api.warning({ message: 'No detailed logs found for this import run.' });
+            }
+        } catch (err) {
+            console.error('Failed to fetch Data Import logs:', err);
+            api.error({ message: 'Failed to fetch logs from server' });
+            setActiveImportRun(row);
+        }
+    };
+
+    const handleDeleteImport = async (id) => {
+        if (!window.confirm(`Are you sure you want to delete the Data Import record "${id}"?`)) {
+            return;
+        }
+
+        try {
+            api.info({ message: 'Deleting Data Import record...', duration: 1.5 });
+            
+            if (!id.startsWith('STU-IMP-')) {
+                const logsRes = await API.get('/api/resource/Data Import Log', {
+                    params: {
+                        filters: JSON.stringify([["data_import", "=", id]]),
+                        fields: JSON.stringify(["name"]),
+                        limit_page_length: 'None'
+                    }
+                });
+                const logsToDelete = logsRes.data.data || [];
+                
+                for (let logDoc of logsToDelete) {
+                    await API.delete(`/api/resource/Data Import Log/${encodeURIComponent(logDoc.name)}`);
+                }
+                await API.delete(`/api/resource/Data Import/${encodeURIComponent(id)}`);
+            }
+            
+            const stored = localStorage.getItem('student_imports');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                const filtered = parsed.filter(item => item.id !== id);
+                localStorage.setItem('student_imports', JSON.stringify(filtered));
+            }
+            
+            setImportList(prev => prev.filter(item => item.id !== id));
+            if (activeImportRun?.id === id) {
+                setActiveImportRun(null);
+            }
+            api.success({ message: 'Success', description: 'Data Import record deleted successfully.' });
+        } catch (err) {
+            console.error('Failed to delete Data Import record:', err);
+            api.error({ message: 'Delete Failed' });
+        }
+    };
+
+    const handleStartImport = async () => {
+        if (previewRows.length === 0) {
+            api.error({ message: 'Error', description: 'No records to import.' });
+            return;
+        }
+
+        setImporting(true);
+        setImportProgress(0);
+        const logs = [];
+        let successCount = 0;
+        let failCount = 0;
+        const errorMessages = [];
+
+        try {
+            let dataImportName = null;
+            try {
+                const diRes = await API.post('/api/resource/Data Import', {
+                    reference_doctype: "Student",
+                    import_type: importType,
+                    status: "In Progress",
+                    import_file: selectedFile?.name || 'Uploaded File.xlsx',
+                    total_records: previewRows.length,
+                    success_count: 0,
+                    failure_count: 0
+                });
+                dataImportName = diRes.data.data?.name;
+            } catch (err) {
+                console.error('Failed to create Data Import record in ERPNext:', err);
+            }
+
+            for (let i = 0; i < previewRows.length; i++) {
+                const row = previewRows[i];
+                const rowNum = i + 2; 
+                
+                // Support all column names from the template (exact label matches)
+                const getField = (row, ...keys) => { for (const k of keys) { if (row[k] !== undefined && row[k] !== '') return row[k]; } return ''; };
+
+                const studentId       = String(getField(row, 'ID', 'id')).trim();
+                const firstName       = String(getField(row, 'First Name', 'first_name')).trim();
+                const middleName      = String(getField(row, 'Middle Name', 'middle_name')).trim();
+                const lastName        = String(getField(row, 'Last Name', 'last_name')).trim();
+                const email           = String(getField(row, 'Student Email Address', 'Email', 'student_email_id', 'student_email_address')).trim();
+                const mobile          = String(getField(row, 'Student Mobile Number', 'Mobile', 'student_mobile_number')).trim();
+                const program         = String(getField(row, 'Program', 'program')).trim();
+                const gender          = String(getField(row, 'Gender', 'gender')).trim();
+                const grNumber        = String(getField(row, 'GR Number', 'gr_number')).trim();
+                const rollNumber      = String(getField(row, 'Roll Number', 'roll_number')).trim();
+                const namingSeries    = String(getField(row, 'Naming Series', 'naming_series')).trim();
+                const bloodGroup      = String(getField(row, 'Blood Group', 'blood_group')).trim();
+                const nationality     = String(getField(row, 'Nationality', 'nationality')).trim();
+                const addressLine1    = String(getField(row, 'Address Line 1', 'address_line_1')).trim();
+                const addressLine2    = String(getField(row, 'Address Line 2', 'address_line_2')).trim();
+                const pincode         = String(getField(row, 'Pincode', 'pincode')).trim();
+                const city            = String(getField(row, 'City', 'city')).trim();
+                const state           = String(getField(row, 'State', 'state')).trim();
+                const country         = String(getField(row, 'Country', 'country')).trim();
+                const dateOfLeaving   = String(getField(row, 'Date of Leaving', 'date_of_leaving')).trim();
+                const reasonForLeaving= String(getField(row, 'Reason For Leaving', 'reason_for_leaving')).trim();
+                let rawDob            = getField(row, 'Date of Birth', 'date_of_birth');
+                let rawJoining        = getField(row, 'Joining Date', 'joining_date');
+
+                // Extract guardian detail columns
+                const guardianID          = String(getField(row, 'Guardian', 'guardian_id', 'guardian_guardian')).trim();
+                const guardianName        = String(getField(row, 'Guardian Name', 'guardian_guardian_name')).trim();
+                const guardianRelation    = String(getField(row, 'Relation', 'guardian_relation')).trim();
+                const guardianEmail       = String(getField(row, 'Guardian Email Address', 'guardian_email_address')).trim();
+                const guardianMobile      = String(getField(row, 'Guardian Mobile Number', 'guardian_mobile_number')).trim();
+                const guardianOccupation  = String(getField(row, 'Guardian Occupation', 'guardian_occupation')).trim();
+                const guardianDesignation = String(getField(row, 'Guardian Designation', 'guardian_designation')).trim();
+                const guardianEducation   = String(getField(row, 'Guardian Education', 'guardian_education')).trim();
+                const guardianAlternate   = String(getField(row, 'Guardian Alternate Number', 'guardian_alternate_number')).trim();
+                const guardianDobVal      = String(getField(row, 'Guardian Date of Birth', 'guardian_date_of_birth')).trim();
+                const guardianWorkAddr    = String(getField(row, 'Guardian Work Address', 'guardian_work_address')).trim();
+
+                try {
+                    if (importType === 'Insert New Records' && !firstName) {
+                        throw new Error("Missing 'First Name'");
+                    }
+
+                    const parseDate = (d) => {
+                        if (!d) return '';
+                        if (typeof d === 'number') {
+                            return new Date(Math.round((d - 25569) * 86400 * 1000)).toISOString().split('T')[0];
+                        }
+                        if (typeof d === 'string' && d.includes('-')) {
+                            const parts = d.split('-');
+                            if (parts[0].length === 2 && parts[2].length === 4) {
+                                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                            }
+                        }
+                        return d;
+                    };
+
+                    const dob = parseDate(rawDob);
+                    const joining = parseDate(rawJoining);
+
+                    // --- Strict dropdown validation (fails import if invalid) ---
+
+                    // 1. Guardian Relation
+                    const hasGuardianDetails = !!(guardianID || guardianName || guardianEmail || guardianMobile || guardianOccupation || guardianDesignation || guardianEducation || guardianAlternate || guardianDobVal || guardianWorkAddr);
+                    if (hasGuardianDetails) {
+                        if (!guardianRelation) {
+                            throw new Error("Relation with Student is required when specifying Guardian details.");
+                        }
+                        if (!guardianID && !guardianName) {
+                            throw new Error("Guardian Name or existing Guardian ID is required when specifying Guardian details.");
+                        }
+                    }
+
+                    if (guardianRelation) {
+                        const validRelations = ['Father', 'Mother', 'Others'];
+                        const trimmedRelation = guardianRelation.trim();
+                        const match = validRelations.find(r => r.toLowerCase() === trimmedRelation.toLowerCase());
+                        if (!match) {
+                            throw new Error(`Invalid Relation: ${guardianRelation}. Allowed options are Father, Mother, Others.`);
+                        }
+                    }
+
+                    // 2. Gender
+                    let resolvedGender = gender || undefined;
+                    if (gender) {
+                        const validGenders = ['Male', 'Female', 'Other'];
+                        const trimmedGender = gender.trim();
+                        const match = validGenders.find(g => g.toLowerCase() === trimmedGender.toLowerCase());
+                        if (!match) {
+                            throw new Error(`Invalid Gender: ${gender}. Allowed options are Male, Female, Other.`);
+                        }
+                        resolvedGender = match;
+                    }
+
+                    // 3. Blood Group
+                    let resolvedBloodGroup = bloodGroup || undefined;
+                    if (bloodGroup) {
+                        const validBloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+                        const trimmedBG = bloodGroup.trim().replace(/\s+/g, '');
+                        const match = validBloodGroups.find(bg => bg.toLowerCase() === trimmedBG.toLowerCase());
+                        if (!match) {
+                            throw new Error(`Invalid Blood Group: ${bloodGroup}. Allowed options are A+, A-, B+, B-, O+, O-, AB+, AB-.`);
+                        }
+                        resolvedBloodGroup = match;
+                    }
+
+                    // --- Dynamic Reference resolution & auto-creation (creates dynamic document if missing) ---
+
+                    // 1. Program
+                    let resolvedProgram = program || undefined;
+                    if (program) {
+                        const trimmedProgram = program.trim();
+                        const match = programs.find(p => p.toLowerCase() === trimmedProgram.toLowerCase());
+                        if (!match) {
+                            const programAbbr = trimmedProgram.split(' ').map(w => w[0]).join('').toUpperCase() || trimmedProgram;
+                            const newProgramRes = await API.post('/api/resource/Program', {
+                                program_name: trimmedProgram,
+                                program_abbreviation: programAbbr
+                            });
+                            const createdProgramName = newProgramRes.data.data?.name || trimmedProgram;
+                            setPrograms(prev => [...prev, createdProgramName]);
+                            resolvedProgram = createdProgramName;
+                        } else {
+                            resolvedProgram = match;
+                        }
+                    }
+
+                    // 2. Country
+                    let resolvedCountry = country || undefined;
+                    if (country) {
+                        const trimmedCountry = country.trim();
+                        const match = countries.find(c => c.toLowerCase() === trimmedCountry.toLowerCase());
+                        if (!match) {
+                            const newCountryRes = await API.post('/api/resource/Country', {
+                                country_name: trimmedCountry
+                            });
+                            const createdCountryName = newCountryRes.data.data?.name || trimmedCountry;
+                            setCountries(prev => [...prev, createdCountryName]);
+                            resolvedCountry = createdCountryName;
+                        } else {
+                            resolvedCountry = match;
+                        }
+                    }
+
+                    // 3. Customer Group
+                    const customerGroup = getField(row, 'Customer Group', 'customer_group');
+                    let resolvedCustomerGroup = customerGroup || undefined;
+                    if (customerGroup) {
+                        const trimmedCG = customerGroup.trim();
+                        const match = customerGroups.find(cg => cg.toLowerCase() === trimmedCG.toLowerCase());
+                        if (!match) {
+                            const newCGRes = await API.post('/api/resource/Customer Group', {
+                                customer_group_name: trimmedCG
+                            });
+                            const createdCGName = newCGRes.data.data?.name || trimmedCG;
+                            setCustomerGroups(prev => [...prev, createdCGName]);
+                            resolvedCustomerGroup = createdCGName;
+                        } else {
+                            resolvedCustomerGroup = match;
+                        }
+                    }
+
+                    // --- Dynamic Guardian linkage & auto-creation if columns are present ---
+                    let finalGuardians = [];
+                    if (hasGuardianDetails) {
+                        const trimmedRelation = guardianRelation.trim();
+                        const matchRelation = ['Father', 'Mother', 'Others'].find(r => r.toLowerCase() === trimmedRelation.toLowerCase()) || 'Others';
+
+                        let resolvedGuardianId = guardianID || undefined;
+                        let finalGuardianDisplayName = guardianName ? guardianName.trim() : `Parent of ${firstName || 'Student'}`;
+                        const cleanGName = finalGuardianDisplayName.replace(/\s+/g, '').toLowerCase();
+                        const gEmail = guardianEmail ? guardianEmail.trim() : `${cleanGName}.${Date.now().toString().slice(-4)}@guardian.ssvschool.edu.in`;
+
+                        if (!resolvedGuardianId && guardianName) {
+                            const found = guardiansList.find(g => g.guardian_name?.toLowerCase() === guardianName.trim().toLowerCase());
+                            if (found) {
+                                resolvedGuardianId = found.name;
+                            } else {
+                                const guardianPayload = {
+                                    guardian_name: guardianName.trim(),
+                                    email_address: gEmail,
+                                    mobile_number: guardianMobile || null,
+                                    occupation: guardianOccupation || null,
+                                    designation: guardianDesignation || null,
+                                    education: guardianEducation || null,
+                                    alternate_number: guardianAlternate || null,
+                                    work_address: guardianWorkAddr || null,
+                                    date_of_birth: parseDate(guardianDobVal) || null
+                                };
+
+                                let gAttempts = 0;
+                                while (gAttempts < 15 && !resolvedGuardianId) {
+                                    gAttempts++;
+                                    try {
+                                        const gRes = await API.post('/api/resource/Guardian', guardianPayload);
+                                        const createdGuardian = gRes.data.data;
+                                        resolvedGuardianId = createdGuardian.name;
+                                        finalGuardianDisplayName = createdGuardian.guardian_name;
+                                        console.log(`[ERPNext Guardian Sync] Created Guardian doc on attempt ${gAttempts}:`, resolvedGuardianId);
+                                    } catch (gErr) {
+                                        const status = gErr.response?.status;
+                                        const errStr = JSON.stringify(gErr.response?.data || {});
+                                        console.warn(`[ERPNext Guardian Sync] Attempt ${gAttempts} failed:`, gErr.response?.data || gErr.message);
+
+                                        if (status === 409 || errStr.includes('DuplicateEntryError') || errStr.includes('Duplicate entry')) {
+                                            if (gAttempts < 15) {
+                                                await new Promise(r => setTimeout(r, 150));
+                                                continue;
+                                            }
+                                        }
+
+                                        // Fallback lookup
+                                        try {
+                                            const safeFilters = encodeURIComponent(JSON.stringify([["guardian_name", "like", `%${guardianPayload.guardian_name}%`]]));
+                                            const sq = await API.get(`/api/resource/Guardian?filters=${safeFilters}&limit_page_length=1`);
+                                            if (sq.data.data?.length > 0) {
+                                                resolvedGuardianId = sq.data.data[0].name;
+                                                console.log('[ERPNext Guardian Sync] Fallback resolution: Found existing Guardian doc:', resolvedGuardianId);
+                                                break;
+                                            }
+                                        } catch (lookupErr) {
+                                            console.warn('[ERPNext Guardian Sync] Fallback search yielded no result.');
+                                        }
+                                        throw gErr;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Sync Guardian User account
+                        if (finalGuardianDisplayName) {
+                            const gUserPayload = {
+                                mobile_no: guardianMobile || null,
+                                role_profile_name: 'Guardian',
+                                module_profile: 'Guardian'
+                            };
+                            try {
+                                await API.put(`/api/resource/User/${encodeURIComponent(gEmail)}`, gUserPayload);
+                                console.log('[ERPNext Guardian User Sync] Successfully mapped Guardian profiles to existing User:', gEmail);
+                            } catch (guErr) {
+                                if (guErr.response?.status === 404) {
+                                    await API.post('/api/resource/User', {
+                                        email: gEmail,
+                                        first_name: finalGuardianDisplayName,
+                                        send_welcome_email: 1,
+                                        ...gUserPayload
+                                    });
+                                    console.log('[ERPNext Guardian User Sync] Explicitly auto-created User record for Guardian:', gEmail);
+                                } else {
+                                    throw guErr;
+                                }
+                            }
+
+                            // Map user account back to the Guardian doc
+                            if (resolvedGuardianId) {
+                                await API.put(`/api/resource/Guardian/${encodeURIComponent(resolvedGuardianId)}`, {
+                                    user: gEmail,
+                                    email_address: gEmail
+                                });
+                            }
+                        }
+
+                        if (resolvedGuardianId) {
+                            finalGuardians.push({
+                                guardian: resolvedGuardianId,
+                                guardian_name: finalGuardianDisplayName,
+                                relation: matchRelation
+                            });
+                        }
+                    }
+
+                    // Student email resolution
+                    const cleanFirstName = (firstName || 'student').replace(/\s+/g, '').toLowerCase();
+                    const safeEmail = email ? email.trim() : `${cleanFirstName}.${Date.now().toString().slice(-5)}@ssvschool.edu.in`;
+
+                    const payload = {
+                        first_name: firstName || undefined,
+                        middle_name: middleName || undefined,
+                        last_name: lastName || undefined,
+                        student_email_id: safeEmail,
+                        student_mobile_number: mobile || undefined,
+                        program: resolvedProgram,
+                        gender: resolvedGender,
+                        gr_number: grNumber || undefined,
+                        roll_number: rollNumber || undefined,
+                        naming_series: namingSeries || undefined,
+                        blood_group: resolvedBloodGroup,
+                        nationality: nationality || undefined,
+                        address_line_1: addressLine1 || undefined,
+                        address_line_2: addressLine2 || undefined,
+                        pincode: pincode || undefined,
+                        city: city || undefined,
+                        state: state || undefined,
+                        country: resolvedCountry,
+                        customer_group: resolvedCustomerGroup,
+                        date_of_leaving: dateOfLeaving || undefined,
+                        reason_for_leaving: reasonForLeaving || undefined,
+                        date_of_birth: dob || undefined,
+                        joining_date: joining || undefined,
+                    };
+                    
+                    Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+                    let erpNextStudentName = studentId || null;
+
+                    if (importType === 'Update Existing Records') {
+                        if (!erpNextStudentName) throw new Error("Missing 'ID' for update");
+                        await API.put(`/api/resource/Student/${encodeURIComponent(erpNextStudentName)}`, payload);
+                        if (finalGuardians.length > 0) {
+                            await API.put(`/api/resource/Student/${encodeURIComponent(erpNextStudentName)}`, {
+                                guardians: finalGuardians
+                            });
+                        }
+                        successCount++;
+                        logs.push({ type: 'success', msg: `Row ${rowNum}: Successfully updated Student ID ${erpNextStudentName}` });
+                    } else {
+                        // Insert New Records
+                        let attempts = 0;
+                        const maxAttempts = 40;
+                        let lastSyncErr = null;
+
+                        while (attempts < maxAttempts && !erpNextStudentName) {
+                            attempts++;
+                            try {
+                                const currentPayload = {
+                                    ...payload,
+                                    student_email_id: safeEmail
+                                };
+                                const sRes = await API.post('/api/resource/Student', currentPayload);
+                                erpNextStudentName = sRes.data.data.name;
+                                
+                                // Explicitly update the Student record via PUT to guarantee child table (guardians) linkage parity with Student master storage
+                                if (finalGuardians.length > 0) {
+                                    await API.put(`/api/resource/Student/${encodeURIComponent(erpNextStudentName)}`, {
+                                        guardians: finalGuardians
+                                    });
+                                }
+                            } catch (err) {
+                                lastSyncErr = err;
+                                const status = err.response?.status;
+                                const errStr = JSON.stringify(err.response?.data || {});
+                                console.warn(`[ERPNext Sync] Attempt ${attempts}/${maxAttempts} failed:`, err.response?.data || err.message);
+                                
+                                // If it's a primary key/duplicate entry error due to backend tabSeries lag, loop and retry to auto-increment the server sequence
+                                if (status === 409 || errStr.includes('DuplicateEntryError') || errStr.includes('Duplicate entry')) {
+                                    if (attempts < maxAttempts) {
+                                        await new Promise(r => setTimeout(r, 120));
+                                        continue;
+                                    }
+                                }
+                                throw err;
+                            }
+                        }
+
+                        if (!erpNextStudentName && lastSyncErr) {
+                            throw lastSyncErr;
+                        }
+
+                        successCount++;
+                        logs.push({ type: 'success', msg: `Row ${rowNum}: Successfully created record ${erpNextStudentName}` });
+                    }
+
+                    // Sync/Create Student User account
+                    if (erpNextStudentName) {
+                        const userPayload = {
+                            mobile_no: mobile || null,
+                            role_profile_name: 'Student',
+                            module_profile: 'Student'
+                        };
+                        try {
+                            await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, userPayload);
+                            console.log('[ERPNext User Sync] Automatically applied mobile number, role profile, and module profile to User record.');
+                        } catch (uErr) {
+                            if (uErr.response?.status === 404) {
+                                await API.post('/api/resource/User', {
+                                    email: safeEmail,
+                                    first_name: firstName || 'Student',
+                                    last_name: lastName || null,
+                                    send_welcome_email: 1,
+                                    ...userPayload
+                                });
+                                console.log('[ERPNext User Sync] Explicitly created new User record mapped with Student permissions.');
+                            } else {
+                                throw uErr;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    failCount++;
+                    let errMsg = '';
+                    try {
+                        if (err.response?.data?._server_messages) {
+                            const parsed = JSON.parse(err.response.data._server_messages);
+                            const firstMsg = typeof parsed === 'string' ? JSON.parse(parsed) : parsed[0];
+                            errMsg = typeof firstMsg === 'string' ? JSON.parse(firstMsg).message : (firstMsg?.message || JSON.stringify(firstMsg));
+                        } else {
+                            errMsg = err.response?.data?.message || err.message;
+                        }
+                    } catch (jsonErr) {
+                        errMsg = err.response?.data?.message || err.message;
+                    }
+                    logs.push({ type: 'error', msg: `Row ${rowNum}: Failed - ${errMsg}` });
+                    errorMessages.push(`Row ${rowNum}: ${errMsg}`);
+                }
+
+                setImportProgress(Math.round(((i + 1) / previewRows.length) * 100));
+                setImportLogs([...logs]);
+            }
+
+            const finalStatus = failCount === 0 
+                ? "Success" 
+                : failCount === previewRows.length 
+                    ? "Failed" 
+                    : "Partial Success";
+
+            if (dataImportName) {
+                try {
+                    await API.put(`/api/resource/Data Import/${encodeURIComponent(dataImportName)}`, {
+                        status: finalStatus,
+                        success_count: successCount,
+                        failure_count: failCount
+                    });
+                } catch (err) {
+                    console.error('Failed to update Data Import status in ERPNext:', err);
+                }
+            }
+
+            const newRun = {
+                id: dataImportName || `STU-IMP-${Date.now().toString().slice(-5)}`,
+                status: finalStatus,
+                docType: "Student",
+                importType: importType,
+                importFile: selectedFile?.name || 'Uploaded File.xlsx',
+                time: new Date().toLocaleString(),
+                successCount: successCount,
+                failureCount: failCount,
+                totalRecords: previewRows.length,
+                logs: logs
+            };
+            const updatedList = [newRun, ...(Array.isArray(importList) ? importList : []).filter(item => item && item.id !== dataImportName)];
+            localStorage.setItem('student_imports', JSON.stringify(updatedList));
+
+            // Save log to Firebase Firestore
+            try {
+                const firebaseLogPayload = {
+                    id: newRun.id,
+                    fileName: newRun.importFile,
+                    importType: newRun.importType,
+                    timestamp: serverTimestamp(),
+                    successCount: newRun.successCount,
+                    failureCount: newRun.failureCount,
+                    totalRecords: newRun.totalRecords,
+                    status: newRun.status,
+                    logs: newRun.logs.map(l => ({ type: l.type, msg: l.msg })),
+                    module: 'Student'
+                };
+                await addDoc(collection(db, "schooler_system", "student_imports", "logs"), firebaseLogPayload);
+            } catch (fsErr) {
+                console.error('Failed to save import log to Firestore:', fsErr);
+            }
+
+            if (successCount > 0 && failCount === 0) {
+                api.success({
+                    message: 'Import Successful',
+                    description: `Student import successfully completed. Affected rows: ${successCount}.`,
+                    duration: 6
+                });
+            } else if (successCount > 0 && failCount > 0) {
+                api.success({
+                    message: 'Import Completed',
+                    description: `Student import completed with ${successCount} row(s) successfully processed.`,
+                    duration: 6
+                });
+                const uniqueErrors = [...new Set(errorMessages)];
+                api.warning({
+                    message: 'Import Partial Success',
+                    description: `Failed to import ${failCount} record(s). Reasons:\n${uniqueErrors.slice(0, 5).join('\n')}${uniqueErrors.length > 5 ? '\n...and more.' : ''}`,
+                    duration: 10
+                });
+            } else if (successCount === 0 && failCount > 0) {
+                const uniqueErrors = [...new Set(errorMessages)];
+                api.error({
+                    message: 'Import Failed',
+                    description: `Student import failed. Reasons:\n${uniqueErrors.slice(0, 5).join('\n')}${uniqueErrors.length > 5 ? '\n...and more.' : ''}`,
+                    duration: 10
+                });
+            } else {
+                api.info({
+                    message: 'Import Run Empty',
+                    description: 'No student records were processed.',
+                    duration: 6
+                });
+            }
+        } catch (outerErr) {
+            console.error('Critical failure in handleStartImport:', outerErr);
+            api.error({
+                message: 'Import Error',
+                description: `A critical error occurred: ${outerErr.message}`,
+                duration: 10
+            });
+        } finally {
+            setImporting(false);
+            setImportView('list');
+            fetchImportList();
+        }
+    };
+
+    // --- Styles (Standard App UI) ---
+
+    if (view === 'import') {
+        return (
+            <div className="p-6">
+                {contextHolder}
+                {/* Header */}
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Tools</div>
+                        <h1 className="text-2xl font-bold text-gray-800">Data Import</h1>
+                    </div>
+                    <div className="flex gap-2">
+                        <button 
+                            className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 transition font-medium"
+                            onClick={() => setView('list')}
+                            disabled={importing}
+                        >
+                            ← Back to Students
+                        </button>
+                        {importView === 'list' && (
+                            <button 
+                                className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium flex items-center gap-1.5 shadow-sm"
+                                onClick={() => {
+                                    setImportView('form');
+                                    setImportType('Insert New Records');
+                                    setPreviewRows([]);
+                                    setSelectedFile(null);
+                                    setImportLogs([]);
+                                    setImportProgress(0);
+                                }}
+                            >
+                                + Add Data Import
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {importView === 'list' ? (
+                    <>
+                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50 border-b">
+                                    <tr>
+                                        <th className="px-4 py-3 font-semibold text-gray-600">ID</th>
+                                        <th className="px-4 py-3 font-semibold text-gray-600">Status</th>
+                                        <th className="px-4 py-3 font-semibold text-gray-600">Document Type</th>
+                                        <th className="px-4 py-3 font-semibold text-gray-600">Import Type</th>
+                                        <th className="px-4 py-3 font-semibold text-gray-600 text-center">Success</th>
+                                        <th className="px-4 py-3 font-semibold text-gray-600 text-center">Failed</th>
+                                        <th className="px-4 py-3 font-semibold text-gray-600 text-center">Total</th>
+                                        <th className="px-4 py-3 font-semibold text-gray-600">Import File</th>
+                                        <th className="px-4 py-3 font-semibold text-gray-600">Time</th>
+                                        <th className="px-4 py-3 font-semibold text-gray-600 text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {importList.map((row) => (
+                                        <tr 
+                                            key={row.id} 
+                                            className="border-b hover:bg-gray-50 transition cursor-pointer font-medium"
+                                            onClick={() => handleSelectImportRun(row)}
+                                        >
+                                            <td className="px-4 py-3 font-semibold text-blue-600 hover:underline">{row.id}</td>
+                                            <td className="px-4 py-3">
+                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wide border ${
+                                                    row.status === 'Success' 
+                                                        ? 'bg-[#DEF7EC] text-[#03543F] border-[#BCF0DA]' 
+                                                        : row.status === 'Failed' 
+                                                            ? 'bg-[#FDE2E2] text-[#9B1C1C] border-[#F8B4B4]' 
+                                                            : 'bg-[#FEF08A] text-[#854D0E] border-[#FEF08A]'
+                                                }`}>
+                                                    {row.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-gray-700">{row.docType}</td>
+                                            <td className="px-4 py-3 text-gray-600">{row.importType}</td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded text-xs font-bold">
+                                                    {row.successCount ?? 0}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded text-xs font-bold">
+                                                    {row.failureCount ?? 0}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className="px-2 py-0.5 bg-gray-50 text-gray-700 border border-gray-200 rounded text-xs font-bold">
+                                                    {row.totalRecords ?? 0}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-gray-500 italic max-w-xs truncate">{row.importFile}</td>
+                                            <td className="px-4 py-3 text-gray-500">{row.time}</td>
+                                            <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                                <button
+                                                    onClick={() => handleDeleteImport(row.id)}
+                                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"
+                                                    title="Delete Import Record"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+ 
+                        {activeImportRun && (
+                            <div className="mt-6 bg-white border border-gray-200 rounded-xl p-5 shadow-sm animate-fadeIn">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-gray-800 text-base">Import Logs for {activeImportRun.id}</h3>
+                                    <button 
+                                        className="text-gray-400 hover:text-gray-600 text-sm font-semibold"
+                                        onClick={() => setActiveImportRun(null)}
+                                    >
+                                        ✕ Close Logs
+                                    </button>
+                                </div>
+                                <div className="max-h-60 overflow-y-auto border border-gray-150 rounded bg-gray-50 p-3 font-mono text-xs space-y-1">
+                                    {activeImportRun.logs?.map((log, idx) => (
+                                        <div 
+                                            key={idx} 
+                                            className={log.type === 'error' ? 'text-red-600' : 'text-green-600'}
+                                            dangerouslySetInnerHTML={{ __html: log.msg }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div className="grid grid-cols-3 gap-6">
+                        <div className="col-span-2 space-y-6">
+                            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
+                                <div className="flex justify-between items-center border-b pb-2">
+                                    <h2 className="font-bold text-gray-800 text-base">Document Import Settings</h2>
+                                    {previewRows.length > 0 && (
+                                        <button 
+                                            className="px-4 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 shadow-sm transition"
+                                            onClick={handleStartImport}
+                                            disabled={importing}
+                                        >
+                                            {importing ? 'Importing...' : 'Start Import Run'}
+                                        </button>
+                                    )}
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Document Type</label>
+                                        <input 
+                                            type="text" 
+                                            className="w-full border border-gray-200 rounded px-3 py-2 text-sm bg-gray-50 text-gray-500 font-semibold cursor-not-allowed" 
+                                            value="Student" 
+                                            disabled 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Import Type *</label>
+                                        <select 
+                                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-500 font-semibold" 
+                                            value={importType} 
+                                            onChange={(e) => setImportType(e.target.value)}
+                                            disabled={importing}
+                                        >
+                                            <option value="Insert New Records">Insert New Records</option>
+                                            <option value="Update Existing Records">Update Existing Records</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-3 pt-2">
+                                    <button 
+                                        className="px-4 py-2 bg-white text-blue-600 border border-blue-600 hover:bg-blue-50 rounded text-sm font-semibold transition"
+                                        onClick={() => setShowTemplateModal(true)}
+                                        disabled={importing}
+                                    >
+                                        Download Template
+                                    </button>
+                                    <label className="px-4 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded text-sm font-semibold text-gray-700 cursor-pointer transition flex items-center gap-1">
+                                        Attach File
+                                        <input 
+                                            type="file" 
+                                            accept=".xlsx,.xls,.csv" 
+                                            className="hidden" 
+                                            onChange={handleFileChange}
+                                            disabled={importing}
+                                        />
+                                    </label>
+                                    {selectedFile && (
+                                        <div className="flex items-center text-xs text-gray-500 font-semibold bg-gray-100 rounded px-3 border border-gray-200">
+                                            📎 {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {previewRows.length > 0 && (() => {
+                                const previewCols = Object.keys(previewRows[0] || {});
+                                return (
+                                <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm animate-scaleUp">
+                                    <h2 className="font-bold text-gray-800 text-base border-b pb-2 mb-3">Data Preview ({previewRows.length} Rows)</h2>
+                                    <div className="max-h-80 overflow-auto border border-gray-200 rounded-lg">
+                                        <table className="w-full text-xs text-left">
+                                            <thead className="bg-gray-50 border-b sticky top-0">
+                                                <tr>
+                                                    <th className="px-3 py-2 font-bold text-gray-600 whitespace-nowrap">Sr. No</th>
+                                                    {previewCols.map(col => (
+                                                        <th key={col} className="px-3 py-2 font-bold text-gray-600 whitespace-nowrap">{col}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {previewRows.slice(0, 10).map((row, idx) => (
+                                                    <tr key={idx} className="border-b hover:bg-gray-50">
+                                                        <td className="px-3 py-2 font-semibold text-gray-400">{idx + 1}</td>
+                                                        {previewCols.map(col => (
+                                                            <td key={col} className="px-3 py-2 text-gray-700 whitespace-nowrap">{row[col] !== undefined && row[col] !== '' ? String(row[col]) : '-'}</td>
+                                                        ))}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {previewRows.length > 10 && (
+                                        <div className="text-center text-xs text-gray-400 mt-2 font-semibold">
+                                            Showing first 10 of {previewRows.length} rows. All rows will be imported.
+                                        </div>
+                                    )}
+                                </div>
+                                );
+                            })()}
+                        </div>
+
+                        <div className="space-y-6">
+                            {(importing || importLogs.length > 0) && (
+                                <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
+                                    <h2 className="font-bold text-gray-800 text-base border-b pb-2">Import Progress</h2>
+                                    
+                                    {importing && (
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between text-xs font-bold text-gray-600">
+                                                <span>Processing Rows...</span>
+                                                <span>{importProgress}%</span>
+                                            </div>
+                                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                                <div className="bg-blue-600 h-2 rounded-full transition-all duration-300" style={{ width: `${importProgress}%` }}></div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="max-h-60 overflow-y-auto border border-gray-150 rounded bg-gray-50 p-3 font-mono text-[11px] space-y-1">
+                                        {importLogs.map((log, idx) => (
+                                            <div 
+                                                key={idx} 
+                                                className={log.type === 'error' ? 'text-red-600' : 'text-green-600'}
+                                                dangerouslySetInnerHTML={{ __html: log.msg }}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {showTemplateModal && (
+                    <div className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 animate-fadeIn">
+                        <div className="bg-white rounded-xl shadow-xl w-[700px] max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 transform scale-100 transition-all duration-300">
+                            <div className="flex justify-between items-center p-4 border-b shrink-0">
+                                <h3 className="font-bold text-gray-800 text-lg">Export Data</h3>
+                                <button onClick={() => setShowTemplateModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-lg">✕</button>
+                            </div>
+                            <div className="p-6 space-y-6 overflow-y-auto grow custom-scrollbar">
+                                <div>
+                                    <label className="block text-sm text-gray-500 mb-2">File Type</label>
+                                    <select 
+                                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:border-blue-500 font-medium text-gray-700"
+                                        value={templateFormat}
+                                        onChange={(e) => setTemplateFormat(e.target.value)}
+                                    >
+                                        <option value="CSV">CSV</option>
+                                        <option value="Excel">Excel</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm text-gray-500 mb-2">Export Type</label>
+                                    <select 
+                                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:border-blue-500 font-medium text-gray-700"
+                                        value={templateType}
+                                        onChange={(e) => setTemplateType(e.target.value)}
+                                    >
+                                        <option value="Blank Template">Blank Template</option>
+                                        <option value="5 Records">5 Records</option>
+                                        <option value="All Records">All Records</option>
+                                    </select>
+                                    {templateType !== 'Blank Template' && (
+                                        <p className="text-xs text-gray-500 mt-1">{templateType === '5 Records' ? '5 records will be exported' : 'All records will be exported'}</p>
+                                    )}
+                                </div>
+
+                                <div className="border-t pt-4">
+                                    <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3">SELECT FIELDS TO INSERT</label>
+                                    
+                                    <div className="flex gap-2 mb-6">
+                                        <button 
+                                            type="button" 
+                                            className="px-3 py-1.5 text-[13px] bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full font-medium text-gray-700 transition"
+                                            onClick={() => {
+                                                const allTrue = {};
+                                                Object.keys(selectedFields).forEach(k => allTrue[k] = true);
+                                                setSelectedFields(allTrue);
+                                            }}
+                                        >
+                                            Select All
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            className="px-3 py-1.5 text-[13px] bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full font-medium text-gray-700 transition"
+                                            onClick={() => {
+                                                const allFalse = {};
+                                                Object.keys(selectedFields).forEach(k => allFalse[k] = false);
+                                                allFalse.id = true;
+                                                allFalse.first_name = true;
+                                                allFalse.student_email_address = true;
+                                                allFalse.guardian_guardian = true;
+                                                allFalse.guardian_guardian_name = true;
+                                                allFalse.guardian_id = true;
+                                                allFalse.sibling_id = true;
+                                                setSelectedFields(allFalse);
+                                            }}
+                                        >
+                                            Select Mandatory
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            className="px-3 py-1.5 text-[13px] bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full font-medium text-gray-700 transition"
+                                            onClick={() => {
+                                                const allFalse = {};
+                                                Object.keys(selectedFields).forEach(k => allFalse[k] = false);
+                                                setSelectedFields(allFalse);
+                                            }}
+                                        >
+                                            Unselect All
+                                        </button>
+                                    </div>
+
+                                    {/* Student Section */}
+                                    <div className="mb-4">
+                                        <h4 className="text-sm font-medium text-gray-700 mb-3">Student</h4>
+                                        <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm font-normal text-gray-800">
+                                            {/* Column 1 items */}
+                                            <div className="flex flex-col gap-3">
+                                                <CheckboxField name="id" label="ID" isRed />
+                                                <CheckboxField name="enabled" label="Enabled" />
+                                                <CheckboxField name="first_name" label="First Name" isRed />
+                                                <CheckboxField name="middle_name" label="Middle Name" />
+                                                <CheckboxField name="gr_number" label="GR Number" />
+                                                <CheckboxField name="roll_number" label="Roll Number" />
+                                                <CheckboxField name="last_name" label="Last Name" />
+                                                <CheckboxField name="program" label="Program" />
+                                                <CheckboxField name="naming_series" label="Naming Series" />
+                                                <CheckboxField name="joining_date" label="Joining Date" />
+                                                <CheckboxField name="user_id" label="User ID" />
+                                                <CheckboxField name="student_applicant" label="Student Applicant" />
+                                                <CheckboxField name="image" label="Image" />
+                                                <CheckboxField name="student_email_address" label="Student Email Address" isRed />
+                                                <CheckboxField name="date_of_birth" label="Date of Birth" />
+                                                <CheckboxField name="blood_group" label="Blood Group" />
+                                            </div>
+                                            {/* Column 2 items */}
+                                            <div className="flex flex-col gap-3">
+                                                <CheckboxField name="student_mobile_number" label="Student Mobile Number" />
+                                                <CheckboxField name="gender" label="Gender" />
+                                                <CheckboxField name="nationality" label="Nationality" />
+                                                <CheckboxField name="address_line_1" label="Address Line 1" />
+                                                <CheckboxField name="address_line_2" label="Address Line 2" />
+                                                <CheckboxField name="pincode" label="Pincode" />
+                                                <CheckboxField name="city" label="City" />
+                                                <CheckboxField name="state" label="State" />
+                                                <CheckboxField name="country" label="Country" />
+                                                <CheckboxField name="customer" label="Customer" />
+                                                <CheckboxField name="customer_group" label="Customer Group" />
+                                                <CheckboxField name="date_of_leaving" label="Date of Leaving" />
+                                                <CheckboxField name="leaving_certificate_number" label="Leaving Certificate Number" />
+                                                <CheckboxField name="reason_for_leaving" label="Reason For Leaving" />
+                                                <CheckboxField name="student_name" label="Student Name" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Guardians Section */}
+                                    <div className="mb-4 mt-6">
+                                        <h4 className="text-sm font-medium text-gray-700 mb-3">Guardians (Student Guardian)</h4>
+                                        <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm font-normal text-gray-800">
+                                            <div className="flex flex-col gap-3">
+                                                <CheckboxField name="guardian_guardian" label="Guardian" isRed />
+                                                <CheckboxField name="guardian_guardian_name" label="Guardian Name" isRed />
+                                                <CheckboxField name="guardian_email_address" label="Guardian Email Address" />
+                                                <CheckboxField name="guardian_mobile_number" label="Guardian Mobile Number" />
+                                                <CheckboxField name="guardian_occupation" label="Guardian Occupation" />
+                                            </div>
+                                            <div className="flex flex-col gap-3">
+                                                <CheckboxField name="guardian_id" label="ID" isRed />
+                                                <CheckboxField name="guardian_relation" label="Relation" />
+                                                <CheckboxField name="guardian_designation" label="Guardian Designation" />
+                                                <CheckboxField name="guardian_education" label="Guardian Education" />
+                                                <CheckboxField name="guardian_alternate_number" label="Guardian Alternate Number" />
+                                                <CheckboxField name="guardian_date_of_birth" label="Guardian Date of Birth" />
+                                                <CheckboxField name="guardian_work_address" label="Guardian Work Address" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Siblings Section */}
+                                    <div className="mb-4 mt-6">
+                                        <h4 className="text-sm font-medium text-gray-700 mb-3">Siblings (Student Sibling)</h4>
+                                        <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm font-normal text-gray-800">
+                                            <div className="flex flex-col gap-3">
+                                                <CheckboxField name="sibling_date_of_birth" label="Date of Birth" />
+                                                <CheckboxField name="sibling_full_name" label="Full Name" />
+                                                <CheckboxField name="sibling_gender" label="Gender" />
+                                                <CheckboxField name="sibling_id" label="ID" isRed />
+                                            </div>
+                                            <div className="flex flex-col gap-3">
+                                                <CheckboxField name="sibling_institution" label="Institution" />
+                                                <CheckboxField name="sibling_program" label="Program" />
+                                                <CheckboxField name="sibling_student_id" label="Student ID" />
+                                                <CheckboxField name="sibling_studying_in_same_institute" label="Studying in Same Institute" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                            <div className="bg-white px-6 py-4 border-t shrink-0 flex justify-end">
+                                <button onClick={handleDownloadTemplate} className="px-5 py-2.5 text-[13px] font-medium bg-[#1c2126] text-white hover:bg-black rounded-lg shadow-sm transition">
+                                    Export {templateType === '5 Records' ? '5 records' : templateType === 'All Records' ? 'all records' : 'template'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+
     // --- Styles (Standard App UI) ---
     const inputStyle = "w-full border border-gray-200 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 disabled:bg-gray-50";
     const labelStyle = "block text-[13px] text-gray-500 mb-1";
@@ -527,9 +1892,13 @@ const Student = () => {
 
         return (
             <div className="p-6">
+                {contextHolder}
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-semibold text-gray-800">Students</h1>
                     <div className="flex gap-2">
+                        <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 transition font-medium" onClick={() => setView('import')}>
+                            Data Import
+                        </button>
                         <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 flex items-center gap-2 transition" onClick={fetchStudents} disabled={loadingList}>
                             {loadingList ? '⟳ Loading...' : '⟳ Refresh'}
                         </button>
@@ -554,7 +1923,9 @@ const Student = () => {
                             ✕ Clear Filters
                         </button>
                     )}
-                    <div className="ml-auto text-xs text-gray-400">{filtered.length} of {students.length}</div>
+                    <div className="ml-auto text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                        {!loadingList && `${Math.min(visibleCount, filtered.length)} of ${filtered.length}`}
+                    </div>
                 </div>
 
                 <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -583,7 +1954,7 @@ const Student = () => {
                                     </td>
                                 </tr>
                             ) : (
-                                filtered.map((row) => (
+                                filtered.slice(0, visibleCount).map((row) => (
                                     <tr key={row.name} className="border-b hover:bg-gray-50 transition-colors">
                                         <td className="px-4 py-3">
                                             <button className="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-left text-base" onClick={() => { setEditingRecord(row.name); setView('form'); }}>
@@ -609,6 +1980,33 @@ const Student = () => {
                             )}
                         </tbody>
                     </table>
+
+                    {/* Pagination Controls */}
+                    {!loadingList && filtered.length > 0 && (
+                        <div className="flex justify-between items-center p-4 bg-gray-50 border-t border-gray-200">
+                            <div className="flex items-center border border-gray-300 rounded bg-white overflow-hidden shadow-sm">
+                                {[20, 100, 500, 2500].map((size) => (
+                                    <button
+                                        key={size}
+                                        className={`px-3 py-1.5 text-xs font-semibold border-r last:border-r-0 hover:bg-gray-50 transition ${
+                                            pageSize === size ? 'bg-gray-100 text-gray-800' : 'text-gray-600'
+                                        }`}
+                                        onClick={() => setPageSize(size)}
+                                    >
+                                        {size}
+                                    </button>
+                                ))}
+                            </div>
+                            {visibleCount < filtered.length && (
+                                <button
+                                    className="px-4 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded shadow-sm hover:bg-gray-50 transition"
+                                    onClick={() => setVisibleCount(prev => prev + pageSize)}
+                                >
+                                    Load More
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -618,6 +2016,7 @@ const Student = () => {
     if (loadingForm) {
         return (
             <div className="p-6 max-w-5xl mx-auto">
+                {contextHolder}
                 <div className="text-center py-20 text-gray-400 italic font-medium">Loading student data...</div>
             </div>
         );
@@ -625,6 +2024,7 @@ const Student = () => {
 
     return (
         <div className="p-6 max-w-5xl mx-auto pb-20">
+            {contextHolder}
             <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-200">
                 <div className="flex items-center gap-2">
                     <span className="text-xl font-bold text-gray-900">

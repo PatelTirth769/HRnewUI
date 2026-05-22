@@ -516,6 +516,7 @@ export const moduleNavigation = {
                 icon: 'check-badge',
                 items: [
                     { label: 'Student Attendance', path: '/education/student-attendance', studentAccess: true, instructorAccess: true, guardianAccess: true },
+                    { label: 'Quick Attendance', path: '/education/quick-attendance' },
                     { label: 'Student Leave Application', path: '/education/student-leave-application', studentAccess: true, instructorAccess: true, guardianAccess: true },
                     { label: 'Student Monthly Attendance Sheet', path: '/education/student-monthly-attendance-sheet' },
                     { label: 'Absent Student Report', path: '/education/absent-student-report' },
@@ -867,7 +868,6 @@ export const moduleNavigation = {
                     { label: 'Admission Fees Report', path: '/enquiry/reports/admission-fees' },
                     { label: 'Enquiry Custom Report', path: '/enquiry/reports/enquiry-custom' },
                     { label: 'Registration Custom Report', path: '/enquiry/reports/registration-custom' },
-
                 ],
             },
             {
@@ -879,4 +879,38 @@ export const moduleNavigation = {
             },
         ],
     },
+    homework: {
+        title: 'Work',
+        sections: [
+            {
+                title: 'Homework',
+                icon: 'document-text',
+                items: [
+                    { label: 'Homework Assignments', path: '/homework/assignments', studentAccess: true, instructorAccess: true, guardianAccess: true },
+                ],
+            },
+            {
+                title: 'Classwork',
+                icon: 'book',
+                items: [
+                    { label: 'Classwork Assignments', path: '/homework/classwork', studentAccess: true, instructorAccess: true, guardianAccess: true },
+                ],
+            },
+        ],
+    },
+    importLogs: {
+        title: 'Import Logs',
+        sections: [
+            {
+                title: 'Logs',
+                icon: 'document-text',
+                items: [
+                    { label: 'Student Import Logs', path: '/import-logs/students' }
+                ],
+            },
+        ],
+    },
 };
+
+
+

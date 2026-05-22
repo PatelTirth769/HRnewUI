@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Row, Col, Statistic, List, Avatar, Tag, Spin, notification, Empty, Descriptions, Divider, Button, Alert, Badge, Modal, Checkbox, Tabs, Table } from 'antd';
+import { Card, Typography, Row, Col, Statistic, List, Avatar, Tag, Spin, notification, Empty, Descriptions, Divider, Button, Alert, Badge, Modal, Checkbox, Tabs, Table, Calendar } from 'antd';
 import { 
   BookOutlined, 
   CalendarOutlined, 
@@ -17,7 +17,9 @@ import {
   CreditCardOutlined,
   RightOutlined,
   DownloadOutlined,
-  TableOutlined
+  TableOutlined,
+  LinkOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons';
 import API from '../../services/api';
 import axios from 'axios';
@@ -25,6 +27,9 @@ import html2pdf from 'html2pdf.js';
 import FeeReceiptTemplate from './FeeReceiptTemplate';
 import { generateAdmissionReceipt } from '../Enquiry/AdmissionFeeReceipt';
 import { useRef } from 'react';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 
@@ -43,6 +48,8 @@ const StudentDashboard = () => {
     fullSchedule: [],
     notifications: [],
     studentGroups: [],
+    homework: [],
+    classwork: [],
     permissions: {
       fees: true,
       attendance: true,
@@ -190,7 +197,7 @@ const StudentDashboard = () => {
 
       // Parallel Data Fetch with Individual Error Handling
       const [attRes, enrRes, feeRes, assRes] = await Promise.allSettled([
-        API.get('/api/resource/Student Attendance', { params: { filters: JSON.stringify([["student", "=", studentId]]), limit_page_length: 1000 } }),
+        API.get('/api/resource/Student Attendance', { params: { filters: JSON.stringify([["student", "=", studentId]]), fields: JSON.stringify(["name", "date", "status", "student", "student_name", "student_group"]), limit_page_length: 1000 } }),
         API.get('/api/resource/Program Enrollment', { 
           params: { 
             filters: JSON.stringify([["student", "=", studentId]]), 
@@ -384,6 +391,45 @@ const StudentDashboard = () => {
       if (!linkedFeeStructure) {
         console.warn('[FeeDebug] FINAL STATUS: Fee Structure NOT FOUND in any stage.');
       }
+
+      // Fetch Homework and Classwork from Firestore
+      let homework = [];
+      let classwork = [];
+      try {
+        const HOMEWORK_PATH = 'schooler_system/homework_management/assignments';
+        const hQuery = query(collection(db, HOMEWORK_PATH), orderBy('dueDate', 'asc'));
+        const hSnapshot = await getDocs(hQuery);
+        const allHomework = hSnapshot.docs.map(docSnapshot => ({
+          id: docSnapshot.id,
+          ...docSnapshot.data()
+        }));
+
+        const CLASSWORK_PATH = 'schooler_system/classwork_management/assignments';
+        const cQuery = query(collection(db, CLASSWORK_PATH), orderBy('classworkDate', 'desc'));
+        const cSnapshot = await getDocs(cQuery);
+        const allClasswork = cSnapshot.docs.map(docSnapshot => ({
+          id: docSnapshot.id,
+          ...docSnapshot.data()
+        }));
+
+        const studentProgram = profile?.program;
+        
+        homework = allHomework.filter(item => {
+          const matchesProgram = !item.program || item.program === studentProgram;
+          const matchesGroup = !item.studentGroup || studentGroups.includes(item.studentGroup);
+          return matchesProgram && matchesGroup;
+        });
+
+        classwork = allClasswork.filter(item => {
+          const matchesProgram = !item.program || item.program === studentProgram;
+          const matchesGroup = !item.studentGroup || studentGroups.includes(item.studentGroup);
+          return matchesProgram && matchesGroup;
+        });
+        
+        console.log('Filtered homework & classwork assignments for student:', { homework, classwork });
+      } catch (err) {
+        console.error('Error fetching work for student dashboard:', err);
+      }
       
       setStudentData({
         profile,
@@ -391,17 +437,20 @@ const StudentDashboard = () => {
         permissions,
         feeStructure: linkedFeeStructure,
         feeStructureDetails,
+        attendanceList: attendanceList,
         attendance: attendanceList.length > 0 ? Math.round((presentDays / attendanceList.length) * 100) : 0,
         courses: enrollmentData.length || 0,
-        assignments: assRes.status === 'fulfilled' ? (assRes.value.data?.data?.length || 0) : 0,
+        assignments: homework.length + classwork.length,
         fees: feeList.reduce((sum, f) => sum + (f.outstanding_amount || 0), 0),
         feeRecords: feeList,
         schedule: scheduleStatus ? (schRes.data?.data || []) : [],
         fullSchedule,
+        homework,
+        classwork,
         notifications: [
           'Academic profile linked successfully.',
           'Always check your schedule for real-time updates.',
-          'New features are being added to your student portal!'
+          'New coursework & homework assignments have been loaded!'
         ]
       });
 
@@ -680,7 +729,7 @@ const StudentDashboard = () => {
             <Col xs={24} sm={12} md={6}>
               <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
                 {studentData.permissions.assessments ? (
-                  <Statistic title="ASSESSMENTS" value={studentData.assignments} valueStyle={{ color: '#faad14', fontWeight: 800 }} prefix={<FileTextOutlined />} />
+                  <Statistic title="HOMEWORK" value={studentData.assignments} valueStyle={{ color: '#faad14', fontWeight: 800 }} prefix={<FileTextOutlined />} />
                 ) : (
                   <div style={{ textAlign: 'center', padding: '10px' }}><LockOutlined style={{ color: '#bfbfbf', fontSize: '24px' }} /><br/><Text type="secondary">Access Locked</Text></div>
                 )}
@@ -764,21 +813,155 @@ const StudentDashboard = () => {
               </Row>
             </Tabs.TabPane>
 
-            <Tabs.TabPane tab={<span><CalendarOutlined /> Schedule</span>} key="2">
-              <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                {studentData.permissions.schedule ? (
-                  <List
-                    dataSource={studentData.schedule}
-                    locale={{ emptyText: 'No classes today.' }}
-                    renderItem={item => (
-                      <List.Item>
-                        <List.Item.Meta avatar={<Avatar icon={<BookOutlined />} />} title={item.course} description={`${item.from_time} - ${item.to_time} | ${item.room || 'TBD'}`} />
-                      </List.Item>
-                    )}
-                  />
-                ) : (
-                  <Empty description="You do not have permission to view Course Schedules." />
-                )}
+            <Tabs.TabPane tab={<span><BookOutlined /> Work</span>} key="2">
+              <Card 
+                bordered={false} 
+                style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                bodyStyle={{ padding: '12px 24px 24px 24px' }}
+              >
+                <Tabs defaultActiveKey="homework" type="line" size="middle">
+                  <Tabs.TabPane tab={<span>Homework ({studentData.homework.length})</span>} key="homework">
+                    <List
+                      dataSource={studentData.homework}
+                      locale={{ emptyText: <Empty description="No homework assignments found for your class." /> }}
+                      renderItem={item => {
+                        const isOverdue = dayjs(item.dueDate).isBefore(dayjs(), 'day') && item.status !== 'Completed';
+                        return (
+                          <List.Item
+                            style={{ padding: '20px 0', borderBottom: '1px solid #f0f0f0' }}
+                            extra={
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                                <Tag color={
+                                  item.status === 'Completed' ? 'green' :
+                                  item.status === 'Closed' ? 'default' :
+                                  isOverdue ? 'red' : 'blue'
+                                } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
+                                  {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
+                                </Tag>
+                                {item.estimatedMinutes && (
+                                  <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <ClockCircleOutlined /> {item.estimatedMinutes} mins
+                                  </span>
+                                )}
+                              </div>
+                            }
+                          >
+                            <List.Item.Meta
+                              title={
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>
+                                    {item.title}
+                                  </span>
+                                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <Tag color="blue" style={{ fontSize: '11px', fontWeight: 500 }}>
+                                      Subject (Course): {item.subject || 'N/A'}
+                                    </Tag>
+                                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                                      Assigned By: <b style={{ color: '#374151' }}>{item.assignedBy || 'Instructor'}</b>
+                                    </span>
+                                    <span style={{ fontSize: '12px', color: isOverdue ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+                                      Due: {dayjs(item.dueDate).format('DD MMM YYYY')}
+                                    </span>
+                                  </div>
+                                </div>
+                              }
+                              description={
+                                <div style={{ marginTop: '10px' }}>
+                                  <p style={{ color: '#4b5563', fontSize: '13px', whiteSpace: 'pre-line', margin: 0 }}>
+                                    {item.description || 'No detailed instructions provided.'}
+                                  </p>
+                                  {item.attachmentUrl && (
+                                    <Button
+                                      type="link"
+                                      icon={<LinkOutlined />}
+                                      href={item.attachmentUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
+                                    >
+                                      Reference Link / Attachment
+                                    </Button>
+                                  )}
+                                </div>
+                              }
+                            />
+                          </List.Item>
+                        );
+                      }}
+                    />
+                  </Tabs.TabPane>
+                  
+                  <Tabs.TabPane tab={<span>Classwork ({studentData.classwork.length})</span>} key="classwork">
+                    <List
+                      dataSource={studentData.classwork}
+                      locale={{ emptyText: <Empty description="No classwork assignments found for your class." /> }}
+                      renderItem={item => {
+                        const isOverdue = dayjs(item.classworkDate).isBefore(dayjs(), 'day') && item.status !== 'Completed';
+                        return (
+                          <List.Item
+                            style={{ padding: '20px 0', borderBottom: '1px solid #f0f0f0' }}
+                            extra={
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                                <Tag color={
+                                  item.status === 'Completed' ? 'green' :
+                                  item.status === 'Closed' ? 'default' :
+                                  isOverdue ? 'red' : 'blue'
+                                } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
+                                  {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
+                                </Tag>
+                                {item.estimatedMinutes && (
+                                  <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <ClockCircleOutlined /> {item.estimatedMinutes} mins
+                                  </span>
+                                )}
+                              </div>
+                            }
+                          >
+                            <List.Item.Meta
+                              title={
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>
+                                    {item.title}
+                                  </span>
+                                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <Tag color="purple" style={{ fontSize: '11px', fontWeight: 500 }}>
+                                      Subject (Course): {item.subject || 'N/A'}
+                                    </Tag>
+                                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                                      Assigned By: <b style={{ color: '#374151' }}>{item.assignedBy || 'Instructor'}</b>
+                                    </span>
+                                    <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>
+                                      Class Date: {dayjs(item.classworkDate).format('DD MMM YYYY')}
+                                    </span>
+                                  </div>
+                                </div>
+                              }
+                              description={
+                                <div style={{ marginTop: '10px' }}>
+                                  <p style={{ color: '#4b5563', fontSize: '13px', whiteSpace: 'pre-line', margin: 0 }}>
+                                    {item.description || 'No detailed instructions provided.'}
+                                  </p>
+                                  {item.attachmentUrl && (
+                                    <Button
+                                      type="link"
+                                      icon={<LinkOutlined />}
+                                      href={item.attachmentUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
+                                    >
+                                      Reference Link / Attachment
+                                    </Button>
+                                  )}
+                                </div>
+                              }
+                            />
+                          </List.Item>
+                        );
+                      }}
+                    />
+                  </Tabs.TabPane>
+                </Tabs>
               </Card>
             </Tabs.TabPane>
 
@@ -978,6 +1161,32 @@ const StudentDashboard = () => {
                     { title: 'Room', dataIndex: 'room', key: 'room' }
                   ]}
                 />
+              </Card>
+            </Tabs.TabPane>
+
+            <Tabs.TabPane tab={<span><CalendarOutlined /> Attendance</span>} key="6">
+              <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                {studentData.permissions.attendance ? (
+                  <Calendar 
+                    cellRender={(current, info) => {
+                      if (info.type !== 'date' || !studentData.attendanceList) return info.originNode;
+                      
+                      const dateStr = current.format('YYYY-MM-DD');
+                      const atts = studentData.attendanceList.filter(a => a.date === dateStr);
+                      
+                      return (
+                        <div className="events" style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '2px' }}>
+                          {atts.map((att, index) => {
+                            const type = att.status === 'Present' ? 'success' : att.status === 'Absent' ? 'error' : 'warning';
+                            return <Badge key={index} status={type} text={<span style={{ fontSize: '10px' }}>{att.status}</span>} />;
+                          })}
+                        </div>
+                      );
+                    }}
+                  />
+                ) : (
+                  <Empty description="You do not have permission to view Attendance." />
+                )}
               </Card>
             </Tabs.TabPane>
           </Tabs>

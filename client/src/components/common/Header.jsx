@@ -84,6 +84,12 @@ const Header = ({ onModuleClick }) => {
                     <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('enquiry'); }}>
                       Enquiry Module
                     </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('homework'); }}>
+                      Work
+                    </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('importLogs'); }}>
+                      Import Logs
+                    </div>
                   </div>
                 </div>
               </>
