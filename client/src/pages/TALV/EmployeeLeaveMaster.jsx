@@ -64,7 +64,7 @@ export default function EmployeeLeaveMaster() {
       }
 
       // Fetch fields
-      const fields = JSON.stringify(["name", "employee", "employee_name", "leave_type", "total_leaves_allocated", "new_leaves_allocated", "from_date", "to_date"]);
+      const fields = JSON.stringify(["name", "employee", "employee_name", "leave_type", "total_leaves_allocated", "new_leaves_allocated", "from_date", "to_date", "company"]);
       const res = await API.get(`/api/resource/Leave Allocation?fields=${fields}&limit_page_length=None`);
 
       if (res.data && res.data.data) {
@@ -81,13 +81,23 @@ export default function EmployeeLeaveMaster() {
   const handleAdd = () => {
     setEditingRecord(null);
     form.resetFields();
+    
+    // Resolve dynamic system default company
+    const activeSystemCode = localStorage.getItem('activeSystem') || 'preeshe';
+    let defaultComp = companies[0] || 'Preeshe Consultancy Services';
+    const matched = companies.find(c => c.toLowerCase().includes(activeSystemCode.toLowerCase()));
+    if (matched) {
+      defaultComp = matched;
+    }
+
     // Default dates (e.g., current year)
     form.setFieldsValue({
       from_date: dayjs().startOf('year'),
       to_date: dayjs().endOf('year'),
       carry_forward: 0,
       new_leaves_allocated: 0,
-      total_leaves_allocated: 0
+      total_leaves_allocated: 0,
+      company: defaultComp
     });
     setModalVisible(true);
   };
@@ -102,8 +112,7 @@ export default function EmployeeLeaveMaster() {
       to_date: dayjs(record.to_date),
       new_leaves_allocated: record.new_leaves_allocated,
       total_leaves_allocated: record.total_leaves_allocated,
-      // Note: Check API response for carry_forward or add if needed in fetch fields
-      // carry_forward: record.carry_forward 
+      company: record.company
     });
     setModalVisible(true);
   };
@@ -306,7 +315,7 @@ export default function EmployeeLeaveMaster() {
                   if (emp) {
                     form.setFieldsValue({
                       employee_name: emp.employee_name,
-                      // company: emp.company // If needed
+                      company: emp.company
                     });
                   }
                 }}
@@ -325,7 +334,7 @@ export default function EmployeeLeaveMaster() {
             <Form.Item name="employee_name" label="Employee Name">
               <Input readOnly className="bg-gray-50" />
             </Form.Item>
-            <Form.Item name="company" label="Company" initialValue="Preeshe Consultancy Services">
+            <Form.Item name="company" label="Company">
               <Input readOnly className="bg-gray-50" />
             </Form.Item>
           </div>

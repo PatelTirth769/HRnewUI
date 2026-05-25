@@ -73,16 +73,45 @@ const FeeStructure = () => {
                 safeGet('/api/resource/Company?limit_page_length=None'),
                 safeGet('/api/resource/Cost Center?limit_page_length=None'),
             ]);
+            const fetchedCompanies = coRes.data.data?.map(d => d.name) || [];
+            const fetchedAccounts = aRes.data.data?.map(d => d.name) || [];
+            const fetchedCostCenters = ccRes.data.data?.map(d => d.name) || [];
+
             setDropdowns({
                 academicYears: yRes.data.data?.map(d => d.name) || [],
                 programs: pRes.data.data?.map(d => d.name) || [],
                 academicTerms: tRes.data.data?.map(d => d.name) || [],
                 studentCategories: cRes.data.data?.map(d => d.name) || [],
                 feesCategories: fRes.data.data?.map(d => d.name) || [],
-                accounts: aRes.data.data?.map(d => d.name) || [],
-                companies: coRes.data.data?.map(d => d.name) || [],
-                costCenters: ccRes.data.data?.map(d => d.name) || [],
+                accounts: fetchedAccounts,
+                companies: fetchedCompanies,
+                costCenters: fetchedCostCenters,
             });
+
+            if (fetchedCompanies.length > 0) {
+                const activeSystemCode = localStorage.getItem('activeSystem') || 'preeshe';
+                let defaultComp = fetchedCompanies[0];
+                const matchedComp = fetchedCompanies.find(c => c.toLowerCase().includes(activeSystemCode.toLowerCase()));
+                if (matchedComp) {
+                    defaultComp = matchedComp;
+                }
+
+                setForm(prev => {
+                    const updates = {};
+                    if (!prev.company || prev.company === 'Preeshe Consultancy Services') {
+                        updates.company = defaultComp;
+                    }
+                    if (!prev.receivable_account || prev.receivable_account === 'Debtors - Preeshe') {
+                        const matchedAcc = fetchedAccounts.find(a => a.toLowerCase().includes('debtors'));
+                        updates.receivable_account = matchedAcc || fetchedAccounts[0] || '';
+                    }
+                    if (!prev.cost_center || prev.cost_center === 'Main - Preeshe') {
+                        const matchedCC = fetchedCostCenters.find(cc => cc.toLowerCase().includes('main'));
+                        updates.cost_center = matchedCC || fetchedCostCenters[0] || '';
+                    }
+                    return { ...prev, ...updates };
+                });
+            }
         } catch (err) {
             console.error('Error fetching dropdowns', err);
         }

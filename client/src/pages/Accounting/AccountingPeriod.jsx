@@ -80,7 +80,23 @@ const AccountingPeriod = () => {
     const fetchCompanies = async () => {
         try {
             const res = await API.get('/api/resource/Company?fields=["name"]');
-            setCompanies((res.data.data || []).map(c => c.name));
+            const fetchedCompanies = (res.data.data || []).map(c => c.name);
+            setCompanies(fetchedCompanies);
+
+            if (fetchedCompanies.length > 0) {
+                const activeSystemCode = localStorage.getItem('activeSystem') || 'preeshe';
+                let defaultComp = fetchedCompanies[0];
+                const matched = fetchedCompanies.find(c => c.toLowerCase().includes(activeSystemCode.toLowerCase()));
+                if (matched) {
+                    defaultComp = matched;
+                }
+                setForm(prev => {
+                    if (!prev.company || prev.company === 'Preeshe Consultancy Services') {
+                        return { ...prev, company: defaultComp };
+                    }
+                    return prev;
+                });
+            }
         } catch (err) {
             console.error('Error fetching companies:', err);
         }

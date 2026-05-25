@@ -36,6 +36,12 @@ const AddEmployee = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // --- State for Dynamic Dropdown Options ---
+  const [dynamicCompanies, setDynamicCompanies] = useState([]);
+  const [dynamicDepartments, setDynamicDepartments] = useState([]);
+  const [dynamicDesignations, setDynamicDesignations] = useState([]);
+  const [dynamicBranches, setDynamicBranches] = useState([]);
+
   // --- Dropdown Options (Static for now, can be fetched if APIs exist) ---
   const departments = ['IT', 'HR', 'Finance', 'Marketing', 'Operations', 'Sales', 'Admin'];
   const designations = ['Software Engineer', 'Senior Software Engineer', 'Team Lead', 'Manager', 'HR Manager', 'Accountant', 'Marketing Executive', 'Sales Executive'];
@@ -48,15 +54,54 @@ const AddEmployee = () => {
   const statusOptions = ['Active', 'Inactive', 'Suspended', 'Left'];
 
   useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const [compRes, deptRes, desigRes, branchRes] = await Promise.all([
+          API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
+          API.get('/api/resource/Department?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
+          API.get('/api/resource/Designation?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
+          API.get('/api/resource/Branch?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
+        ]);
+
+        const fetchedCompanies = (compRes.data?.data || []).map(c => c.name);
+        const fetchedDepts = (deptRes.data?.data || []).map(d => d.name);
+        const fetchedDesigs = (desigRes.data?.data || []).map(d => d.name);
+        const fetchedBranches = (branchRes.data?.data || []).map(b => b.name);
+
+        setDynamicCompanies(fetchedCompanies);
+        setDynamicDepartments(fetchedDepts);
+        setDynamicDesignations(fetchedDesigs);
+        setDynamicBranches(fetchedBranches);
+
+        if (!isEdit) {
+          // Determine the default company dynamically
+          const activeSystemCode = localStorage.getItem('activeSystem') || 'preeshe';
+          let defaultComp = fetchedCompanies[0] || 'Preeshe Consultancy Services';
+          
+          if (activeSystemCode) {
+            const matched = fetchedCompanies.find(c => c.toLowerCase().includes(activeSystemCode.toLowerCase()));
+            if (matched) {
+              defaultComp = matched;
+            }
+          }
+
+          form.setFieldsValue({
+            company: defaultComp,
+            status: 'Active',
+            employment_type: 'Full-time'
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching dynamic dropdown options:', err);
+      }
+    };
+
+    fetchOptions();
+  }, [isEdit, form]);
+
+  useEffect(() => {
     if (isEdit) {
       fetchEmployeeDetails();
-    } else {
-      // Set defaults for new employee
-      form.setFieldsValue({
-        company: 'Preeshe Consultancy Services',
-        status: 'Active',
-        employment_type: 'Full-time'
-      });
     }
   }, [isEdit, id]);
 
@@ -225,10 +270,12 @@ const AddEmployee = () => {
 
       <Title level={5} style={{ marginTop: '20px' }}>Company Details</Title>
       <Row gutter={16}>
-        {renderSelect('company', 'Company', companies, true)}
-        {renderSelect('department', 'Department', departments)}
-        {renderSelect('designation', 'Designation', designations)}
-        {renderInput('branch', 'Branch')}
+        {renderSelect('company', 'Company', dynamicCompanies.length > 0 ? dynamicCompanies : companies, true)}
+        {renderSelect('department', 'Department', dynamicDepartments.length > 0 ? dynamicDepartments : departments)}
+        {renderSelect('designation', 'Designation', dynamicDesignations.length > 0 ? dynamicDesignations : designations)}
+        {dynamicBranches.length > 0 
+          ? renderSelect('branch', 'Branch', dynamicBranches)
+          : renderInput('branch', 'Branch')}
         {renderInput('reports_to', 'Reports To (Manager ID)')}
         {renderInput('grade', 'Grade')}
         {renderSelect('employment_type', 'Employment Type', employmentTypes)}
@@ -396,7 +443,7 @@ const AddEmployee = () => {
           form={form}
           layout="vertical"
           onFinish={onFinish}
-          initialValues={{ status: 'Active', company: 'Preeshe Consultancy Services' }}
+          initialValues={{ status: 'Active' }}
         >
           <Tabs defaultActiveKey="1" type="card">
             <TabPane tab="Overview" key="1">

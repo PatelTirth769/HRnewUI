@@ -82,9 +82,25 @@ const ChartOfAccounts = () => {
                 API.get('/api/resource/Currency?fields=["name"]'),
                 API.get('/api/resource/Account?fields=["name"]&filters=[["is_group","=",1]]&limit_page_length=None'),
             ]);
-            setCompanies((compRes.data.data || []).map(c => c.name));
+            const fetchedCompanies = (compRes.data.data || []).map(c => c.name);
+            setCompanies(fetchedCompanies);
             setCurrencies((currRes.data.data || []).map(c => c.name));
             setParentAccounts((parentRes.data.data || []).map(a => a.name));
+
+            if (fetchedCompanies.length > 0) {
+                const activeSystemCode = localStorage.getItem('activeSystem') || 'preeshe';
+                let defaultComp = fetchedCompanies[0];
+                const matched = fetchedCompanies.find(c => c.toLowerCase().includes(activeSystemCode.toLowerCase()));
+                if (matched) {
+                    defaultComp = matched;
+                }
+                setForm(prev => {
+                    if (!prev.company || prev.company === 'Preeshe Consultancy Services') {
+                        return { ...prev, company: defaultComp };
+                    }
+                    return prev;
+                });
+            }
         } catch (err) {
             console.error('Error fetching dropdown data:', err);
         }

@@ -23,7 +23,7 @@ export default function JobRequisition() {
         name: '',
         naming_series: 'HR-HIREQ-',
         no_of_positions: '',
-        company: 'Preeshe Consultancy Services',
+        company: '',
         designation: '',
         expected_compensation: '',
         status: 'Pending',
@@ -49,10 +49,25 @@ export default function JobRequisition() {
                     API.get('/api/resource/Designation?fields=["name"]&limit_page_length=None&order_by=name asc'),
                     API.get('/api/resource/Employee?fields=["name","employee_name","department","designation"]&limit_page_length=None&order_by=name asc'),
                 ]);
-                setCompanies((compRes.data?.data || []).map(c => c.name));
+                const fetchedCompanies = (compRes.data?.data || []).map(c => c.name);
+                setCompanies(fetchedCompanies);
                 setDepartments((deptRes.data?.data || []).map(d => d.name));
                 setDesignations((desigRes.data?.data || []).map(d => d.name));
                 setEmployees(empRes.data?.data || []);
+
+                // Determine and set default company
+                if (fetchedCompanies.length > 0) {
+                    const activeSystemCode = localStorage.getItem('activeSystem') || 'preeshe';
+                    let defaultComp = fetchedCompanies[0];
+                    const matched = fetchedCompanies.find(c => c.toLowerCase().includes(activeSystemCode.toLowerCase()));
+                    if (matched) {
+                        defaultComp = matched;
+                    }
+                    updateForm('company', defaultComp);
+                    defaultForm.company = defaultComp;
+                } else {
+                    defaultForm.company = 'Preeshe Consultancy Services';
+                }
             } catch (err) { console.error('Masters fetch error:', err); }
         };
         fetchMasters();

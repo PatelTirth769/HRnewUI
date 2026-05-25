@@ -19,7 +19,7 @@ export default function StaffingPlan() {
     // Form data
     const defaultForm = {
         name: '',
-        company: 'Preeshe Consultancy Services',
+        company: '',
         department: '',
         from_date: '',
         to_date: '',
@@ -37,9 +37,24 @@ export default function StaffingPlan() {
                     API.get('/api/resource/Department?fields=["name"]&limit_page_length=None&order_by=name asc'),
                     API.get('/api/resource/Designation?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 ]);
-                setCompanies((compRes.data?.data || []).map(c => c.name));
+                const fetchedCompanies = (compRes.data?.data || []).map(c => c.name);
+                setCompanies(fetchedCompanies);
                 setDepartments((deptRes.data?.data || []).map(d => d.name));
                 setDesignations((desigRes.data?.data || []).map(d => d.name));
+
+                // Determine and set default company
+                if (fetchedCompanies.length > 0) {
+                    const activeSystemCode = localStorage.getItem('activeSystem') || 'preeshe';
+                    let defaultComp = fetchedCompanies[0];
+                    const matched = fetchedCompanies.find(c => c.toLowerCase().includes(activeSystemCode.toLowerCase()));
+                    if (matched) {
+                        defaultComp = matched;
+                    }
+                    setFormData(prev => ({ ...prev, company: defaultComp }));
+                    defaultForm.company = defaultComp;
+                } else {
+                    defaultForm.company = 'Preeshe Consultancy Services';
+                }
             } catch (err) { console.error('Masters fetch error:', err); }
         };
         fetchMasters();

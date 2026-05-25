@@ -84,6 +84,7 @@ const FeeSchedule = () => {
                 safeGet('/api/resource/Company?limit_page_length=None'),
                 safeGet('/api/resource/Cost Center?limit_page_length=None'),
             ]);
+            const fetchedInstitutions = iRes.data.data?.map(d => d.name) || [];
             setDropdowns({
                 feeStructures: fsRes.data.data?.map(d => d.name) || [],
                 academicYears: yRes.data.data?.map(d => d.name) || [],
@@ -92,9 +93,24 @@ const FeeSchedule = () => {
                 feesCategories: fcRes.data.data?.map(d => d.name) || [],
                 letterHeads: lhRes.data.data?.map(d => d.name) || [],
                 accounts: aRes.data.data?.map(d => d.name) || [],
-                institutions: iRes.data.data?.map(d => d.name) || [],
+                institutions: fetchedInstitutions,
                 costCenters: ccRes.data.data?.map(d => d.name) || [],
             });
+
+            if (fetchedInstitutions.length > 0) {
+                const activeSystemCode = localStorage.getItem('activeSystem') || 'preeshe';
+                let defaultInst = fetchedInstitutions[0];
+                const matched = fetchedInstitutions.find(c => c.toLowerCase().includes(activeSystemCode.toLowerCase()));
+                if (matched) {
+                    defaultInst = matched;
+                }
+                setForm(prev => {
+                    if (!prev.institution || prev.institution === 'Preeshe Consultancy Services') {
+                        return { ...prev, institution: defaultInst };
+                    }
+                    return prev;
+                });
+            }
         } catch (err) {
             console.error('Error fetching dropdowns:', err);
         }

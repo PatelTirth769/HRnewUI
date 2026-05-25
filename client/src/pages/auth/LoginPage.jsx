@@ -64,6 +64,8 @@ const LoginPage = () => {
       systemForDisplay = 'lingayas';
     } else if (emailLower.includes('lingayasgroup.org')) {
       systemForDisplay = 'ecommerce';
+    } else if (emailLower.includes('celejor')) {
+      systemForDisplay = 'celejor';
     } else if (emailLower.length > 5) { // Only default to preeshe if they've typed enough
       systemForDisplay = 'preeshe';
     }
@@ -102,7 +104,7 @@ const LoginPage = () => {
     try {
       const res = await axios.get('/local-api/systems');
       const systemsList = res.data || [];
-      const hiddenSystems = new Set(['celejor', 'celejio', 'bombiam', 'bombaim', 'schooler']);
+      const hiddenSystems = new Set(['bombiam', 'bombaim', 'schooler']);
       const filteredSystems = systemsList.filter((system) => {
         const code = (system?.code || '').toLowerCase();
         const name = (system?.name || '').toLowerCase();

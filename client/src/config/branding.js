@@ -34,6 +34,15 @@ const BRANDING_BY_CODE = {
     showHeaderTitle: false,
     headerTitle: 'Ecommerce Dashboard',
   },
+  celejor: {
+    code: 'celejor',
+    displayName: 'Celejor',
+    headerLogo: defaultLogo,
+    sidebarLogo: defaultLogo,
+    salarySlipLogo: defaultLogo,
+    showHeaderTitle: false,
+    headerTitle: 'Celejor Dashboard',
+  },
 };
 
 export const getActiveBrandCode = () => {

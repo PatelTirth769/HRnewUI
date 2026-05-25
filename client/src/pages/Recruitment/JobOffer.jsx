@@ -66,10 +66,11 @@ export default function JobOffer() {
 
                 // Set default company
                 if (compRes.data?.data?.length > 0) {
-                    // Try to find Preeshe Consultancy Services, otherwise use first
-                    const preeshe = compRes.data.data.find(c => c.name.toLowerCase().includes('preeshe consultancy services'));
-                    updateForm('company', preeshe ? preeshe.name : compRes.data.data[0].name);
-                    defaultForm.company = preeshe ? preeshe.name : compRes.data.data[0].name;
+                    const activeSystemCode = localStorage.getItem('activeSystem') || 'preeshe';
+                    const matched = compRes.data.data.find(c => c.name.toLowerCase().includes(activeSystemCode.toLowerCase()));
+                    const defaultCompName = matched ? matched.name : compRes.data.data[0].name;
+                    updateForm('company', defaultCompName);
+                    defaultForm.company = defaultCompName;
                 } else {
                     defaultForm.company = 'Preeshe Consultancy Services';
                 }

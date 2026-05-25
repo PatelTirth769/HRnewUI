@@ -128,9 +128,25 @@ const BenefitClaim = () => {
                 API.get('/api/resource/Salary Component?fields=["name"]&filters=[["is_flexible_benefit","=","1"]]&limit_page_length=None')
             ]);
             setEmployees(emps.data.data || []);
-            setCompanies((comps.data.data || []).map(c => c.name));
+            const fetchedCompanies = (comps.data.data || []).map(c => c.name);
+            setCompanies(fetchedCompanies);
             setEarningComponents((components.data.data || []).map(c => c.name));
             setMastersLoaded(true);
+
+            if (fetchedCompanies.length > 0) {
+                const activeSystemCode = localStorage.getItem('activeSystem') || 'preeshe';
+                let defaultComp = fetchedCompanies[0];
+                const matched = fetchedCompanies.find(c => c.toLowerCase().includes(activeSystemCode.toLowerCase()));
+                if (matched) {
+                    defaultComp = matched;
+                }
+                setFormData(prev => {
+                    if (!prev.company || prev.company === 'Preeshe Consultancy Services') {
+                        return { ...prev, company: defaultComp };
+                    }
+                    return prev;
+                });
+            }
         } catch (err) {
             console.error('Error fetching masters:', err);
         }
