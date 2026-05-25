@@ -910,6 +910,27 @@ export const moduleNavigation = {
             },
         ],
     },
+    certificates: {
+        title: 'Certificates',
+        sections: [
+            {
+                title: 'Overview',
+                icon: 'chart-bar',
+                items: [
+                    { label: 'Dashboard', path: '/certificates/dashboard' }
+                ],
+            },
+            {
+                title: 'Certificates',
+                icon: 'document-text',
+                items: [
+                    { label: 'Bonafide Certificate', path: '/certificates/bonafide' },
+                    { label: 'Trial Certificate', path: '/certificates/trial' },
+                    { label: 'Certificate Records', path: '/certificates/records' }
+                ],
+            },
+        ],
+    },
 };
 
 

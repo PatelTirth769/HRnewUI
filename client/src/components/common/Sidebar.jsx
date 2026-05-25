@@ -130,11 +130,12 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
     const [loadingFirebase, setLoadingFirebase] = useState(false);
 
     useEffect(() => {
-        if (activeModule === 'transport') {
+        if (activeModule === 'transport' || activeModule === 'certificates') {
             setLoadingFirebase(true);
             const fetchFirebaseSections = async () => {
                 try {
-                    const sectionsRef = collection(db, "schooler_system", "transport_management", "sidebar_sections");
+                    const managementKey = activeModule === 'transport' ? 'transport_management' : 'certificates_management';
+                    const sectionsRef = collection(db, "schooler_system", managementKey, "sidebar_sections");
                     const snapshot = await getDocs(sectionsRef);
                     const sectionsData = [];
                     snapshot.forEach((doc) => {
@@ -144,7 +145,7 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                     // Sort strictly by order field
                     sectionsData.sort((a, b) => (a.order || 0) - (b.order || 0));
                     
-                    // NEW: Ensure our newly added local items exist even if Firebase is used
+                    // Ensure local items exist
                     const ensureItems = (sectionTitle, newItems) => {
                         const section = sectionsData.find(s => s.title.toLowerCase() === sectionTitle.toLowerCase());
                         if (section) {
@@ -158,60 +159,84 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                     };
 
                     if (sectionsData.length > 0) {
-                        ensureItems('Settings', [
-                            { label: 'General Settings', path: '/transport/settings' },
-                            { label: 'School Transport Configuration', path: '/transport/settings/config' }
-                        ]);
-                        ensureItems('Master', [
-                            { label: 'Add Bus Routes', path: '/transport/master/add-bus-routes' },
-                            { label: 'Driver Master', path: '/transport/master/driver' },
-                            { label: 'Route Master', path: '/transport/master/route' },
-                            { label: 'Transport Range', path: '/transport/master/range' }
-                        ]);
-                        ensureItems('Transaction', [
-                            { label: 'Transport Fee Import', path: '/transport/transaction/fee-import' },
-                            { label: 'Student Transport Allocation', path: '/transport/transaction/student-allocation' },
-                            { label: 'Set Punch Timing', path: '/transport/transaction/punch-timing' },
-                            { label: 'Transport SMS', path: '/transport/transaction/transport-sms' },
-                            { label: 'Allocate Route Excel', path: '/transport/transaction/route-excel-import' },
-                            { label: 'Transport Carry Forward', path: '/transport/transaction/carry-forward' }
-                        ]);
-                        ensureItems('Reports', [
-                            { label: 'Student Punch Detail', path: '/transport/reports/student-punch-detail' },
-                            { label: 'New Transport Report', path: '/transport/reports/new-transport-report' }
-                        ]);
-                    }
-
-                    // Fallback to dummy data if Firebase has 0 configurations set up yet
-                    if (sectionsData.length === 0) {
-                        sectionsData.push(
-                            { title: 'Settings', icon: 'cog', order: 1, items: [{ label: 'General Settings', path: '/transport/settings' }, { label: 'School Transport Configuration', path: '/transport/settings/config' }] },
-                            { title: 'Master', icon: 'database', order: 2, items: [{ label: 'Add Vehicle', path: '/transport/master/add-vehicle' }, { label: 'Add Bus Stop', path: '/transport/master/add-bus-stop' }, { label: 'Add Bus Routes', path: '/transport/master/add-bus-routes' }, { label: 'Driver Master', path: '/transport/master/driver' }, { label: 'Route Master', path: '/transport/master/route' }, { label: 'Transport Range', path: '/transport/master/range' }] },
-                            { title: 'Transaction', icon: 'switch-horizontal', order: 3, items: [
+                        if (activeModule === 'transport') {
+                            ensureItems('Settings', [
+                                { label: 'General Settings', path: '/transport/settings' },
+                                { label: 'School Transport Configuration', path: '/transport/settings/config' }
+                            ]);
+                            ensureItems('Master', [
+                                { label: 'Add Bus Routes', path: '/transport/master/add-bus-routes' },
+                                { label: 'Driver Master', path: '/transport/master/driver' },
+                                { label: 'Route Master', path: '/transport/master/route' },
+                                { label: 'Transport Range', path: '/transport/master/range' }
+                            ]);
+                            ensureItems('Transaction', [
                                 { label: 'Transport Fee Import', path: '/transport/transaction/fee-import' },
-                                { label: 'Trip Allocation', path: '/transport/transaction/allocated' },
                                 { label: 'Student Transport Allocation', path: '/transport/transaction/student-allocation' },
                                 { label: 'Set Punch Timing', path: '/transport/transaction/punch-timing' },
                                 { label: 'Transport SMS', path: '/transport/transaction/transport-sms' },
                                 { label: 'Allocate Route Excel', path: '/transport/transaction/route-excel-import' },
                                 { label: 'Transport Carry Forward', path: '/transport/transaction/carry-forward' }
-                            ] },
-                            { title: 'Finance', icon: 'currency-dollar', order: 4, items: [{ label: 'Fee Collection', path: '/transport/finance/fees' }] },
-                            { title: 'Integration', icon: 'link', order: 5, items: [{ label: 'GPS Tracking', path: '/transport/integration/gps' }] },
-                            { title: 'Reports', icon: 'chart-bar', order: 6, items: [
-                                { label: 'Trip Reports', path: '/transport/reports/trip' },
+                            ]);
+                            ensureItems('Reports', [
                                 { label: 'Student Punch Detail', path: '/transport/reports/student-punch-detail' },
                                 { label: 'New Transport Report', path: '/transport/reports/new-transport-report' }
-                            ] }
-                        );
+                            ]);
+                        } else if (activeModule === 'certificates') {
+                            ensureItems('Overview', [
+                                { label: 'Dashboard', path: '/certificates/dashboard' }
+                            ]);
+                            ensureItems('Certificates', [
+                                { label: 'Bonafide Certificate', path: '/certificates/bonafide' },
+                                { label: 'Trial Certificate', path: '/certificates/trial' },
+                                { label: 'Transfer Certificate', path: '/certificates/transfer' },
+                                { label: 'Certificate Records', path: '/certificates/records' }
+                            ]);
+                        }
+                    }
+
+                    // Fallback to dummy data if Firebase has 0 configurations set up yet
+                    if (sectionsData.length === 0) {
+                        if (activeModule === 'transport') {
+                            sectionsData.push(
+                                { title: 'Settings', icon: 'cog', order: 1, items: [{ label: 'General Settings', path: '/transport/settings' }, { label: 'School Transport Configuration', path: '/transport/settings/config' }] },
+                                { title: 'Master', icon: 'database', order: 2, items: [{ label: 'Add Vehicle', path: '/transport/master/add-vehicle' }, { label: 'Add Bus Stop', path: '/transport/master/add-bus-stop' }, { label: 'Add Bus Routes', path: '/transport/master/add-bus-routes' }, { label: 'Driver Master', path: '/transport/master/driver' }, { label: 'Route Master', path: '/transport/master/route' }, { label: 'Transport Range', path: '/transport/master/range' }] },
+                                { title: 'Transaction', icon: 'switch-horizontal', order: 3, items: [
+                                    { label: 'Transport Fee Import', path: '/transport/transaction/fee-import' },
+                                    { label: 'Trip Allocation', path: '/transport/transaction/allocated' },
+                                    { label: 'Student Transport Allocation', path: '/transport/transaction/student-allocation' },
+                                    { label: 'Set Punch Timing', path: '/transport/transaction/punch-timing' },
+                                    { label: 'Transport SMS', path: '/transport/transaction/transport-sms' },
+                                    { label: 'Allocate Route Excel', path: '/transport/transaction/route-excel-import' },
+                                    { label: 'Transport Carry Forward', path: '/transport/transaction/carry-forward' }
+                                ] },
+                                { title: 'Finance', icon: 'currency-dollar', order: 4, items: [{ label: 'Fee Collection', path: '/transport/finance/fees' }] },
+                                { title: 'Integration', icon: 'link', order: 5, items: [{ label: 'GPS Tracking', path: '/transport/integration/gps' }] },
+                                { title: 'Reports', icon: 'chart-bar', order: 6, items: [
+                                    { label: 'Trip Reports', path: '/transport/reports/trip' },
+                                    { label: 'Student Punch Detail', path: '/transport/reports/student-punch-detail' },
+                                    { label: 'New Transport Report', path: '/transport/reports/new-transport-report' }
+                                ] }
+                            );
+                        } else if (activeModule === 'certificates') {
+                            sectionsData.push(
+                                { title: 'Overview', icon: 'chart-bar', order: 1, items: [{ label: 'Dashboard', path: '/certificates/dashboard' }] },
+                                { title: 'Certificates', icon: 'document-text', order: 2, items: [
+                                    { label: 'Bonafide Certificate', path: '/certificates/bonafide' },
+                                    { label: 'Trial Certificate', path: '/certificates/trial' },
+                                    { label: 'Transfer Certificate', path: '/certificates/transfer' },
+                                    { label: 'Certificate Records', path: '/certificates/records' }
+                                ] }
+                            );
+                        }
                     }
                     
                     const newConfig = {
-                        title: 'Transport Management',
+                        title: activeModule === 'transport' ? 'Transport Management' : 'Certificates',
                         sections: sectionsData
                     };
                     
-                    console.log('Sidebar: Final Transport config:', newConfig);
+                    console.log('Sidebar: Final config:', newConfig);
                     setFirebaseConfig(newConfig);
                     
                     const initialExpanded = {};
@@ -222,17 +247,27 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                 } catch (error) {
                     console.error("Error fetching firebase sidebar:", error);
                     // Provide fallback empty state if firebase fails (or config missing)
-                    setFirebaseConfig({
-                        title: 'Transport Management',
-                        sections: [
-                            { title: 'Settings', icon: 'cog', items: [] },
-                            { title: 'Master', icon: 'database', items: [] },
-                            { title: 'Transaction', icon: 'switch-horizontal', items: [] },
-                            { title: 'Finance', icon: 'currency-dollar', items: [] },
-                            { title: 'Integration', icon: 'link', items: [] },
-                            { title: 'Reports', icon: 'chart-bar', items: [] }
-                        ]
-                    });
+                    if (activeModule === 'transport') {
+                        setFirebaseConfig({
+                            title: 'Transport Management',
+                            sections: [
+                                { title: 'Settings', icon: 'cog', items: [] },
+                                { title: 'Master', icon: 'database', items: [] },
+                                { title: 'Transaction', icon: 'switch-horizontal', items: [] },
+                                { title: 'Finance', icon: 'currency-dollar', items: [] },
+                                { title: 'Integration', icon: 'link', items: [] },
+                                { title: 'Reports', icon: 'chart-bar', items: [] }
+                            ]
+                        });
+                    } else {
+                        setFirebaseConfig({
+                            title: 'Certificates',
+                            sections: [
+                                { title: 'Overview', icon: 'chart-bar', items: [] },
+                                { title: 'Certificates', icon: 'document-text', items: [] }
+                            ]
+                        });
+                    }
                 } finally {
                     setLoadingFirebase(false);
                 }
@@ -249,12 +284,12 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
     }, [activeModule]);
 
     if (!isOpen || !activeModule) return null;
-    if (activeModule !== 'transport' && !moduleNavigation[activeModule]) return null;
+    if (activeModule !== 'transport' && activeModule !== 'certificates' && !moduleNavigation[activeModule]) return null;
 
-    const config = activeModule === 'transport' ? firebaseConfig : moduleNavigation[activeModule];
+    const config = (activeModule === 'transport' || activeModule === 'certificates') ? firebaseConfig : moduleNavigation[activeModule];
 
     // If loading firebase data dynamically
-    if (activeModule === 'transport' && loadingFirebase && !config) {
+    if ((activeModule === 'transport' || activeModule === 'certificates') && loadingFirebase && !config) {
         return (
             <>
                 <div className={`fixed inset-0 bg-black/20 backdrop-blur-[2px] z-[45] transition-opacity duration-300 opacity-100`} onClick={onClose} />

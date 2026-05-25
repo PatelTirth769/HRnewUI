@@ -21,6 +21,7 @@ const FeesReport = () => {
         program: '',
         term: '',
         status: '',
+        payment_mode: '',
         student_search: '',
         date_range: null,
     });
@@ -367,6 +368,13 @@ const FeesReport = () => {
         if (filters.term) data = data.filter(s => s.academic_term === filters.term);
         if (filters.status === 'PAID') data = data.filter(s => s.status === 'PAID');
         else if (filters.status === 'UNPAID') data = data.filter(s => s.status !== 'PAID');
+        if (filters.payment_mode) {
+            if (filters.payment_mode === 'ONLINE') {
+                data = data.filter(s => s.status === 'PAID' && (s.payment_mode || '').toUpperCase().includes('ONLINE'));
+            } else if (filters.payment_mode === 'OFFLINE') {
+                data = data.filter(s => s.status === 'PAID' && (s.payment_mode || '').toUpperCase() !== '-' && !(s.payment_mode || '').toUpperCase().includes('ONLINE'));
+            }
+        }
         if (filters.date_range && filters.date_range[0] && filters.date_range[1]) {
             const start = filters.date_range[0].startOf('day');
             const end = filters.date_range[1].endOf('day');
@@ -388,9 +396,9 @@ const FeesReport = () => {
         totalRecords: filteredData.length,
     }), [filteredData]);
 
-    const clearAllFilters = () => setFilters({ academic_year: '2026-27', program: '', term: '', status: '', student_search: '', date_range: null });
+    const clearAllFilters = () => setFilters({ academic_year: '2026-27', program: '', term: '', status: '', payment_mode: '', student_search: '', date_range: null });
 
-    const activeFilterCount = [filters.program, filters.term, filters.status, filters.student_search, filters.date_range].filter(Boolean).length;
+    const activeFilterCount = [filters.program, filters.term, filters.status, filters.payment_mode, filters.student_search, filters.date_range].filter(Boolean).length;
 
     const exportCSV = () => {
         const headers = ['Student Name', 'Student ID', 'Program', 'Fee Structure', 'Term', 'Total Fee', 'Paid Amount', 'Outstanding', 'Status', 'Paid Date', 'Receipt No', 'Payment Mode'];
@@ -528,7 +536,7 @@ const FeesReport = () => {
             >
                 {showFilters && (
                     <Row gutter={[16, 16]}>
-                        <Col xs={24} sm={12} lg={6}>
+                        <Col xs={24} sm={12} lg={5}>
                             <label style={labelStyle}>Student</label>
                             <Select
                                 showSearch
@@ -547,13 +555,13 @@ const FeesReport = () => {
                                 ))}
                             </Select>
                         </Col>
-                        <Col xs={24} sm={12} lg={5}>
+                        <Col xs={24} sm={12} lg={4}>
                             <label style={labelStyle}>Program</label>
                             <Select style={{ width: '100%' }} placeholder="All Programs" allowClear value={filters.program || undefined} onChange={v => setFilters(p => ({ ...p, program: v || '', student_search: '' }))}>
                                 {(dropdowns.programs.length > 0 ? dropdowns.programs : dataPrograms).map(p => <Option key={p} value={p}>{p}</Option>)}
                             </Select>
                         </Col>
-                        <Col xs={24} sm={12} lg={4}>
+                        <Col xs={24} sm={12} lg={3}>
                             <label style={labelStyle}>Term</label>
                             <Select style={{ width: '100%' }} placeholder="All Terms" allowClear value={filters.term || undefined} onChange={v => setFilters(p => ({ ...p, term: v || '' }))}>
                                 {(dropdowns.terms.length > 0 ? dropdowns.terms : dataTerms).map(t => <Option key={t} value={t}>{t}</Option>)}
@@ -566,7 +574,14 @@ const FeesReport = () => {
                                 <Option value="UNPAID"><Tag color="error" style={{ margin: 0 }}>Unpaid</Tag></Option>
                             </Select>
                         </Col>
-                        <Col xs={24} sm={12} lg={6}>
+                        <Col xs={24} sm={12} lg={4}>
+                            <label style={labelStyle}>Fees Type</label>
+                            <Select style={{ width: '100%' }} placeholder="All Types" allowClear value={filters.payment_mode || undefined} onChange={v => setFilters(p => ({ ...p, payment_mode: v || '' }))}>
+                                <Option value="ONLINE"><Tag color="blue" style={{ margin: 0 }}>Online</Tag></Option>
+                                <Option value="OFFLINE"><Tag color="orange" style={{ margin: 0 }}>Offline (Cash)</Tag></Option>
+                            </Select>
+                        </Col>
+                        <Col xs={24} sm={12} lg={5}>
                             <label style={labelStyle}>Paid Date Range</label>
                             <RangePicker style={{ width: '100%' }} value={filters.date_range} onChange={v => setFilters(p => ({ ...p, date_range: v }))} format="DD-MM-YYYY" />
                         </Col>

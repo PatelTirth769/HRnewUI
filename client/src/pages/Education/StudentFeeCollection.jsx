@@ -1,190 +1,924 @@
-import React, { useState, useEffect } from 'react';
-import { Table, notification, Select, Button, Space, Card, Statistic } from 'antd';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Table, Card, Statistic, Row, Col, Tag, Button, Select, Space, Input, DatePicker, notification, Spin, Tooltip, Dropdown, Modal, Form, InputNumber } from 'antd';
+import { 
+  SearchOutlined, SyncOutlined, CheckCircleOutlined, ClockCircleOutlined,
+  ExclamationCircleOutlined, FilterOutlined, ClearOutlined, DownloadOutlined,
+  UserOutlined, BookOutlined, CalendarOutlined, WalletOutlined,
+  FileExcelOutlined, EyeOutlined, EyeInvisibleOutlined, PlusCircleOutlined,
+  CreditCardOutlined, InfoCircleOutlined
+} from '@ant-design/icons';
 import API from '../../services/api';
+import axios from 'axios';
 import dayjs from 'dayjs';
+import html2pdf from 'html2pdf.js';
+import FeeReceiptTemplate from './FeeReceiptTemplate';
 
 const { Option } = Select;
+const { RangePicker } = DatePicker;
 
 const StudentFeeCollection = () => {
     const [loading, setLoading] = useState(false);
-    const [data, setData] = useState([]);
-    const [columns, setColumns] = useState([]);
+    const [allData, setAllData] = useState([]);
     const [filters, setFilters] = useState({
-        academic_year: '',
+        academic_year: '2026-27',
         program: '',
-        student_group: '',
+        term: '',
+        status: '',
+        payment_mode: '',
+        student_search: '',
+        date_range: null,
     });
-
     const [dropdowns, setDropdowns] = useState({
         academicYears: [],
         programs: [],
-        studentGroups: [],
+        terms: [],
     });
+    const [showFilters, setShowFilters] = useState(true);
 
-    useEffect(() => {
-        fetchDropdowns();
-        fetchReport();
-    }, []);
+    // Payment collection modal states
+    const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+    const [selectedRow, setSelectedRow] = useState(null);
+    const [paymentAmount, setPaymentAmount] = useState(0);
+    const [paymentMode, setPaymentMode] = useState('CASH');
+    const [manualReceiptRef, setManualReceiptRef] = useState('');
+    const [processingPayment, setProcessingPayment] = useState(false);
 
-    const fetchDropdowns = async () => {
+    // Receipt download states
+    const [selectedReceipt, setSelectedReceipt] = useState(null);
+    const receiptRef = useRef(null);
+
+    useEffect(() => { fetchInitialData(); }, []);
+
+    const fetchInitialData = async () => {
+        setLoading(true);
         try {
-            const safeGet = (url) => API.get(url).catch(err => ({ data: { data: [] } }));
-            const [yRes, pRes, gRes] = await Promise.all([
-                safeGet('/api/resource/Academic Year?limit_page_length=None'),
-                safeGet('/api/resource/Program?limit_page_length=None'),
-                safeGet('/api/resource/Student Group?limit_page_length=None'),
+            const [yRes, pRes, tRes] = await Promise.all([
+                API.get('/api/resource/Academic Year?limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Program?limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Academic Term?limit_page_length=None').catch(() => ({ data: { data: [] } })),
             ]);
             setDropdowns({
                 academicYears: yRes.data.data?.map(d => d.name) || [],
                 programs: pRes.data.data?.map(d => d.name) || [],
-                studentGroups: gRes.data.data?.map(d => d.name) || [],
+                terms: tRes.data.data?.map(d => d.name) || [],
             });
+            await fetchData();
         } catch (err) {
-            console.error('Error fetching dropdowns:', err);
-        }
-    };
-
-    const fetchReport = async () => {
-        setLoading(true);
-        try {
-            // Use POST for query_report.run as filters can be complex
-            const res = await API.post('/api/method/frappe.desk.query_report.run', {
-                report_name: 'Student Fee Collection',
-                filters: filters
-            });
-            
-            if (res.data.message) {
-                const { result, columns: reportCols } = res.data.message;
-                
-                // Map columns to Ant Design table columns
-                const mappedCols = (reportCols || []).map(col => {
-                    const label = typeof col === 'string' ? col : col.label;
-                    const fieldname = typeof col === 'string' ? col : col.fieldname;
-                    
-                    return {
-                        title: label,
-                        dataIndex: fieldname,
-                        key: fieldname,
-                        render: (text) => {
-                           if (typeof text === 'number' && !fieldname.toLowerCase().includes('year')) {
-                               return text.toLocaleString(undefined, { minimumFractionDigits: 2 });
-                           }
-                           return text || '-';
-                        },
-                        sorter: (a, b) => {
-                            if (typeof a[fieldname] === 'number') return a[fieldname] - b[fieldname];
-                            return (a[fieldname] || '').toString().localeCompare((b[fieldname] || '').toString());
-                        }
-                    };
-                });
-
-                setColumns(mappedCols);
-                setData(result || []);
-            }
-        } catch (err) {
-            console.error('Report Error:', err);
-            const serverMsg = err.response?.data?._server_messages || err.message;
-            notification.error({ message: 'Failed to Fetch Live Data', description: serverMsg });
-            setData([]); // Clear data if fetch fails
+            console.error('Initial Fetch Error:', err);
         } finally {
             setLoading(false);
         }
     };
 
-    const totals = data.reduce((acc, curr) => ({
-        total: acc.total + (parseFloat(curr.total_amount || curr.grand_total || 0)),
-        paid: acc.paid + (parseFloat(curr.paid_amount || 0)),
-        outstanding: acc.outstanding + (parseFloat(curr.outstanding || curr.outstanding_amount || 0))
-    }), { total: 0, paid: 0, outstanding: 0 });
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            // 1. Fetch Firebase payments (only students who initiated/completed payment)
+            const payRes = await axios.get('/local-api/payment/history-all');
+            const paymentList = payRes.data.success ? payRes.data.data : [];
+
+            // 2. Fetch ALL Fees records from ERPNext (invoices for ALL students)
+            let erpFeesList = [];
+            try {
+                const feesRes = await API.get('/api/resource/Fees', {
+                    params: {
+                        fields: JSON.stringify(["name", "student", "student_name", "program", "fee_structure", "grand_total", "outstanding_amount", "posting_date", "academic_term", "academic_year"]),
+                        limit_page_length: 'None',
+                        order_by: 'creation desc'
+                    }
+                });
+                erpFeesList = feesRes.data?.data || [];
+            } catch (e) {
+                console.warn('[Offline Collection] Could not fetch ERP Fees:', e.message);
+                try {
+                    const feesRes2 = await API.get('/api/resource/Fees', {
+                        params: {
+                            fields: JSON.stringify(["name", "student", "student_name", "program", "grand_total", "outstanding_amount", "posting_date"]),
+                            limit_page_length: 'None'
+                        }
+                    });
+                    erpFeesList = feesRes2.data?.data || [];
+                } catch (e2) { console.warn('[Offline Collection] Fees fallback also failed:', e2.message); }
+            }
+
+            // 3. Fetch ALL Fee Structures (to get program-level term components)
+            let allFeeStructures = [];
+            try {
+                const fsListRes = await API.get('/api/resource/Fee Structure', {
+                    params: {
+                        fields: JSON.stringify(["name", "program", "total_amount"]),
+                        limit_page_length: 'None'
+                    }
+                });
+                allFeeStructures = fsListRes.data?.data || [];
+            } catch (e) { console.warn('[Offline Collection] Could not fetch Fee Structures list:', e.message); }
+
+            const structureDetails = {};
+            await Promise.all(
+                allFeeStructures.map(async (fs) => {
+                    try {
+                        const res = await API.get(`/api/resource/Fee Structure/${encodeURIComponent(fs.name)}`);
+                        if (res.data?.data) structureDetails[fs.name] = res.data.data;
+                    } catch (e) { /* skip */ }
+                })
+            );
+
+            // 4. Fetch ALL students
+            let allStudents = [];
+            try {
+                const stuRes = await API.get('/api/resource/Student', {
+                    params: {
+                        fields: JSON.stringify(["name", "student_name", "program", "enabled"]),
+                        filters: JSON.stringify([["enabled", "=", 1]]),
+                        limit_page_length: 'None'
+                    }
+                });
+                allStudents = stuRes.data?.data || [];
+            } catch (e) { console.warn('[Offline Collection] Could not fetch students:', e.message); }
+
+            // 5. Fetch ALL Program Enrollments
+            let enrollments = [];
+            try {
+                const enrRes = await API.get('/api/resource/Program Enrollment', {
+                    params: {
+                        fields: JSON.stringify(["name", "student", "student_name", "program", "academic_year", "enrollment_date"]),
+                        limit_page_length: 'None'
+                    }
+                });
+                enrollments = enrRes.data?.data || [];
+            } catch (e) { console.warn('[Offline Collection] Could not fetch enrollments:', e.message); }
+
+            const studentInfoMap = {};
+            allStudents.forEach(s => {
+                studentInfoMap[s.name] = { student_name: s.student_name || s.name, program: s.program || '' };
+            });
+            enrollments.forEach(e => {
+                if (e.student && e.program) {
+                    if (!studentInfoMap[e.student]) {
+                        studentInfoMap[e.student] = { student_name: e.student_name || e.student, program: e.program };
+                    } else {
+                        studentInfoMap[e.student].program = e.program;
+                        if (e.student_name) studentInfoMap[e.student].student_name = e.student_name;
+                    }
+                }
+            });
+            enrollments.forEach(e => {
+                if (e.student && !allStudents.find(s => s.name === e.student)) {
+                    allStudents.push({ name: e.student, student_name: e.student_name || e.student, program: e.program, enabled: 1 });
+                }
+            });
+
+            // Build Firebase payment lookup: key = student_id + term
+            const firebasePayments = {};
+            paymentList.forEach(p => {
+                const termName = p.fees_category || '-';
+                const key = `${p.student_id}_${termName}`;
+                if (!firebasePayments[key]) firebasePayments[key] = [];
+                firebasePayments[key].push(p);
+            });
+
+            // 5. Build the merged records
+            const groupedRecords = {};
+
+            // Process ERP Fees records
+            erpFeesList.forEach(fee => {
+                const studentId = fee.student;
+                const studentName = fee.student_name || studentInfoMap[studentId]?.student_name || 'Unknown';
+                const program = fee.program || studentInfoMap[studentId]?.program || '-';
+                const termName = fee.academic_term || fee.name;
+                const key = `${studentId}_${termName}`;
+                const totalFee = parseFloat(fee.grand_total) || 0;
+                const outstanding = parseFloat(fee.outstanding_amount) || 0;
+                const paidAmount = totalFee - outstanding;
+
+                const fbPayments = firebasePayments[key] || [];
+                const verifiedPayment = fbPayments.find(p => p.status === 'verified');
+
+                let status = 'UNPAID';
+                let paidDate = null;
+                let receiptNo = '-';
+
+                if (outstanding <= 0 || verifiedPayment) {
+                    status = 'PAID';
+                    paidDate = verifiedPayment?.verified_at || verifiedPayment?.receipt_date || fee.posting_date;
+                    receiptNo = verifiedPayment?.payment_id || verifiedPayment?.receipt_no || '-';
+                } else if (paidAmount > 0 && outstanding > 0) {
+                    status = 'PARTIAL';
+                }
+
+                const feeStructureName = fee.fee_structure || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program) || '-';
+
+                if (!groupedRecords[key] || status === 'PAID') {
+                    groupedRecords[key] = {
+                        key: key,
+                        fee_id: fee.name,
+                        student_id: studentId,
+                        student_name: studentName,
+                        program: program,
+                        fee_structure: feeStructureName,
+                        academic_term: termName,
+                        academic_year: fee.academic_year || '-',
+                        total_fee: totalFee,
+                        paid_amount: paidAmount > 0 ? paidAmount : (verifiedPayment ? parseFloat(verifiedPayment.amount) || 0 : 0),
+                        outstanding: outstanding,
+                        status: status,
+                        paid_date: paidDate,
+                        payment_mode: verifiedPayment?.payment_mode || '-',
+                        receipt_no: receiptNo,
+                    };
+                }
+            });
+
+            // Process Firebase-only payments
+            paymentList.forEach(p => {
+                const termName = p.fees_category || '-';
+                const key = `${p.student_id}_${termName}`;
+
+                if (groupedRecords[key]) return;
+
+                const fsName = p.fee_structure || '';
+                const programName = structureDetails[fsName]?.program || studentInfoMap[p.student_id]?.program || '-';
+                const paidAmt = parseFloat(p.amount) || 0;
+
+                let currentStatus = 'PENDING';
+                if (p.status === 'verified') currentStatus = 'PAID';
+                else if (p.status === 'failed') currentStatus = 'FAILED';
+
+                const paidDate = p.verified_at || p.receipt_date || (currentStatus === 'PAID' ? p.created_at : null);
+
+                groupedRecords[key] = {
+                    key: p.payment_id || p.order_id || key,
+                    fee_id: p.order_id || 'manual',
+                    student_id: p.student_id,
+                    student_name: p.student_name || studentInfoMap[p.student_id]?.student_name || 'Unknown',
+                    program: programName,
+                    fee_structure: fsName,
+                    academic_term: termName,
+                    academic_year: '-',
+                    total_fee: paidAmt,
+                    paid_amount: currentStatus === 'PAID' ? paidAmt : 0,
+                    outstanding: currentStatus === 'PAID' ? 0 : paidAmt,
+                    status: currentStatus,
+                    paid_date: currentStatus === 'PAID' ? paidDate : null,
+                    payment_mode: p.payment_mode || 'ONLINE',
+                    receipt_no: p.receipt_no || p.payment_id || '-',
+                };
+            });
+
+            // Program to structure map
+            const programToStructure = {};
+            Object.entries(structureDetails).forEach(([fsName, fsData]) => {
+                if (fsData.program) {
+                    programToStructure[fsData.program] = fsName;
+                }
+            });
+
+            allStudents.forEach(student => {
+                const studentId = student.name;
+                const studentName = studentInfoMap[studentId]?.student_name || student.student_name || studentId;
+                const program = studentInfoMap[studentId]?.program || student.program || '';
+                const fsName = programToStructure[program];
+
+                if (fsName && structureDetails[fsName]) {
+                    const fsData = structureDetails[fsName];
+                    const components = fsData.components || [];
+
+                    components.forEach(comp => {
+                        const termName = comp.fees_category || comp.name || '-';
+                        const key = `${studentId}_${termName}`;
+
+                        if (groupedRecords[key]) return;
+
+                        const termAmount = parseFloat(comp.amount) || 0;
+
+                        const fbPayments = firebasePayments[key] || [];
+                        const verifiedPayment = fbPayments.find(p => p.status === 'verified');
+
+                        let status = 'UNPAID';
+                        let paidDate = null;
+                        let paidAmount = 0;
+                        let receiptNo = '-';
+
+                        if (verifiedPayment) {
+                            status = 'PAID';
+                            paidAmount = parseFloat(verifiedPayment.amount) || termAmount;
+                            paidDate = verifiedPayment.verified_at || verifiedPayment.receipt_date || verifiedPayment.created_at;
+                            receiptNo = verifiedPayment.payment_id || verifiedPayment.receipt_no || '-';
+                        }
+
+                        groupedRecords[key] = {
+                            key: key,
+                            fee_id: '-',
+                            student_id: studentId,
+                            student_name: studentName,
+                            program: program || '-',
+                            fee_structure: fsName,
+                            academic_term: termName,
+                            academic_year: '-',
+                            total_fee: termAmount,
+                            paid_amount: paidAmount,
+                            outstanding: status === 'PAID' ? 0 : termAmount,
+                            status: status,
+                            paid_date: paidDate,
+                            payment_mode: verifiedPayment?.payment_mode || '-',
+                            receipt_no: receiptNo,
+                        };
+                    });
+                } else {
+                    const key = `${studentId}_-`;
+                    if (!groupedRecords[key]) {
+                        groupedRecords[key] = {
+                            key: key,
+                            fee_id: '-',
+                            student_id: studentId,
+                            student_name: studentName,
+                            program: program || 'Not Assigned',
+                            fee_structure: '-',
+                            academic_term: '-',
+                            academic_year: '-',
+                            total_fee: 0,
+                            paid_amount: 0,
+                            outstanding: 0,
+                            status: 'UNPAID',
+                            paid_date: null,
+                            payment_mode: '-',
+                            receipt_no: '-',
+                        };
+                    }
+                }
+            });
+
+            const mergedData = Object.values(groupedRecords);
+            mergedData.sort((a, b) => (a.student_name || '').localeCompare(b.student_name || '') || (a.academic_term || '').localeCompare(b.academic_term || ''));
+            setAllData(mergedData);
+        } catch (err) {
+            console.error('[Offline Collection] Fetch Data Error:', err);
+            notification.error({ message: 'Data Fetch Error', description: err.response?.data?.message || err.message });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const filteredData = useMemo(() => {
+        let data = [...allData];
+        if (filters.student_search) {
+            const q = filters.student_search.toLowerCase();
+            data = data.filter(s => s.student_name.toLowerCase().includes(q) || s.student_id.toLowerCase().includes(q));
+        }
+        if (filters.program) data = data.filter(s => s.program === filters.program);
+        if (filters.term) data = data.filter(s => s.academic_term === filters.term);
+        if (filters.status === 'PAID') data = data.filter(s => s.status === 'PAID');
+        else if (filters.status === 'UNPAID') data = data.filter(s => s.status !== 'PAID');
+        if (filters.payment_mode) {
+            if (filters.payment_mode === 'ONLINE') {
+                data = data.filter(s => s.status === 'PAID' && (s.payment_mode || '').toUpperCase().includes('ONLINE'));
+            } else if (filters.payment_mode === 'OFFLINE') {
+                data = data.filter(s => s.status === 'PAID' && (s.payment_mode || '').toUpperCase() !== '-' && !(s.payment_mode || '').toUpperCase().includes('ONLINE'));
+            }
+        }
+        if (filters.date_range && filters.date_range[0] && filters.date_range[1]) {
+            const start = filters.date_range[0].startOf('day');
+            const end = filters.date_range[1].endOf('day');
+            data = data.filter(s => {
+                if (!s.paid_date) return false;
+                const d = dayjs(s.paid_date);
+                return d.isAfter(start) && d.isBefore(end);
+            });
+        }
+        return data;
+    }, [allData, filters]);
+
+    const stats = useMemo(() => ({
+        totalProjected: filteredData.reduce((s, r) => s + r.total_fee, 0),
+        totalCollected: filteredData.reduce((s, r) => s + r.paid_amount, 0),
+        totalOutstanding: filteredData.reduce((s, r) => s + r.outstanding, 0),
+        paidCount: filteredData.filter(r => r.status === 'PAID').length,
+        unpaidCount: filteredData.filter(r => r.status !== 'PAID').length,
+        totalRecords: filteredData.length,
+    }), [filteredData]);
+
+    const clearAllFilters = () => setFilters({ academic_year: '2026-27', program: '', term: '', status: '', payment_mode: '', student_search: '', date_range: null });
+
+    const activeFilterCount = [filters.program, filters.term, filters.status, filters.payment_mode, filters.student_search, filters.date_range].filter(Boolean).length;
+
+    // Receipt download logic
+    const handleDownloadReceipt = (record) => {
+        const dateObj = new Date(record.paid_date || record.receipt_date || new Date());
+        const formattedDate = dateObj.toLocaleDateString('en-GB') + ' ' + dateObj.toLocaleTimeString('en-US');
+        
+        const receiptData = {
+            enrollmentNo: record.student_id,
+            studentName: record.student_name,
+            courseName: record.program,
+            semester: record.academic_term || 'N/A',
+            receiptDate: formattedDate,
+            receiptNo: record.receipt_no || record.payment_id || record.order_id || 'N/A',
+            amount: record.paid_amount || record.amount || 0,
+            feeName: record.academic_term || 'TUITION FEES',
+            paymentMode: (record.payment_mode || 'CASH') + ' PAYMENT',
+            transactionNo: record.receipt_no || record.payment_id || 'N/A'
+        };
+
+        setSelectedReceipt(receiptData);
+
+        setTimeout(() => {
+            if (receiptRef.current) {
+                const opt = {
+                    margin: 0.3,
+                    filename: `Receipt_${receiptData.receiptNo}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, windowWidth: 700, width: 700 },
+                    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+                };
+                html2pdf().set(opt).from(receiptRef.current).save().then(() => {
+                    notification.success({ message: 'Receipt Downloaded Successfully' });
+                    setSelectedReceipt(null);
+                });
+            }
+        }, 500);
+    };
+
+    // Open checkout modal
+    const handleCollectFee = (row) => {
+        setSelectedRow(row);
+        setPaymentAmount(row.outstanding);
+        setPaymentMode('CASH');
+        setManualReceiptRef('');
+        setPaymentModalVisible(true);
+    };
+
+    // Post to backend
+    const handleConfirmPayment = async () => {
+        if (paymentAmount <= 0) {
+            notification.error({ message: 'Validation Error', description: 'Payment amount must be greater than 0.' });
+            return;
+        }
+        if (paymentAmount > selectedRow.outstanding) {
+            notification.error({ message: 'Validation Error', description: `Payment amount cannot exceed the outstanding balance of ₹${selectedRow.outstanding.toLocaleString()}.` });
+            return;
+        }
+
+        setProcessingPayment(true);
+        try {
+            const res = await axios.post('/local-api/payment/record-offline-payment', {
+                student_id: selectedRow.student_id,
+                student_name: selectedRow.student_name,
+                fee_structure: selectedRow.fee_structure,
+                fees_category: selectedRow.academic_term,
+                amount: paymentAmount,
+                payment_mode: paymentMode,
+                manual_receipt_no: manualReceiptRef,
+                fee_id: selectedRow.fee_id,
+                systemCode: 'schooler'
+            });
+
+            if (res.data.success) {
+                notification.success({ 
+                    message: 'Payment Recorded!', 
+                    description: `Sequential Receipt ${res.data.receipt_no} generated and sync: ${res.data.erp_sync}.` 
+                });
+                
+                setPaymentModalVisible(false);
+
+                // Auto-print receipt right after payment
+                const mockRecord = {
+                    student_id: selectedRow.student_id,
+                    student_name: selectedRow.student_name,
+                    program: selectedRow.program,
+                    academic_term: selectedRow.academic_term,
+                    receipt_no: res.data.receipt_no,
+                    payment_id: res.data.payment_id,
+                    paid_amount: paymentAmount,
+                    payment_mode: paymentMode,
+                    paid_date: new Date().toISOString()
+                };
+                handleDownloadReceipt(mockRecord);
+
+                // Refresh data
+                await fetchData();
+            }
+        } catch (err) {
+            console.error('Offline payment err:', err);
+            notification.error({ 
+                message: 'Payment Record Error', 
+                description: err.response?.data?.message || err.message 
+            });
+        } finally {
+            setProcessingPayment(false);
+        }
+    };
+
+    const columns = [
+        {
+            title: 'STUDENT', key: 'student', ellipsis: true,
+            render: (_, r) => (
+                <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.student_name}</div>
+                    <div style={{ fontSize: 11, color: '#3b82f6', fontWeight: 600 }}>{r.student_id}</div>
+                </div>
+            ),
+            sorter: (a, b) => (a.student_name || '').localeCompare(b.student_name || ''),
+        },
+        {
+            title: 'PROGRAM', key: 'program_info', ellipsis: true,
+            render: (_, r) => (
+                <div style={{ minWidth: 0 }}>
+                    <Tag color="cyan" style={{ margin: 0, fontWeight: 600 }}>{r.program}</Tag>
+                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 500, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.fee_structure}</div>
+                </div>
+            ),
+        },
+        {
+            title: 'TERM', dataIndex: 'academic_term', key: 'academic_term', ellipsis: true,
+            render: t => <span style={{ fontWeight: 600, color: '#475569', fontSize: 12 }}>{t}</span>,
+            sorter: (a, b) => (a.academic_term || '').localeCompare(b.academic_term || ''),
+        },
+        {
+            title: 'TOTAL FEE', dataIndex: 'total_fee', key: 'total_fee', align: 'right',
+            render: v => <span style={{ fontWeight: 600, color: '#64748b', fontSize: 13 }}>₹{v.toLocaleString()}</span>,
+            sorter: (a, b) => a.total_fee - b.total_fee,
+        },
+        {
+            title: 'PAID', dataIndex: 'paid_amount', key: 'paid_amount', align: 'right',
+            render: v => <span style={{ fontWeight: 700, color: '#16a34a', fontSize: 13 }}>₹{v.toLocaleString()}</span>,
+            sorter: (a, b) => a.paid_amount - b.paid_amount,
+        },
+        {
+            title: 'DUE', dataIndex: 'outstanding', key: 'outstanding', align: 'right',
+            render: v => <span style={{ fontWeight: 700, color: v > 0 ? '#dc2626' : '#94a3b8', fontSize: 13 }}>₹{v.toLocaleString()}</span>,
+            sorter: (a, b) => a.outstanding - b.outstanding,
+        },
+        {
+            title: 'PAID DATE', key: 'paid_date', ellipsis: true,
+            render: (_, r) => r.paid_date
+                ? <span style={{ fontSize: 12, color: '#334155', fontWeight: 500, whiteSpace: 'nowrap' }}>{dayjs(r.paid_date).format('DD MMM YYYY')}</span>
+                : <span style={{ color: '#cbd5e1', fontSize: 12 }}>—</span>,
+            sorter: (a, b) => (a.paid_date || '').localeCompare(b.paid_date || ''),
+        },
+        {
+            title: 'STATUS', dataIndex: 'status', key: 'status', align: 'center',
+            render: (status) => {
+                const cfg = {
+                    PAID: { color: 'success', icon: <CheckCircleOutlined /> },
+                    PARTIAL: { color: 'processing', icon: <ClockCircleOutlined /> },
+                    UNPAID: { color: 'error', icon: <ExclamationCircleOutlined /> },
+                };
+                const c = cfg[status] || cfg.UNPAID;
+                return <Tag icon={c.icon} color={c.color} style={{ fontWeight: 700, borderRadius: 20, padding: '2px 10px', fontSize: 11 }}>{status}</Tag>;
+            },
+        },
+        {
+            title: 'ACTION', key: 'action', align: 'center', width: 140,
+            render: (_, r) => {
+                if (r.status === 'PAID') {
+                    return (
+                        <Button 
+                            type="text" 
+                            icon={<DownloadOutlined style={{ color: '#3b82f6', fontSize: 16 }} />} 
+                            onClick={() => handleDownloadReceipt(r)} 
+                            title="Download Receipt"
+                        />
+                    );
+                } else if (r.total_fee > 0) {
+                    return (
+                        <Button 
+                            type="primary" 
+                            size="small" 
+                            onClick={() => handleCollectFee(r)}
+                            style={{ 
+                                background: 'linear-gradient(135deg, #10b981, #059669)', 
+                                border: 'none', 
+                                fontWeight: 700, 
+                                borderRadius: 6 
+                            }}
+                        >
+                            Collect
+                        </Button>
+                    );
+                }
+                return <span style={{ color: '#cbd5e1' }}>—</span>;
+            }
+        }
+    ];
+
+    const dataTerms = useMemo(() => {
+        const terms = new Set();
+        allData.forEach(r => { if (r.academic_term && r.academic_term !== '-') terms.add(r.academic_term); });
+        return Array.from(terms).sort();
+    }, [allData]);
+
+    const dataPrograms = useMemo(() => {
+        const progs = new Set();
+        allData.forEach(r => { if (r.program && r.program !== '-') progs.add(r.program); });
+        return Array.from(progs).sort();
+    }, [allData]);
+
+    const dataStudents = useMemo(() => {
+        const source = filters.program ? allData.filter(r => r.program === filters.program) : allData;
+        const map = new Map();
+        source.forEach(r => { if (!map.has(r.student_id)) map.set(r.student_id, r.student_name); });
+        return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+    }, [allData, filters.program]);
 
     return (
-        <div className="p-6 max-w-[1600px] mx-auto space-y-6">
-            <div className="flex justify-between items-center mb-2">
-                <h1 className="text-2xl font-bold text-gray-800">Student Fee Collection Report</h1>
-                <Button type="default" onClick={() => fetchReport()} loading={loading}>Refresh</Button>
-            </div>
-
-            {/* Filters */}
-            <Card className="shadow-sm border-gray-100">
-                <div className="flex flex-wrap gap-6 items-end">
-                    <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Academic Year</label>
-                        <Select 
-                            className="w-48 block" 
-                            placeholder="Select" 
-                            value={filters.academic_year} 
-                            onChange={v => setFilters(p => ({ ...p, academic_year: v }))}
-                        >
-                            <Option value="">All Years</Option>
-                            {dropdowns.academicYears.map(y => <Option key={y} value={y}>{y}</Option>)}
-                        </Select>
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Program</label>
-                        <Select 
-                            className="w-64 block" 
-                            placeholder="Select" 
-                            value={filters.program} 
-                            onChange={v => setFilters(p => ({ ...p, program: v }))}
-                        >
-                            <Option value="">All Programs</Option>
-                            {dropdowns.programs.map(p => <Option key={p} value={p}>{p}</Option>)}
-                        </Select>
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Student Group</label>
-                        <Select 
-                            className="w-56 block" 
-                            placeholder="Select" 
-                            value={filters.student_group} 
-                            onChange={v => setFilters(p => ({ ...p, student_group: v }))}
-                        >
-                            <Option value="">All Groups</Option>
-                            {dropdowns.studentGroups.map(g => <Option key={g} value={g}>{g}</Option>)}
-                        </Select>
-                    </div>
-                    <Button type="primary" className="bg-blue-600 px-6 font-medium" onClick={() => fetchReport()}>Apply Filters</Button>
-                </div>
-            </Card>
-
-            {/* Stats Summary */}
-            <div className="grid grid-cols-3 gap-6">
-                 <Card shadow="sm" className="border-l-4 border-l-blue-500">
-                    <Statistic title="Total Fees Projected" value={totals.total} precision={2} prefix="₹" />
-                 </Card>
-                 <Card shadow="sm" className="border-l-4 border-l-green-500">
-                    <Statistic title="Total Fees Collected" value={totals.paid} precision={2} prefix="₹" />
-                 </Card>
-                 <Card shadow="sm" className="border-l-4 border-l-red-500">
-                    <Statistic title="Oustanding Balance" value={totals.outstanding} precision={2} prefix="₹" />
-                 </Card>
-            </div>
-
-            {/* Table */}
-            <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
-                <Table 
-                    columns={columns} 
-                    dataSource={data} 
-                    loading={loading}
-                    rowKey={(r, i) => r.name || i}
-                    pagination={{ pageSize: 20, showSizeChanger: true }}
-                    scroll={{ x: 'max-content' }}
-                    className="report-table"
+        <div style={{ padding: '32px', maxWidth: 1700, margin: '0 auto' }}>
+            {/* Hidden Receipt for PDF Generation */}
+            <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '700px' }}>
+                <FeeReceiptTemplate 
+                    ref={receiptRef} 
+                    receiptData={selectedReceipt} 
                 />
             </div>
 
-            <style dangerouslySetInnerHTML={{ __html: `
-                .report-table .ant-table-thead > tr > th { 
-                    background: #f8fafc !important; 
-                    font-size: 11px; 
-                    color: #64748b; 
-                    text-transform: uppercase;
-                    letter-spacing: 0.05em;
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
+                <div>
+                    <h1 style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>Offline Fee Collection</h1>
+                    <p style={{ color: '#94a3b8', margin: '6px 0 0', fontSize: 14 }}>Collect student term fees offline (Cash / Cheque) with sequential receipt printing</p>
+                </div>
+                <Space size={12}>
+                    <Button icon={<SyncOutlined />} onClick={fetchData} loading={loading} shape="round" type="primary" style={{ fontWeight: 700, background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none' }}>
+                        Refresh Data
+                    </Button>
+                </Space>
+            </div>
+
+            {/* Filters Panel */}
+            <Card
+                style={{ borderRadius: 16, border: '1px solid #e2e8f0', marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+                styles={{ body: { padding: showFilters ? 24 : 16 } }}
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <FilterOutlined style={{ color: '#10b981' }} />
+                        <span style={{ fontWeight: 700, fontSize: 15, color: '#334155' }}>Filters</span>
+                        {activeFilterCount > 0 && <Tag color="green" style={{ borderRadius: 20, fontWeight: 700, fontSize: 11 }}>{activeFilterCount} active</Tag>}
+                    </div>
                 }
-                .report-table .ant-table-row { font-size: 13px; }
+                extra={
+                    <Space>
+                        {activeFilterCount > 0 && <Button size="small" icon={<ClearOutlined />} onClick={clearAllFilters} type="link" danger style={{ fontWeight: 600 }}>Clear All</Button>}
+                        <Button size="small" type="text" icon={showFilters ? <EyeInvisibleOutlined /> : <EyeOutlined />} onClick={() => setShowFilters(v => !v)} />
+                    </Space>
+                }
+            >
+                {showFilters && (
+                    <Row gutter={[16, 16]}>
+                        <Col xs={24} sm={12} lg={5}>
+                            <label style={labelStyle}>Student</label>
+                            <Select
+                                showSearch
+                                allowClear
+                                style={{ width: '100%' }}
+                                placeholder="Search student..."
+                                value={filters.student_search || undefined}
+                                onChange={v => setFilters(p => ({ ...p, student_search: v || '' }))}
+                                filterOption={(input, option) =>
+                                    (option?.children?.toString() || '').toLowerCase().includes(input.toLowerCase()) ||
+                                    (option?.value || '').toLowerCase().includes(input.toLowerCase())
+                                }
+                            >
+                                {dataStudents.map(([id, name]) => (
+                                    <Option key={id} value={name}>{name} ({id})</Option>
+                                ))}
+                            </Select>
+                        </Col>
+                        <Col xs={24} sm={12} lg={4}>
+                            <label style={labelStyle}>Program</label>
+                            <Select style={{ width: '100%' }} placeholder="All Programs" allowClear value={filters.program || undefined} onChange={v => setFilters(p => ({ ...p, program: v || '', student_search: '' }))}>
+                                {(dropdowns.programs.length > 0 ? dropdowns.programs : dataPrograms).map(p => <Option key={p} value={p}>{p}</Option>)}
+                            </Select>
+                        </Col>
+                        <Col xs={24} sm={12} lg={3}>
+                            <label style={labelStyle}>Term</label>
+                            <Select style={{ width: '100%' }} placeholder="All Terms" allowClear value={filters.term || undefined} onChange={v => setFilters(p => ({ ...p, term: v || '' }))}>
+                                {(dropdowns.terms.length > 0 ? dropdowns.terms : dataTerms).map(t => <Option key={t} value={t}>{t}</Option>)}
+                            </Select>
+                        </Col>
+                        <Col xs={24} sm={12} lg={3}>
+                            <label style={labelStyle}>Payment Status</label>
+                            <Select style={{ width: '100%' }} placeholder="All" allowClear value={filters.status || undefined} onChange={v => setFilters(p => ({ ...p, status: v || '' }))}>
+                                <Option value="PAID"><Tag color="success" style={{ margin: 0 }}>Paid</Tag></Option>
+                                <Option value="UNPAID"><Tag color="error" style={{ margin: 0 }}>Unpaid</Tag></Option>
+                            </Select>
+                        </Col>
+                        <Col xs={24} sm={12} lg={4}>
+                            <label style={labelStyle}>Fees Type</label>
+                            <Select style={{ width: '100%' }} placeholder="All Types" allowClear value={filters.payment_mode || undefined} onChange={v => setFilters(p => ({ ...p, payment_mode: v || '' }))}>
+                                <Option value="ONLINE"><Tag color="blue" style={{ margin: 0 }}>Online</Tag></Option>
+                                <Option value="OFFLINE"><Tag color="orange" style={{ margin: 0 }}>Offline (Cash)</Tag></Option>
+                            </Select>
+                        </Col>
+                        <Col xs={24} sm={12} lg={5}>
+                            <label style={labelStyle}>Paid Date Range</label>
+                            <RangePicker style={{ width: '100%' }} value={filters.date_range} onChange={v => setFilters(p => ({ ...p, date_range: v }))} format="DD-MM-YYYY" />
+                        </Col>
+                    </Row>
+                )}
+            </Card>
+
+            {/* Stats Overview */}
+            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                <Col xs={12} sm={8} lg={4}>
+                    <Card style={{ borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #f0f9ff, #e0f2fe)', boxShadow: '0 2px 8px rgba(59,130,246,0.08)' }} styles={{ body: { padding: '18px 20px' } }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Total Records</div>
+                        <div style={{ fontSize: 26, fontWeight: 800, color: '#1e40af' }}>{stats.totalRecords}</div>
+                    </Card>
+                </Col>
+                <Col xs={12} sm={8} lg={4}>
+                    <Card style={{ borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', boxShadow: '0 2px 8px rgba(22,163,74,0.08)' }} styles={{ body: { padding: '18px 20px' } }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Paid</div>
+                        <div style={{ fontSize: 26, fontWeight: 800, color: '#15803d' }}>{stats.paidCount}</div>
+                    </Card>
+                </Col>
+                <Col xs={12} sm={8} lg={4}>
+                    <Card style={{ borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #fef2f2, #fecaca)', boxShadow: '0 2px 8px rgba(220,38,38,0.08)' }} styles={{ body: { padding: '18px 20px' } }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Unpaid</div>
+                        <div style={{ fontSize: 26, fontWeight: 800, color: '#b91c1c' }}>{stats.unpaidCount}</div>
+                    </Card>
+                </Col>
+                <Col xs={24} sm={8} lg={4}>
+                    <Card style={{ borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }} styles={{ body: { padding: '18px 20px' } }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Total Projected</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: '#334155' }}>₹{stats.totalProjected.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                    </Card>
+                </Col>
+                <Col xs={24} sm={8} lg={4}>
+                    <Card style={{ borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #f0fdf4, #bbf7d0)', boxShadow: '0 2px 8px rgba(22,163,74,0.1)' }} styles={{ body: { padding: '18px 20px' } }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Collected</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: '#15803d' }}>₹{stats.totalCollected.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                    </Card>
+                </Col>
+                <Col xs={24} sm={8} lg={4}>
+                    <Card style={{ borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #fef2f2, #fca5a5)', boxShadow: '0 2px 8px rgba(220,38,38,0.1)' }} styles={{ body: { padding: '18px 20px' } }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Outstanding</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: '#b91c1c' }}>₹{stats.totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                    </Card>
+                </Col>
+            </Row>
+
+            {/* Table Panel */}
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 4px 24px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                <div style={{ padding: '16px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 700, color: '#334155', fontSize: 14 }}>
+                        Showing {filteredData.length} of {allData.length} records
+                    </span>
+                </div>
+                <Table 
+                    columns={columns} 
+                    dataSource={filteredData} 
+                    loading={loading}
+                    rowKey={(r) => r.key || `${r.student_id}_${r.academic_term}`}
+                    pagination={{ pageSize: 25, showSizeChanger: true, pageSizeOptions: ['10', '25', '50', '100'], showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}` }}
+                    className="fees-report-table"
+                    size="middle"
+                />
+            </div>
+
+            {/* Payment Checkout Modal */}
+            <Modal
+                title={null}
+                visible={paymentModalVisible}
+                onCancel={() => setPaymentModalVisible(false)}
+                footer={null}
+                width={700}
+                centered
+                bodyStyle={{ padding: 0, borderRadius: '24px', overflow: 'hidden' }}
+            >
+                <div style={{ background: 'linear-gradient(135deg, #10b981, #059669)', padding: '20px', color: 'white', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <CreditCardOutlined style={{ fontSize: '22px' }} />
+                    <h2 style={{ fontSize: '18px', fontWeight: 900, margin: 0, color: 'white', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Record Cash Payment</h2>
+                </div>
+
+                <div style={{ padding: '24px' }}>
+                    {selectedRow && (
+                        <>
+                            {/* Student Profile Info banner */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', background: '#f0fdf4', padding: '16px', borderRadius: '12px', border: '1px solid #dcfce7' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <Avatar size={48} icon={<UserOutlined />} style={{ background: '#10b981', color: 'white' }} />
+                                    <div>
+                                        <h4 style={{ fontSize: '16px', fontWeight: 900, color: '#1f2937', margin: 0 }}>{selectedRow.student_name}</h4>
+                                        <span style={{ fontSize: '11px', fontWeight: 800, color: '#059669', textTransform: 'uppercase' }}>{selectedRow.program}</span>
+                                    </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, display: 'block', textTransform: 'uppercase' }}>Student ID</span>
+                                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#374151' }}>{selectedRow.student_id}</span>
+                                </div>
+                            </div>
+
+                            {/* Detail Fields grid */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '24px' }}>
+                                <div>
+                                    <label style={modalLabelStyle}>Fee Structure</label>
+                                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>{selectedRow.fee_structure || 'Standard'}</span>
+                                </div>
+                                <div>
+                                    <label style={modalLabelStyle}>Term / Installment</label>
+                                    <Tag color="green" style={{ margin: 0, fontWeight: 'bold', border: 'none', background: '#dcfce7', color: '#15803d' }}>{selectedRow.academic_term}</Tag>
+                                </div>
+                                <div>
+                                    <label style={modalLabelStyle}>ERP Fees ID</label>
+                                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>{selectedRow.fee_id !== '-' ? selectedRow.fee_id : 'Pre-billed Structure'}</span>
+                                </div>
+                                <div>
+                                    <label style={modalLabelStyle}>Outstanding Balance</label>
+                                    <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#dc2626' }}>₹{selectedRow.outstanding.toLocaleString()}</span>
+                                </div>
+                            </div>
+
+                            {/* Form Input fields */}
+                            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+                                <Row gutter={16}>
+                                    <Col span={12}>
+                                        <label style={modalInputLabelStyle}>Payment Amount (₹) *</label>
+                                        <InputNumber 
+                                            style={{ width: '100%' }} 
+                                            value={paymentAmount} 
+                                            onChange={v => setPaymentAmount(v || 0)} 
+                                            min={1} 
+                                            max={selectedRow.outstanding}
+                                            precision={2}
+                                        />
+                                    </Col>
+                                    <Col span={12}>
+                                        <label style={modalInputLabelStyle}>Payment Mode *</label>
+                                        <Select style={{ width: '100%' }} value={paymentMode} onChange={setPaymentMode}>
+                                            <Option value="CASH">Cash</Option>
+                                            <Option value="CHEQUE">Cheque</Option>
+                                            <Option value="BANK_TRANSFER">Bank Transfer</Option>
+                                        </Select>
+                                    </Col>
+                                </Row>
+                                <Row style={{ marginTop: '16px' }}>
+                                    <Col span={24}>
+                                        <label style={modalInputLabelStyle}>Manual Receipt Ref / Notes (Optional)</label>
+                                        <Input 
+                                            placeholder="Enter cash memo or book receipt reference..."
+                                            value={manualReceiptRef}
+                                            onChange={e => setManualReceiptRef(e.target.value)}
+                                        />
+                                    </Col>
+                                </Row>
+                            </div>
+
+                            {/* Checkout Footer buttons */}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
+                                <Button onClick={() => setPaymentModalVisible(false)} size="large" style={{ borderRadius: '8px', fontWeight: 600 }}>
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    type="primary" 
+                                    size="large" 
+                                    loading={processingPayment} 
+                                    onClick={handleConfirmPayment}
+                                    style={{ background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', borderRadius: '8px', fontWeight: 700, paddingLeft: '28px', paddingRight: '28px' }}
+                                >
+                                    Confirm Collection
+                                </Button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </Modal>
+
+            <style dangerouslySetInnerHTML={{ __html: `
+                .fees-report-table .ant-table { table-layout: fixed !important; }
+                .fees-report-table .ant-table-thead > tr > th { 
+                    background: #f8fafc !important; font-size: 10px; color: #94a3b8;
+                    text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800;
+                    padding: 12px 12px !important; border-bottom: 2px solid #e2e8f0;
+                    white-space: nowrap;
+                }
+                .fees-report-table .ant-table-row { font-size: 13px; transition: all 0.15s; }
+                .fees-report-table .ant-table-cell { padding: 12px 12px !important; }
+                .fees-report-table .ant-table-row:hover .ant-table-cell { background: #f8fafc !important; }
+                .fees-report-table .ant-table-row:nth-child(even) .ant-table-cell { background: #fafbfc; }
+                .fees-report-table .ant-table-row:nth-child(even):hover .ant-table-cell { background: #f1f5f9 !important; }
+                .fees-report-table .ant-table-content { overflow: hidden !important; }
             `}} />
         </div>
     );
 };
+
+// Antd Avatar fallback styling wrapper since we didn't import Avatar directly
+const Avatar = ({ size, icon, style, ...props }) => (
+    <div style={{ 
+        width: size, 
+        height: size, 
+        borderRadius: '50%', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        fontSize: '20px',
+        ...style 
+    }} {...props}>
+        {icon}
+    </div>
+);
+
+const labelStyle = { display: 'block', fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 };
+const modalLabelStyle = { display: 'block', fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 };
+const modalInputLabelStyle = { display: 'block', fontSize: 10, fontWeight: 700, color: '#475569', marginBottom: 6 };
 
 export default StudentFeeCollection;

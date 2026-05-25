@@ -8,6 +8,7 @@ import { FiPlus, FiArrowLeft, FiSave, FiUser, FiUsers, FiBriefcase, FiLink, FiEd
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import schoolLogo from '../../assets/images/SSVLOGO.png';
+import { DEFAULT_USER_PASSWORD } from '../../config/settings';
 
 const getOptimizedAdmissionLogoUrl = async (src) => {
     return new Promise((resolve) => {
@@ -412,11 +413,20 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                     // Synchronize and auto-create the Guardian User account mapped with the correct role profiles and mobile number for seamless login
                     if (finalGuardianDisplayName) {
                         try {
+                            const cleanPhone = g.mobile_number ? String(g.mobile_number).replace(/[\s+-]/g, '') : '';
+                            const cleanGUsername = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
                             const gUserPayload = {
                                 mobile_no: g.mobile_number || null,
                                 role_profile_name: 'Guardian',
-                                module_profile: 'Guardian'
+                                module_profile: 'Guardian',
+                                new_password: DEFAULT_USER_PASSWORD,
+                                enabled: 1,
+                                roles: [{ role: 'Guardian' }]
                             };
+                            if (cleanGUsername) {
+                                gUserPayload.username = cleanGUsername;
+                            }
                             try {
                                 await API.put(`/api/resource/User/${encodeURIComponent(gEmail)}`, gUserPayload);
                                 console.log('[ERPNext Guardian User Sync] Successfully mapped Guardian profiles to existing User:', gEmail);
@@ -425,10 +435,14 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                                     await API.post('/api/resource/User', {
                                         email: gEmail,
                                         first_name: finalGuardianDisplayName,
-                                        send_welcome_email: 1,
+                                        send_welcome_email: 0,
                                         ...gUserPayload
                                     });
                                     console.log('[ERPNext Guardian User Sync] Explicitly auto-created User record for Guardian:', gEmail);
+                                    // Explicit PUT to guarantee password is saved on creation
+                                    await API.put(`/api/resource/User/${encodeURIComponent(gEmail)}`, {
+                                        new_password: DEFAULT_USER_PASSWORD
+                                    }).catch(err => console.warn('[ERPNext Guardian Admission Password Sync] Explicit PUT failed:', err.message));
                                 } else {
                                     console.warn('[ERPNext Guardian User Sync] Non-404 status response:', guErr.message);
                                 }
@@ -501,11 +515,21 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
 
                         // Instantly map Student profile settings to the corresponding ERPNext User account
                         try {
+                            const sMobile = formData.mobile || selectedRegistration?.student_mobile_number || null;
+                            const cleanPhone = sMobile ? String(sMobile).replace(/[\s+-]/g, '') : '';
+                            const cleanStudentUsername = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
                             const userPayload = {
-                                mobile_no: formData.mobile || selectedRegistration?.student_mobile_number || null,
+                                mobile_no: sMobile,
                                 role_profile_name: 'Student',
-                                module_profile: 'Student'
+                                module_profile: 'Student',
+                                new_password: DEFAULT_USER_PASSWORD,
+                                enabled: 1,
+                                roles: [{ role: 'Student' }]
                             };
+                            if (cleanStudentUsername) {
+                                userPayload.username = cleanStudentUsername;
+                            }
                             try {
                                 // Try updating the User account if Frappe's backend trigger auto-created it
                                 await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, userPayload);
@@ -517,10 +541,14 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                                         email: safeEmail,
                                         first_name: formData.first_name || selectedRegistration?.first_name || 'Student',
                                         last_name: formData.last_name || selectedRegistration?.last_name || null,
-                                        send_welcome_email: 1,
+                                        send_welcome_email: 0,
                                         ...userPayload
                                     });
                                     console.log('[ERPNext User Sync] Explicitly created new User record mapped with Student permissions.');
+                                    // Explicit PUT to guarantee password is saved on creation
+                                    await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, {
+                                        new_password: DEFAULT_USER_PASSWORD
+                                    }).catch(err => console.warn('[ERPNext Student Admission Password Sync] Explicit PUT failed:', err.message));
                                 } else {
                                     console.warn('[ERPNext User Sync] Non-404 update response:', uErr.message);
                                 }

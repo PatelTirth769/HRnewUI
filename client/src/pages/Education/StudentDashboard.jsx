@@ -644,7 +644,7 @@ const StudentDashboard = () => {
       receiptNo: record.payment_id || record.order_id,
       amount: record.amount,
       feeName: record.fees_category,
-      paymentMode: 'ONLINE PAYMENT',
+      paymentMode: record.payment_mode ? `${record.payment_mode} PAYMENT` : 'ONLINE PAYMENT',
       transactionNo: record.payment_id || 'N/A'
     };
 

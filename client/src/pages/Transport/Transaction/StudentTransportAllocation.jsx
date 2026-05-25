@@ -119,7 +119,7 @@ export default function StudentTransportAllocation() {
         setSearching(true);
         try {
             // Fetch students from ERPNext API as per project pattern
-            const res = await API.get(`/api/resource/Student?filters=[["student_name","like","%${studentSearch}%"]]&fields=["name","student_name","first_name","middle_name","last_name","admission_no"]&limit_page_length=20`);
+            const res = await API.get(`/api/resource/Student?filters=[["student_name","like","%${studentSearch}%"]]&fields=["name","student_name","first_name","middle_name","last_name"]&limit_page_length=20`);
             const students = res.data.data || [];
             
             if (students.length === 0) {
@@ -156,7 +156,7 @@ export default function StudentTransportAllocation() {
             const allocationData = {
                 student_id: selectedStudent.name,
                 student_name: selectedStudent.student_name,
-                admission_no: selectedStudent.admission_no || '',
+                admission_no: selectedStudent.admission_no || selectedStudent.name || '',
                 ...formData,
                 route_name: routes.find(r => r.id === formData.route_id)?.display_name || '',
                 stop_name: stops.find(s => s.id === formData.stop_id)?.bus_stop || '',
@@ -218,7 +218,7 @@ export default function StudentTransportAllocation() {
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900 tracking-tight">{selectedStudent.student_name}</h2>
                                 <p className="text-sm text-gray-500 font-bold uppercase tracking-widest mt-0.5 flex items-center gap-2">
-                                    <span className="text-blue-600">#{selectedStudent.admission_no || 'N/A'}</span>
+                                    <span className="text-blue-600">#{selectedStudent.admission_no || selectedStudent.name || 'N/A'}</span>
                                     <span className="w-1 h-1 rounded-full bg-gray-300"></span>
                                     <span>{selectedStudent.name}</span>
                                 </p>

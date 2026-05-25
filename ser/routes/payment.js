@@ -365,5 +365,158 @@ router.get('/history-all', async (req, res) => {
     }
 });
 
+/**
+ * Generate sequential offline receipt number: FEE-RCPT-YYYYMM-XXX
+ */
+async function generateOfflineReceiptNo(systemCode) {
+    const now = new Date();
+    const prefix = `FEE-RCPT-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    const receiptsCol = getCollection(db, systemCode || 'schooler', 'fee_receipts');
+    const snapshot = await receiptsCol
+        .where('receipt_no', '>=', prefix)
+        .where('receipt_no', '<=', prefix + '\uf8ff')
+        .get();
+
+    const seq = snapshot.size + 1;
+    return `${prefix}-${String(seq).padStart(3, '0')}`;
+}
+
+/**
+ * POST /record-offline-payment
+ * For Cash/offline payments collected by admin
+ * Payload: { student_id, student_name, fee_structure, fees_category, amount, payment_mode, manual_receipt_no, fee_id, systemCode }
+ */
+router.post('/record-offline-payment', async (req, res) => {
+    try {
+        const {
+            student_id,
+            student_name,
+            fee_structure,
+            fees_category,
+            amount,
+            payment_mode,
+            manual_receipt_no,
+            fee_id,
+            systemCode
+        } = req.body;
+
+        if (!student_id || !amount || !fees_category || !systemCode) {
+            return res.status(400).json({ success: false, message: 'Missing required fields: student_id, amount, fees_category, and systemCode are required.' });
+        }
+
+        const resolvedPaymentMode = (payment_mode || 'CASH').toUpperCase();
+        const receiptNo = await generateOfflineReceiptNo(systemCode);
+        const docId = `manual_off_${Date.now()}`;
+        const numAmount = parseFloat(amount) || 0;
+
+        console.log(`[Offline Payment] Recording: Student=${student_id}, Category=${fees_category}, Amount=₹${numAmount}, Mode=${resolvedPaymentMode}`);
+
+        // Try to sync with ERPNext
+        const targetBase = await getSystemUrl(systemCode);
+        const erpApiKey = process.env.ERP_ADMIN_API_KEY;
+        const erpApiSecret = process.env.ERP_ADMIN_API_SECRET;
+        
+        let targetFeeId = fee_id && fee_id !== '-' && fee_id !== 'manual' ? fee_id : null;
+        let erpSyncStatus = 'manual_required';
+        let erpPaymentEntryId = 'N/A';
+        let erpError = '';
+
+        if (targetBase && erpApiKey && erpApiSecret) {
+            try {
+                // If fee_id was not explicitly passed, let's search outstanding ERPNext Fees
+                if (!targetFeeId) {
+                    const feeFilter = JSON.stringify([
+                        ["student", "=", student_id],
+                        ["outstanding_amount", ">", 0],
+                        ["docstatus", "=", 1]
+                    ]);
+                    const feeRes = await axios.get(`${targetBase}/api/resource/Fees?filters=${feeFilter}`, {
+                        headers: { 'Authorization': `token ${erpApiKey}:${erpApiSecret}` }
+                    });
+                    
+                    if (feeRes.data.data && feeRes.data.data.length > 0) {
+                        targetFeeId = feeRes.data.data[0].name;
+                    }
+                }
+
+                if (targetFeeId) {
+                    // Create Payment Entry in ERPNext
+                    const paymentEntryPayload = {
+                        payment_type: "Receive",
+                        party_type: "Student",
+                        party: student_id,
+                        paid_amount: numAmount,
+                        received_amount: numAmount,
+                        target_exchange_rate: 1,
+                        mode_of_payment: resolvedPaymentMode === 'CASH' ? 'Cash' : (resolvedPaymentMode === 'CHEQUE' ? 'Cheque' : 'Cash'),
+                        references: [{
+                            reference_doctype: "Fees",
+                            reference_name: targetFeeId,
+                            allocated_amount: numAmount
+                        }]
+                    };
+
+                    const peRes = await axios.post(`${targetBase}/api/resource/Payment Entry`, paymentEntryPayload, {
+                        headers: { 'Authorization': `token ${erpApiKey}:${erpApiSecret}` }
+                    });
+
+                    erpPaymentEntryId = peRes?.data?.data?.name || 'manual';
+                    erpSyncStatus = 'success';
+                }
+            } catch (err) {
+                console.error('[Offline Payment] ERP Sync Error:', err.response?.data || err.message);
+                erpSyncStatus = 'failed';
+                erpError = err.response?.data?._server_messages || err.message;
+            }
+        }
+
+        const receiptRecord = {
+            status: 'verified',
+            payment_id: docId,
+            order_id: docId,
+            student_id: student_id,
+            student_name: student_name || '',
+            guardian_email: req.body.guardian_email || '',
+            fees_category: fees_category || '',
+            fee_structure: fee_structure || '',
+            amount: numAmount,
+            payment_mode: resolvedPaymentMode,
+            receipt_no: receiptNo,
+            manual_receipt_ref: manual_receipt_no || '',
+            receipt_date: new Date().toISOString(),
+            erp_payment_entry_id: erpPaymentEntryId,
+            erp_fees_id: targetFeeId || 'N/A',
+            erp_sync: erpSyncStatus,
+            erp_error: erpError,
+            verified_at: new Date().toISOString(),
+            school_name: 'SSV CAMPUS - CBSE',
+            created_at: new Date().toISOString(),
+        };
+
+        // Write to fee_payments
+        const col = feePaymentsCol(systemCode);
+        await col.doc(docId).set(receiptRecord);
+
+        // Write to fee_receipts
+        const receiptsCol = getCollection(db, systemCode || 'schooler', 'fee_receipts');
+        await receiptsCol.doc(docId).set(receiptRecord);
+
+        console.log(`✅ [Offline Payment] Recorded: ${receiptNo} for student ${student_id}. ERP sync: ${erpSyncStatus}`);
+        res.json({
+            success: true,
+            message: 'Offline payment recorded successfully',
+            receipt_no: receiptNo,
+            payment_id: docId,
+            erp_sync: erpSyncStatus,
+            erp_error: erpError
+        });
+
+    } catch (err) {
+        console.error('[Offline Payment] Record Error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 module.exports = router;
 

@@ -4,6 +4,7 @@ import API from '../../services/api';
 import * as XLSX from 'xlsx';
 import { db } from '../../config/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { DEFAULT_USER_PASSWORD } from '../../config/settings';
 
 const TABS = ['Details', 'Address', 'Relations', 'Customer Details', 'Exit'];
 const BLOOD_GROUPS = ['', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
@@ -42,6 +43,8 @@ const emptyForm = () => ({
     date_of_leaving: '',
     reason_for_leaving: '',
     leaving_certificate_number: '',
+    password: DEFAULT_USER_PASSWORD,
+    confirm_password: DEFAULT_USER_PASSWORD,
 });
 
 const Student = () => {
@@ -189,6 +192,8 @@ const Student = () => {
                 date_of_leaving: d.date_of_leaving || '',
                 reason_for_leaving: d.reason_for_leaving || '',
                 leaving_certificate_number: d.leaving_certificate_number || '',
+                password: '',
+                confirm_password: '',
             });
         } catch (err) {
             console.error('Error fetching student:', err);
@@ -203,6 +208,11 @@ const Student = () => {
     const handleSave = async () => {
         if (!form.first_name) {
             api.warning({ message: 'First Name is required.' });
+            return;
+        }
+
+        if (form.password && form.password !== form.confirm_password) {
+            api.warning({ message: 'Passwords do not match.' });
             return;
         }
 
@@ -305,11 +315,22 @@ const Student = () => {
                 // Sync Guardian User account
                 if (finalGuardianDisplayName) {
                     try {
+                        const cleanPhone = g.mobile_number ? String(g.mobile_number).replace(/[\s+-]/g, '') : '';
+                        const cleanGUsername = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
                         const gUserPayload = {
                             mobile_no: g.mobile_number ? String(g.mobile_number).trim() : null,
                             role_profile_name: 'Guardian',
-                            module_profile: 'Guardian'
+                            module_profile: 'Guardian',
+                            enabled: 1,
+                            roles: [{ role: 'Guardian' }]
                         };
+                        if (cleanGUsername) {
+                            gUserPayload.username = cleanGUsername;
+                        }
+                        if (form.password) {
+                            gUserPayload.new_password = form.password;
+                        }
                         try {
                             await API.put(`/api/resource/User/${encodeURIComponent(gEmail)}`, gUserPayload);
                             console.log('[ERPNext Guardian User Sync] Successfully mapped Guardian profiles to existing User:', gEmail);
@@ -318,10 +339,16 @@ const Student = () => {
                                 await API.post('/api/resource/User', {
                                     email: gEmail,
                                     first_name: finalGuardianDisplayName,
-                                    send_welcome_email: 1,
+                                    send_welcome_email: 0,
                                     ...gUserPayload
                                 });
                                 console.log('[ERPNext Guardian User Sync] Explicitly auto-created User record for Guardian:', gEmail);
+                                // Explicit PUT to guarantee password is saved on creation
+                                if (form.password) {
+                                    await API.put(`/api/resource/User/${encodeURIComponent(gEmail)}`, {
+                                        new_password: form.password
+                                    }).catch(err => console.warn('[ERPNext Guardian Password Sync] Explicit PUT failed:', err.message));
+                                }
                             } else {
                                 console.warn('[ERPNext Guardian User Sync] Non-404 status response:', guErr.message);
                             }
@@ -428,11 +455,22 @@ const Student = () => {
             // Sync/Create Student User account
             if (erpNextStudentName) {
                 try {
+                    const cleanPhone = form.student_mobile_number ? String(form.student_mobile_number).replace(/[\s+-]/g, '') : '';
+                    const cleanStudentUsername = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
                     const userPayload = {
                         mobile_no: form.student_mobile_number ? String(form.student_mobile_number).trim() : null,
                         role_profile_name: 'Student',
-                        module_profile: 'Student'
+                        module_profile: 'Student',
+                        enabled: 1,
+                        roles: [{ role: 'Student' }]
                     };
+                    if (cleanStudentUsername) {
+                        userPayload.username = cleanStudentUsername;
+                    }
+                    if (form.password) {
+                        userPayload.new_password = form.password;
+                    }
                     try {
                         await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, userPayload);
                         console.log('[ERPNext User Sync] Automatically applied mobile number, role profile, and module profile to User record.');
@@ -442,10 +480,16 @@ const Student = () => {
                                 email: safeEmail,
                                 first_name: form.first_name || 'Student',
                                 last_name: form.last_name || null,
-                                send_welcome_email: 1,
+                                send_welcome_email: 0,
                                 ...userPayload
                             });
                             console.log('[ERPNext User Sync] Explicitly created new User record mapped with Student permissions.');
+                            // Explicit PUT to guarantee password is saved on creation
+                            if (form.password) {
+                                await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, {
+                                    new_password: form.password
+                                }).catch(err => console.warn('[ERPNext Student Password Sync] Explicit PUT failed:', err.message));
+                            }
                         } else {
                             console.warn('[ERPNext User Sync] Non-404 update response:', uErr.message);
                         }
@@ -1142,11 +1186,20 @@ const Student = () => {
 
                         // Sync Guardian User account
                         if (finalGuardianDisplayName) {
+                            const cleanPhone = guardianMobile ? String(guardianMobile).replace(/[\s+-]/g, '') : '';
+                            const cleanGUsername = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
                             const gUserPayload = {
                                 mobile_no: guardianMobile || null,
                                 role_profile_name: 'Guardian',
-                                module_profile: 'Guardian'
+                                module_profile: 'Guardian',
+                                new_password: DEFAULT_USER_PASSWORD,
+                                enabled: 1,
+                                roles: [{ role: 'Guardian' }]
                             };
+                            if (cleanGUsername) {
+                                gUserPayload.username = cleanGUsername;
+                            }
                             try {
                                 await API.put(`/api/resource/User/${encodeURIComponent(gEmail)}`, gUserPayload);
                                 console.log('[ERPNext Guardian User Sync] Successfully mapped Guardian profiles to existing User:', gEmail);
@@ -1155,10 +1208,16 @@ const Student = () => {
                                     await API.post('/api/resource/User', {
                                         email: gEmail,
                                         first_name: finalGuardianDisplayName,
-                                        send_welcome_email: 1,
+                                        send_welcome_email: 0,
                                         ...gUserPayload
                                     });
                                     console.log('[ERPNext Guardian User Sync] Explicitly auto-created User record for Guardian:', gEmail);
+                                    // Explicit PUT to guarantee password is saved on creation
+                                    if (DEFAULT_USER_PASSWORD) {
+                                        await API.put(`/api/resource/User/${encodeURIComponent(gEmail)}`, {
+                                            new_password: DEFAULT_USER_PASSWORD
+                                        }).catch(err => console.warn('[ERPNext Guardian Password Sync] Explicit PUT failed:', err.message));
+                                    }
                                 } else {
                                     throw guErr;
                                 }
@@ -1278,8 +1337,14 @@ const Student = () => {
                         const userPayload = {
                             mobile_no: mobile || null,
                             role_profile_name: 'Student',
-                            module_profile: 'Student'
+                            module_profile: 'Student',
+                            new_password: DEFAULT_USER_PASSWORD,
+                            enabled: 1,
+                            roles: [{ role: 'Student' }]
                         };
+                        if (cleanStudentUsername) {
+                            userPayload.username = cleanStudentUsername;
+                        }
                         try {
                             await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, userPayload);
                             console.log('[ERPNext User Sync] Automatically applied mobile number, role profile, and module profile to User record.');
@@ -1289,10 +1354,16 @@ const Student = () => {
                                     email: safeEmail,
                                     first_name: firstName || 'Student',
                                     last_name: lastName || null,
-                                    send_welcome_email: 1,
+                                    send_welcome_email: 0,
                                     ...userPayload
                                 });
                                 console.log('[ERPNext User Sync] Explicitly created new User record mapped with Student permissions.');
+                                // Explicit PUT to guarantee password is saved on creation
+                                if (DEFAULT_USER_PASSWORD) {
+                                    await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, {
+                                        new_password: DEFAULT_USER_PASSWORD
+                                    }).catch(err => console.warn('[ERPNext Student Password Sync] Explicit PUT failed:', err.message));
+                                }
                             } else {
                                 throw uErr;
                             }
@@ -2124,6 +2195,14 @@ const Student = () => {
                             <div>
                                 <label className={labelStyle}>Last Name</label>
                                 <input className={inputStyle} value={form.last_name || ''} onChange={e => updateField('last_name', e.target.value)} placeholder="Last Name" />
+                            </div>
+                            <div>
+                                <label className={labelStyle}>Password</label>
+                                <input type="password" className={inputStyle} value={form.password || ''} onChange={e => updateField('password', e.target.value)} placeholder="Password" />
+                            </div>
+                            <div>
+                                <label className={labelStyle}>Confirm Password</label>
+                                <input type="password" className={inputStyle} value={form.confirm_password || ''} onChange={e => updateField('confirm_password', e.target.value)} placeholder="Confirm Password" />
                             </div>
                         </div>
 

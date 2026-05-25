@@ -387,6 +387,12 @@ import WebsiteItem from './pages/Website/WebsiteItem';
 // Buying Module
 import PurchaseOrder from './pages/Buying/PurchaseOrder';
 
+import CertificatesDashboard from './pages/Certificates/CertificatesDashboard';
+import BonafideCertificate from './pages/Certificates/BonafideCertificate';
+import TrialCertificate from './pages/Certificates/TrialCertificate';
+import TransferCertificate from './pages/Certificates/TransferCertificate';
+import CertificateRecords from './pages/Certificates/CertificateRecords';
+
 const RootRedirect = () => {
   const { isAdmin, isStudent, isInstructor, isGuardian } = useUserRole();
   if (isAdmin) return <Navigate to="/home" replace />;
@@ -439,6 +445,8 @@ function App() {
         navigate('/homework/assignments');
     } else if (moduleKey === 'importLogs') {
         navigate('/import-logs/students');
+    } else if (moduleKey === 'certificates') {
+        navigate('/certificates/dashboard');
     }
   };
 
@@ -888,6 +896,13 @@ function App() {
                 <Route path="/enquiry/setup/class-restriction" element={<ClassRestrictionSetup />} />
                 {/* Import Logs Routes */}
                 <Route path="/import-logs/students" element={<ImportLogs />} />
+
+                {/* Certificates Routes */}
+                <Route path="/certificates/dashboard" element={<CertificatesDashboard />} />
+                <Route path="/certificates/bonafide" element={<BonafideCertificate />} />
+                <Route path="/certificates/trial" element={<TrialCertificate />} />
+                <Route path="/certificates/transfer" element={<TransferCertificate />} />
+                <Route path="/certificates/records" element={<CertificateRecords />} />
 
               </Route> {/* End of Protected Routes */}
 
