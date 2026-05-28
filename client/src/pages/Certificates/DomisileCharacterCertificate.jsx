@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import API from '../../services/api';
 import { 
-    Card, Col, Row, Button, Select, Input, DatePicker, notification, Spin, Space, Divider, Typography, Form, Modal, AutoComplete
+    Card, Col, Row, Button, Select, Input, DatePicker, notification, Spin, Divider, Typography, Form, Modal, AutoComplete
 } from 'antd';
 import { 
     PrinterOutlined, DownloadOutlined, ArrowLeftOutlined, SearchOutlined, SaveOutlined, EyeOutlined 
@@ -16,7 +16,62 @@ import schoolHeader from '../../assets/images/school_header.jpg';
 const { Title, Text } = Typography;
 const RECORDS_PATH = 'schooler_system/certificates/records';
 
-export default function BonafideCertificate() {
+// Helper utilities for number to words conversion
+const convertNumberToWords = (num) => {
+    const ones = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN'];
+    const tens = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
+    
+    const helper = (n) => {
+        if (n < 20) return ones[n];
+        if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
+        if (n < 1000) return ones[Math.floor(n / 100)] + ' HUNDRED' + (n % 100 !== 0 ? ' ' + helper(n % 100) : '');
+        if (n < 1000000) return helper(Math.floor(n / 1000)) + ' THOUSAND' + (n % 1000 !== 0 ? ' ' + helper(n % 1000) : '');
+        return '';
+    };
+    return helper(num);
+};
+
+const parseDateString = (str) => {
+    if (!str) return null;
+    const parts = str.split('/');
+    if (parts.length === 3) {
+        const d = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1; 
+        const y = parseInt(parts[2], 10);
+        const parsed = dayjs(new Date(y, m, d));
+        if (parsed.isValid()) return parsed;
+    }
+    return dayjs(str);
+};
+
+const convertDateToWords = (dateString) => {
+    if (!dateString) return '';
+    const parsed = parseDateString(dateString);
+    if (!parsed || !parsed.isValid()) return '';
+    
+    const dayWords = [
+        '', 'FIRST', 'SECOND', 'THIRD', 'FOURTH', 'FIFTH', 'SIXTH', 'SEVENTH', 'EIGHTH', 'NINTH', 'TENTH',
+        'ELEVENTH', 'TWELFTH', 'THIRTEENTH', 'FOURTEENTH', 'FIFTEENTH', 'SIXTEENTH', 'SEVENTEENTH', 'EIGHTEENTH', 'NINETEENTH', 'TWENTIETH',
+        'TWENTY FIRST', 'TWENTY SECOND', 'TWENTY THIRD', 'TWENTY FOURTH', 'TWENTY FIFTH', 'TWENTY SIXTH', 'TWENTY SEVENTH', 'TWENTY EIGHTH', 'TWENTY NINTH', 'THIRTIETH',
+        'THIRTY FIRST'
+    ];
+    
+    const day = parsed.date();
+    const month = parsed.format('MMMM').toUpperCase();
+    const year = parsed.year();
+    
+    const dayText = dayWords[day] || '';
+    const yearText = convertNumberToWords(year);
+    
+    // Capitalize only first letters for nice look like in image: Sixteenth July Two Thousand Seven
+    const titleCase = (str) => {
+        return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    };
+    
+    return titleCase(`${dayText} ${month} ${yearText}`);
+};
+
+export default function DomisileCharacterCertificate() {
     const navigate = useNavigate();
     const [form] = Form.useForm();
     const certificateRef = useRef(null);
@@ -27,7 +82,6 @@ export default function BonafideCertificate() {
     const [certificateNo, setCertificateNo] = useState('');
     const [previewModalVisible, setPreviewModalVisible] = useState(false);
     
-    // Masters and Group States
     const [loadingMasters, setLoadingMasters] = useState(false);
     const [programs, setPrograms] = useState([]);
     const [allStudentGroups, setAllStudentGroups] = useState([]);
@@ -39,7 +93,7 @@ export default function BonafideCertificate() {
     const [studentsInProgram, setStudentsInProgram] = useState([]);
     const [loadingProgramStudents, setLoadingProgramStudents] = useState(false);
 
-    // Certificate preview live state
+    // Dynamic preview state
     const [previewData, setPreviewData] = useState({
         certificateNo: '',
         date: dayjs().format('DD/MM/YYYY'),
@@ -47,16 +101,16 @@ export default function BonafideCertificate() {
         grNo: '',
         rollNo: '',
         std: '',
-        caste: '',
-        subCaste: ' - ',
         gender: '',
-        academicYear: `${dayjs().year()}-${dayjs().year() + 1}`,
+        dateOfBirth: '',
+        dobWords: '',
+        academicYear: `${dayjs().year()}-${String(dayjs().year() + 1).slice(-2)}`,
         principalName: 'Neeraj Kaushesh',
-        prefix: 'Master',
+        prefix: 'Student',
         heShe: 'He',
         hisHer: 'His',
         himHer: 'him',
-        relation: 'son of'
+        relation: 'child of'
     });
 
     useEffect(() => {
@@ -85,7 +139,7 @@ export default function BonafideCertificate() {
         const getNextCertNo = async () => {
             try {
                 const recordsRef = collection(db, RECORDS_PATH);
-                const q = query(recordsRef, orderBy('created_at', 'desc'), limit(1));
+                const q = query(recordsRef, where('type', '==', 'Domisile & Character'), orderBy('created_at', 'desc'), limit(1));
                 const snapshot = await getDocs(q);
                 if (!snapshot.empty) {
                     const lastDoc = snapshot.docs[0].data();
@@ -141,8 +195,15 @@ export default function BonafideCertificate() {
         setSelectedProgram(value);
         if (value) {
             setFilteredGroups(allStudentGroups.filter(g => g.program === value));
-            form.setFieldsValue({ std: value });
-            setPreviewData(prev => ({ ...prev, std: value }));
+            // Class formatting logic (extract roman numeral or standard name, e.g. class XII)
+            let formattedClass = value;
+            if (value.toLowerCase().includes('class')) {
+                formattedClass = value.replace(/class/i, '').trim();
+            } else if (value.toLowerCase().includes('std')) {
+                formattedClass = value.replace(/std\.?/i, '').trim();
+            }
+            form.setFieldsValue({ std: formattedClass });
+            setPreviewData(prev => ({ ...prev, std: formattedClass }));
             fetchStudentsForProgram(value);
         } else {
             setFilteredGroups(allStudentGroups);
@@ -158,7 +219,6 @@ export default function BonafideCertificate() {
     // Load group members and their full profiles when a student group is selected
     const handleGroupChange = async (value) => {
         setSelectedGroup(value);
-        // Clear dependent fields
         form.setFieldsValue({ studentSearch: undefined, studentName: '', grNo: '', rollNo: '' });
         setStudentsInGroup([]);
         setStudents([]);
@@ -211,7 +271,7 @@ export default function BonafideCertificate() {
         }
     };
 
-    // Handle student search on ERPNext API or filter locally within selected group/program
+    // Handle student search
     const handleStudentSearch = async (value) => {
         if (selectedGroup) {
             const baseList = selectedProgram 
@@ -271,13 +331,19 @@ export default function BonafideCertificate() {
         const grNo = student.gr_number || '';
         const rollNo = student.roll_number || '';
         
-        // Extract a clean class/standard name if possible
-        const std = student.program || '';
+        let std = student.program || '';
+        if (std.toLowerCase().includes('class')) {
+            std = std.replace(/class/i, '').trim();
+        } else if (std.toLowerCase().includes('std')) {
+            std = std.replace(/std\.?/i, '').trim();
+        }
 
         // Format Date of Birth
         let dob = '';
+        let dobWords = '';
         if (student.date_of_birth) {
             dob = dayjs(student.date_of_birth).format('DD/MM/YYYY');
+            dobWords = convertDateToWords(dob);
         }
 
         // Determine default pronouns based on ERPNext gender field
@@ -288,13 +354,13 @@ export default function BonafideCertificate() {
         let relation = 'child of';
 
         if (student.gender?.toLowerCase() === 'male') {
-            prefix = 'Master';
+            prefix = 'Student'; // Keep empty/standard by default for Domisile layout
             heShe = 'He';
             hisHer = 'His';
             himHer = 'him';
             relation = 'son of';
         } else if (student.gender?.toLowerCase() === 'female') {
-            prefix = 'Miss';
+            prefix = 'Student';
             heShe = 'She';
             hisHer = 'Her';
             himHer = 'her';
@@ -309,6 +375,7 @@ export default function BonafideCertificate() {
             std,
             gender: student.gender || '',
             dateOfBirth: dob,
+            dobWords,
             prefix,
             heShe,
             hisHer,
@@ -326,7 +393,8 @@ export default function BonafideCertificate() {
             rollNo,
             std,
             gender: student.gender || '',
-            dob
+            dob,
+            dobWords
         }));
     };
 
@@ -340,12 +408,9 @@ export default function BonafideCertificate() {
                 next.date = dayjs(allValues.date).format('DD/MM/YYYY');
             }
             if (allValues.dateOfBirth) {
-                // If it is a dayjs object
-                if (dayjs.isDayjs(allValues.dateOfBirth)) {
-                    next.dob = allValues.dateOfBirth.format('DD/MM/YYYY');
-                } else {
-                    next.dob = allValues.dateOfBirth;
-                }
+                next.dob = allValues.dateOfBirth;
+                next.dobWords = convertDateToWords(allValues.dateOfBirth);
+                form.setFieldsValue({ dobWords: next.dobWords });
             }
             return next;
         });
@@ -369,11 +434,11 @@ export default function BonafideCertificate() {
                 grNo: values.grNo || '',
                 rollNo: values.rollNo || '',
                 std: values.std || '',
-                caste: values.caste || '',
-                subCaste: values.subCaste || ' - ',
                 gender: values.gender || '',
+                dateOfBirth: values.dateOfBirth || '',
+                dateOfBirthWords: values.dobWords || '',
                 academicYear: values.academicYear || '',
-                type: 'Bonafide',
+                type: 'Domisile & Character',
                 principalName: values.principalName || 'Neeraj Kaushesh',
                 prefix: values.prefix || '',
                 heShe: values.heShe || '',
@@ -385,7 +450,7 @@ export default function BonafideCertificate() {
 
             notification.success({ 
                 message: 'Certificate Saved', 
-                description: `Bonafide Certificate No. ${values.certificateNo || certificateNo} has been logged in history.` 
+                description: `Domisile & Character Certificate No. ${values.certificateNo || certificateNo} has been logged in history.` 
             });
 
             // Increment local certificate counter for next issue
@@ -408,7 +473,7 @@ export default function BonafideCertificate() {
         }
     };
 
-    // Trigger landscape A4 browser print dialog
+    // Trigger portrait A4 browser print dialog
     const handlePrint = async () => {
         const values = form.getFieldsValue();
         if (!values.studentName) {
@@ -416,10 +481,8 @@ export default function BonafideCertificate() {
             return;
         }
 
-        // Save to Firebase first
         await saveCertificateRecord();
 
-        // Print using window.print()
         setTimeout(() => {
             window.print();
         }, 300);
@@ -433,13 +496,12 @@ export default function BonafideCertificate() {
             return;
         }
 
-        // Save to Firebase first
         await saveCertificateRecord();
 
         const element = document.getElementById('certificate-print-area');
         const opt = {
             margin: 0,
-            filename: `Bonafide_${values.studentName.replace(/\s+/g, '_')}_No_${values.certificateNo || certificateNo}.pdf`,
+            filename: `Domisile_Character_${values.studentName.replace(/\s+/g, '_')}_No_${values.certificateNo || certificateNo}.pdf`,
             image: { type: 'jpeg', quality: 1.0 },
             html2canvas: { 
                 scale: 3, 
@@ -450,7 +512,6 @@ export default function BonafideCertificate() {
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        // Execute download
         html2pdf().from(element).set(opt).save();
     };
 
@@ -474,25 +535,24 @@ export default function BonafideCertificate() {
                 >
                     Back to Overview
                 </Button>
-                <h3 className="text-xl font-extrabold text-gray-900 m-0">Issue Bonafide Certificate</h3>
+                <h3 className="text-xl font-extrabold text-gray-900 m-0">Issue Domisile & Character Certificate</h3>
             </div>
 
             <div className="max-w-3xl mx-auto no-print">
-                <Card title={<span className="font-bold text-gray-800">Certificate Parameters</span>} className="shadow-sm border-gray-100">
+                <Card title={<span className="font-bold text-gray-800">Certificate Parameters (Domisile & Character)</span>} className="shadow-sm border-gray-100">
                     <Form
                         form={form}
                         layout="vertical"
                         initialValues={{
                             certificateNo: certificateNo,
                             date: dayjs(),
-                            academicYear: `${dayjs().year()}-${dayjs().year() + 1}`,
+                            academicYear: `${dayjs().year()}-${String(dayjs().year() + 1).slice(-2)}`,
                             principalName: 'Neeraj Kaushesh',
-                            subCaste: ' - ',
-                            prefix: 'Master',
+                            prefix: 'Student',
                             heShe: 'He',
                             hisHer: 'His',
                             himHer: 'him',
-                            relation: 'son of',
+                            relation: 'child of',
                             program: '',
                             studentGroup: '',
                             rollNo: ''
@@ -593,7 +653,7 @@ export default function BonafideCertificate() {
                             </Col>
                             <Col span={8}>
                                 <Form.Item label="Std (Class)" name="std">
-                                    <Input placeholder="e.g. Std. 1" />
+                                    <Input placeholder="e.g. XII" />
                                 </Form.Item>
                             </Col>
                         </Row>
@@ -616,7 +676,7 @@ export default function BonafideCertificate() {
                         <Row gutter={12}>
                             <Col span={12}>
                                 <Form.Item label="Academic Year" name="academicYear">
-                                    <Input placeholder="e.g. 2026-2027" />
+                                    <Input placeholder="e.g. 2024-25" />
                                 </Form.Item>
                             </Col>
                             <Col span={12}>
@@ -626,18 +686,9 @@ export default function BonafideCertificate() {
                             </Col>
                         </Row>
 
-                        <Row gutter={12}>
-                            <Col span={12}>
-                                <Form.Item label="Caste" name="caste">
-                                    <Input placeholder="e.g. DIWAN" />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item label="Sub Caste" name="subCaste">
-                                    <Input placeholder="e.g. Sunni" />
-                                </Form.Item>
-                            </Col>
-                        </Row>
+                        <Form.Item label="Date of Birth in Words (Auto-generated)" name="dobWords">
+                            <Input placeholder="Sixteenth July Two Thousand Seven" />
+                        </Form.Item>
 
                         <Form.Item label="Principal Name" name="principalName">
                             <Input placeholder="e.g. Neeraj Kaushesh" />
@@ -649,9 +700,9 @@ export default function BonafideCertificate() {
                             <Col span={8}>
                                 <Form.Item label="Prefix" name="prefix">
                                     <Select>
+                                        <Select.Option value="Student">None (Student)</Select.Option>
                                         <Select.Option value="Master">Master</Select.Option>
                                         <Select.Option value="Miss">Miss</Select.Option>
-                                        <Select.Option value="Student">Student</Select.Option>
                                     </Select>
                                 </Form.Item>
                             </Col>
@@ -721,7 +772,7 @@ export default function BonafideCertificate() {
 
             {/* Preview Modal */}
             <Modal
-                title={<span className="font-extrabold text-gray-800">Certificate Preview</span>}
+                title={<span className="font-extrabold text-gray-800">Domisile & Character Certificate Preview</span>}
                 open={previewModalVisible}
                 onCancel={() => setPreviewModalVisible(false)}
                 footer={[
@@ -770,7 +821,6 @@ export default function BonafideCertificate() {
                             style={{
                                 width: '100%',
                                 height: '100%',
-                                border: '6px double #000000',
                                 padding: '16mm 14mm',
                                 boxSizing: 'border-box',
                                 position: 'relative',
@@ -778,50 +828,37 @@ export default function BonafideCertificate() {
                                 flexDirection: 'column'
                             }}
                         >
+                            {/* Page Corner Crop Brackets */}
+                            <div className="corner-bracket top-left"></div>
+                            <div className="corner-bracket top-right"></div>
+                            <div className="corner-bracket bottom-left"></div>
+                            <div className="corner-bracket bottom-right"></div>
+
                             {/* Header Section */}
-                            <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '10px', width: '100%' }}>
-                                <img src={schoolHeader} alt="School Header" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
-                            </div>
+                             <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '10px', width: '100%' }}>
+                                 <img src={schoolHeader} alt="School Header" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
+                             </div>
 
-                            {/* Divider Line */}
-                            <div style={{ borderTop: '1.5px solid #000000', marginTop: '5px', marginBottom: '15px', width: '100%' }} />
+                             {/* Divider Line */}
+                             <div style={{ borderTop: '1.5px solid #000000', marginTop: '5px', marginBottom: '15px', width: '100%' }} />
 
-                            {/* Title */}
-                            <div style={{ textAlign: 'center', marginTop: '10px', marginBottom: '20px' }}>
+                            {/* Title centered & underlined */}
+                            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                                 <span style={{ 
-                                    fontSize: '24px', 
+                                    fontSize: '26px', 
                                     fontWeight: 'bold', 
                                     textDecoration: 'underline', 
                                     color: '#000000',
-                                    fontFamily: '"Times New Roman", Times, serif'
+                                    fontFamily: '"Times New Roman", Times, serif',
+                                    letterSpacing: '1.2px'
                                 }}>
-                                    Bonafide Certificate
+                                    CERTIFICATE
                                 </span>
                             </div>
 
-                            {/* Metadata Details */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '20px', fontSize: '18px', color: '#000000', fontFamily: '"Times New Roman", Times, serif' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <div>
-                                        Certificate No. &nbsp; <strong>{previewData.certificateNo || '______'}</strong>
-                                    </div>
-                                    <div>
-                                        Date : &nbsp; <strong>{previewData.date}</strong>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <div>
-                                        Std. &nbsp; <strong>{previewData.std || '______'}</strong>
-                                        {previewData.rollNo && (
-                                            <>
-                                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Roll No. &nbsp; <strong>{previewData.rollNo}</strong>
-                                            </>
-                                        )}
-                                    </div>
-                                    <div>
-                                        Gr.No. &nbsp; <strong>{previewData.grNo || '______'}</strong>
-                                    </div>
-                                </div>
+                            {/* GR Number Left Aligned */}
+                            <div style={{ fontSize: '18px', color: '#000000', fontFamily: '"Times New Roman", Times, serif', marginBottom: '20px' }}>
+                                GR.No.<strong>{previewData.grNo || '______'}</strong>
                             </div>
 
                             {/* Paragraph Content */}
@@ -832,18 +869,33 @@ export default function BonafideCertificate() {
                                     lineHeight: '2.2',
                                     color: '#000000',
                                     fontFamily: '"Times New Roman", Times, serif',
-                                    marginTop: '30px'
+                                    marginTop: '20px'
                                 }}
                             >
-                                This is to certify that {previewData.prefix ? previewData.prefix + ' ' : ''}<strong style={{ textTransform: 'uppercase', fontSize: '20px' }}>{previewData.studentName || '________________________________'}</strong> is a Bonafide student of this School. {previewData.heShe} {previewData.heShe?.toLowerCase() === 'they' ? 'bear' : 'bears'} a good moral character.
-                                <br />
-                                {previewData.hisHer} Birth Date : <strong>{previewData.dob || 'DD/MM/YYYY'}</strong> &nbsp;&nbsp; {previewData.hisHer?.toLowerCase()} caste : <strong>{previewData.caste || '_________'}</strong> & Sub Caste : <strong>{previewData.subCaste?.trim() || '-'}</strong>.
+                                This is to certify that {previewData.prefix && previewData.prefix !== 'Student' ? previewData.prefix + ' ' : ''}
+                                <strong style={{ textTransform: 'uppercase', fontSize: '20px' }}>
+                                    {previewData.studentName || '________________________________'}
+                                </strong> is a bonafide student of Shree Saraswati Vidhyalay – SSV CAMPUS and {previewData.heShe?.toLowerCase()} has been studying in the class <strong>{previewData.std || '______'}</strong> in the academic year <strong>{previewData.academicYear || '______'}</strong>. {previewData.hisHer} birth date as recorded in the General Register of this school is <strong>{previewData.dob || 'DD/MM/YYYY'}</strong> ({previewData.dobWords || '________________________'}).
                             </div>
 
-                            {/* Principal Signature Space */}
-                            <div style={{ position: 'absolute', bottom: '16mm', left: '14mm', fontSize: '16px', color: '#000000', fontFamily: '"Times New Roman", Times, serif' }}>
+                            {/* Good Moral Character paragraph */}
+                            <div 
+                                style={{ 
+                                    fontSize: '18.5px', 
+                                    textAlign: 'justify', 
+                                    lineHeight: '2.2',
+                                    color: '#000000',
+                                    fontFamily: '"Times New Roman", Times, serif',
+                                    marginTop: '25px'
+                                }}
+                            >
+                                {previewData.heShe} bears a good moral character.
+                            </div>
+
+                            {/* Principal Signature Space - Left Aligned at the Bottom */}
+                            <div style={{ position: 'absolute', bottom: '16mm', left: '14mm', fontSize: '17px', color: '#000000', fontFamily: '"Times New Roman", Times, serif', lineHeight: '1.4' }}>
                                 <strong>{previewData.principalName}</strong>
-                                <div style={{ marginTop: '2px' }}>Principal</div>
+                                <div style={{ marginTop: '1px' }}>Principal</div>
                                 <div style={{ fontSize: '14px', marginTop: '1px' }}>Shree Saraswati Vidhyalay</div>
                             </div>
                         </div>
@@ -851,12 +903,41 @@ export default function BonafideCertificate() {
                 </div>
             </Modal>
 
-            {/* Custom CSS specifically for window.print() style targets */}
+            {/* Custom CSS for layout, corner brackets, and print targets */}
             <style dangerouslySetInnerHTML={{
                 __html: `
-                @import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cinzel:wght@700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+                
+                .corner-bracket {
+                    position: absolute;
+                    width: 12mm;
+                    height: 12mm;
+                    border-color: rgba(0, 0, 0, 0.2);
+                    border-style: solid;
+                    pointer-events: none;
+                }
+                .corner-bracket.top-left {
+                    top: 10mm;
+                    left: 10mm;
+                    border-width: 1px 0 0 1px;
+                }
+                .corner-bracket.top-right {
+                    top: 10mm;
+                    right: 10mm;
+                    border-width: 1px 1px 0 0;
+                }
+                .corner-bracket.bottom-left {
+                    bottom: 10mm;
+                    left: 10mm;
+                    border-width: 0 0 1px 1px;
+                }
+                .corner-bracket.bottom-right {
+                    bottom: 10mm;
+                    right: 10mm;
+                    border-width: 0 1px 1px 0;
+                }
+
                 @media print {
-                    /* Hide everything except certificate print area */
                     body * {
                         visibility: hidden;
                         background: none !important;
@@ -886,9 +967,11 @@ export default function BonafideCertificate() {
                     #certificate-print-area > div {
                         width: 100% !important;
                         height: 100% !important;
-                        border: 6px double #000000 !important;
                         padding: 16mm 14mm !important;
                         box-sizing: border-box !important;
+                    }
+                    .corner-bracket {
+                        border-color: rgba(0, 0, 0, 0.4) !important;
                     }
                     @page {
                         size: portrait;

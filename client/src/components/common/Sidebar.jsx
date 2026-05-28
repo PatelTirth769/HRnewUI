@@ -190,6 +190,7 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                                 { label: 'Bonafide Certificate', path: '/certificates/bonafide' },
                                 { label: 'Trial Certificate', path: '/certificates/trial' },
                                 { label: 'Transfer Certificate', path: '/certificates/transfer' },
+                                { label: 'Domisile & Character Certificate', path: '/certificates/domisile' },
                                 { label: 'Certificate Records', path: '/certificates/records' }
                             ]);
                         }
@@ -225,6 +226,7 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                                     { label: 'Bonafide Certificate', path: '/certificates/bonafide' },
                                     { label: 'Trial Certificate', path: '/certificates/trial' },
                                     { label: 'Transfer Certificate', path: '/certificates/transfer' },
+                                    { label: 'Domisile & Character Certificate', path: '/certificates/domisile' },
                                     { label: 'Certificate Records', path: '/certificates/records' }
                                 ] }
                             );

@@ -39,7 +39,9 @@ const GuardianDashboard = () => {
         programs: 0,
         feeRecords: [],
         attendanceList: [],
-        assessmentList: []
+        assessmentList: [],
+        studentGroups: [],
+        classTeacher: ''
     });
 
     // Payment Modal State
@@ -184,6 +186,67 @@ const GuardianDashboard = () => {
                 } catch (e) { console.error('[Guardian] FS details fetch failed:', e); }
             }
 
+            // Resolve Student Group & Class Teacher
+            let studentGroups = [];
+            if (enrollmentData.length > 0) {
+                try {
+                    const enrollmentName = enrollmentData[0].name;
+                    const fullEnrRes = await API.get(`/api/resource/Program Enrollment/${encodeURIComponent(enrollmentName)}`);
+                    const enrDoc = fullEnrRes.data?.data || {};
+                    const fallbackGroup = enrDoc.student_group || enrDoc.student_batch_name || enrDoc.student_batch;
+                    if (fallbackGroup) {
+                        studentGroups.push(fallbackGroup);
+                    } else if (wardProf?.student_group || wardProf?.student_batch) {
+                        studentGroups.push(wardProf.student_group || wardProf.student_batch);
+                    }
+                } catch (e) {
+                    console.error('Error fetching program enrollment details:', e.message);
+                }
+            } else {
+                if (wardProf?.student_group || wardProf?.student_batch) {
+                    studentGroups.push(wardProf.student_group || wardProf.student_batch);
+                }
+            }
+
+            try {
+                const sgRes = await API.get('/api/resource/Student Group', {
+                    params: {
+                        limit_page_length: 100,
+                        filters: JSON.stringify([["Student Group Student", "student", "=", studentId]]),
+                        fields: '["name"]'
+                    }
+                });
+                if (sgRes.data?.data && sgRes.data.data.length > 0) {
+                    const groups = sgRes.data.data.map(g => g.name);
+                    studentGroups.push(...groups);
+                }
+            } catch (e) {
+                console.error('Error direct Student Group query:', e.message);
+            }
+
+            studentGroups = [...new Set(studentGroups)];
+
+            let classTeacherName = '';
+            if (studentGroups.length > 0) {
+                try {
+                    const sgDocRes = await API.get(`/api/resource/Student Group/${encodeURIComponent(studentGroups[0])}`);
+                    const sgDoc = sgDocRes.data?.data;
+                    if (sgDoc && sgDoc.custom_class_teacher) {
+                        classTeacherName = sgDoc.custom_class_teacher;
+                        try {
+                            const instRes = await API.get(`/api/resource/Instructor/${encodeURIComponent(sgDoc.custom_class_teacher)}`);
+                            if (instRes.data?.data?.instructor_name) {
+                                classTeacherName = instRes.data.data.instructor_name;
+                            }
+                        } catch (e) {
+                            console.warn('[GuardianDashboard] Failed to fetch Instructor details:', e.message);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[GuardianDashboard] Failed to fetch Student Group details:', e.message);
+                }
+            }
+
             setWardDetails({
                 attendance: attendancePct,
                 attendanceList: attendanceList,
@@ -193,7 +256,9 @@ const GuardianDashboard = () => {
                 assessmentList: assessList,
                 programs: enrollmentData.length,
                 feeStructure: linkedFeeStructure,
-                feeStructureDetails
+                feeStructureDetails,
+                studentGroups,
+                classTeacher: classTeacherName
             });
         } catch (e) {
             console.error("Error fetching ward details", e);
@@ -613,6 +678,20 @@ const GuardianDashboard = () => {
                         <div className="flex justify-between border-b border-gray-50 pb-3">
                             <span className="text-gray-400 font-medium">Mobile</span>
                             <span className="font-bold text-gray-800">{wardProfile.mobile_number || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-50 pb-3">
+                            <span className="text-gray-400 font-medium">Student Group</span>
+                            <span className="font-bold text-gray-800">
+                                {wardDetails.studentGroups && wardDetails.studentGroups.length > 0 ? (
+                                    wardDetails.studentGroups.map(group => <Tag color="cyan" key={group} className="m-0 mr-1">{group}</Tag>)
+                                ) : 'N/A'}
+                            </span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-50 pb-3">
+                            <span className="text-gray-400 font-medium">Class Teacher</span>
+                            <span className="font-bold text-indigo-600 flex items-center gap-1">
+                                <UserOutlined /> {wardDetails.classTeacher || 'Not Assigned'}
+                            </span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-gray-400 font-medium">Status</span>

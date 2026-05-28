@@ -48,6 +48,7 @@ const StudentDashboard = () => {
     fullSchedule: [],
     notifications: [],
     studentGroups: [],
+    classTeacher: '',
     homework: [],
     classwork: [],
     permissions: {
@@ -335,6 +336,28 @@ const StudentDashboard = () => {
         }
       }
 
+      // --- Class Teacher Fetching ---
+      let classTeacherName = '';
+      if (studentGroups.length > 0) {
+        try {
+          const sgDocRes = await API.get(`/api/resource/Student Group/${encodeURIComponent(studentGroups[0])}`);
+          const sgDoc = sgDocRes.data?.data;
+          if (sgDoc && sgDoc.custom_class_teacher) {
+            classTeacherName = sgDoc.custom_class_teacher;
+            try {
+              const instRes = await API.get(`/api/resource/Instructor/${encodeURIComponent(sgDoc.custom_class_teacher)}`);
+              if (instRes.data?.data?.instructor_name) {
+                classTeacherName = instRes.data.data.instructor_name;
+              }
+            } catch (e) {
+              console.warn('[StudentDashboard] Failed to fetch Instructor details for class teacher:', e.message);
+            }
+          }
+        } catch (e) {
+          console.warn('[StudentDashboard] Failed to fetch Student Group details for class teacher:', e.message);
+        }
+      }
+
       let linkedFeeStructure = (enrollmentData.length > 0 && enrollmentData[0].fee_structure) 
         ? enrollmentData[0].fee_structure 
         : (profile.fee_structure || null);
@@ -434,6 +457,7 @@ const StudentDashboard = () => {
       setStudentData({
         profile,
         studentGroups,
+        classTeacher: classTeacherName,
         permissions,
         feeStructure: linkedFeeStructure,
         feeStructureDetails,
@@ -766,6 +790,11 @@ const StudentDashboard = () => {
                         {studentData.studentGroups && studentData.studentGroups.length > 0 ? (
                           studentData.studentGroups.map(group => <Tag color="cyan" key={group}>{group}</Tag>)
                         ) : <Text type="secondary">N/A</Text>}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Class Teacher">
+                        <span className="font-semibold text-blue-600 flex items-center gap-1.5">
+                          <UserOutlined /> {studentData.classTeacher || 'Not Assigned'}
+                        </span>
                       </Descriptions.Item>
                       <Descriptions.Item label="Fee Structure">
                         <Text strong style={{ color: '#ff4d4f' }}>

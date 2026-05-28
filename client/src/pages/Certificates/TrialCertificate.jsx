@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import html2pdf from 'html2pdf.js';
+import schoolHeader from '../../assets/images/school_header.jpg';
 
 const { Title, Text } = Typography;
 const RECORDS_PATH = 'schooler_system/certificates/records';
@@ -808,15 +809,23 @@ export default function TrialCertificate() {
                                 width: '100%',
                                 height: '100%',
                                 border: '6px double #000000',
-                                padding: '20mm 16mm',
+                                padding: '16mm 14mm',
                                 boxSizing: 'border-box',
                                 position: 'relative',
                                 display: 'flex',
                                 flexDirection: 'column'
                             }}
                         >
+                            {/* Header Section */}
+                            <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '10px', width: '100%' }}>
+                                <img src={schoolHeader} alt="School Header" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
+                            </div>
+
+                            {/* Divider Line */}
+                            <div style={{ borderTop: '1.5px solid #000000', marginTop: '5px', marginBottom: '15px', width: '100%' }} />
+
                             {/* Title centered */}
-                            <div style={{ textAlign: 'center', marginTop: '30px', marginBottom: '2px' }}>
+                            <div style={{ textAlign: 'center', marginTop: '10px', marginBottom: '2px' }}>
                                 <span style={{ 
                                     fontSize: '26px', 
                                     fontWeight: 'bold', 
@@ -827,7 +836,7 @@ export default function TrialCertificate() {
                                     TRIAL CERTIFICATE
                                 </span>
                             </div>
-                            <div style={{ textAlign: 'center', marginBottom: '35px' }}>
+                            <div style={{ textAlign: 'center', marginBottom: '15px' }}>
                                 <span style={{ 
                                     fontSize: '18px', 
                                     fontWeight: 'bold', 
@@ -840,7 +849,7 @@ export default function TrialCertificate() {
                             </div>
 
                             {/* Metadata Details (Cert no / Date) */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', color: '#000000', fontFamily: '"Times New Roman", Times, serif', marginBottom: '30px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', color: '#000000', fontFamily: '"Times New Roman", Times, serif', marginBottom: '20px' }}>
                                 <div>
                                     Certificate No. &nbsp; <strong>{previewData.certificateNo || '______'}</strong>
                                 </div>
@@ -857,7 +866,7 @@ export default function TrialCertificate() {
                                     lineHeight: '2.3',
                                     color: '#000000',
                                     fontFamily: '"Times New Roman", Times, serif',
-                                    marginTop: '25px',
+                                    marginTop: '15px',
                                     textIndent: '30px'
                                 }}
                             >
@@ -877,7 +886,7 @@ export default function TrialCertificate() {
                                     fontSize: '18.5px', 
                                     color: '#000000',
                                     fontFamily: '"Times New Roman", Times, serif',
-                                    marginTop: '25px'
+                                    marginTop: '15px'
                                 }}
                             >
                                 {previewData.hisHer} seat number was <strong>{previewData.seatNo || '________________'}</strong>
@@ -889,7 +898,7 @@ export default function TrialCertificate() {
                                     fontSize: '18.5px', 
                                     color: '#000000',
                                     fontFamily: '"Times New Roman", Times, serif',
-                                    marginTop: '25px'
+                                    marginTop: '15px'
                                 }}
                             >
                                 {previewData.heShe} bears a good moral character. I wish {previewData.himHer} success in all the future endeavours.
@@ -943,7 +952,7 @@ export default function TrialCertificate() {
                         width: 100% !important;
                         height: 100% !important;
                         border: 6px double #000000 !important;
-                        padding: 20mm 16mm !important;
+                        padding: 16mm 14mm !important;
                         box-sizing: border-box !important;
                     }
                     @page {

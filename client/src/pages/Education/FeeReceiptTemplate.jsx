@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import ssvLogo from '../../assets/images/SSVLOGO.png';
+import schoolHeader from '../../assets/images/school_header.jpg';
 
 // Convert number to words
 export const numberToWords = (num) => {
@@ -49,15 +49,8 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
         <div ref={ref} style={{ padding: '30px', width: '700px', margin: '0 auto', fontFamily: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif', boxSizing: 'border-box', backgroundColor: '#ffffff', color: '#000000' }}>
             
             {/* Header Section */}
-            <div style={{ display: 'flex', alignItems: 'center', borderBottom: '2px solid #1e3a8a', paddingBottom: '20px', marginBottom: '30px' }}>
-                <div style={{ width: '100px', marginRight: '20px' }}>
-                    <img src={ssvLogo} alt="School Logo" style={{ width: '100%', height: 'auto' }} />
-                </div>
-                <div style={{ flex: '1' }}>
-                    <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#1e3a8a', margin: '0', textTransform: 'uppercase' }}>{schoolName}</h1>
-                    <p style={{ fontSize: '14px', color: '#4b5563', margin: '5px 0' }}>{address}</p>
-                    <p style={{ fontSize: '14px', color: '#4b5563', margin: '0' }}>{contact} | {email} | <span style={{ color: '#1e3a8a', fontWeight: 'bold' }}>{website}</span></p>
-                </div>
+            <div style={{ display: 'flex', justifyContent: 'center', borderBottom: '2px solid #000000', paddingBottom: '10px', marginBottom: '30px', width: '100%' }}>
+                <img src={schoolHeader} alt="School Header" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
             </div>
 
             {/* Title */}

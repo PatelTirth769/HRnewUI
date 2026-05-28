@@ -1007,7 +1007,7 @@ export default function TransferCertificate() {
                                 <div style={{ flex: 1, textAlign: 'center', padding: '0 8px' }}>
                                     <div style={{ fontSize: '17px', fontWeight: 'bold', letterSpacing: '0.3px', color: '#ffffff' }}>SHREE SARASWATI VIDHYALAY</div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', marginTop: '1px' }}>
-                                        <span style={{ fontWeight: '800', background: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '2px', color: '#ffffff' }}>[ SSV CAMPUS ]</span>
+                                        <span style={{ fontWeight: '800', color: '#ffffff' }}>[ SSV CAMPUS ]</span>
                                         <span style={{ marginLeft: '6px', fontStyle: 'italic', fontWeight: '500', color: '#ffffff' }}>Nurturing Mind, Shaping Future...</span>
                                     </div>
                                     <div style={{ fontSize: '8.5px', marginTop: '3px', opacity: 0.95, color: '#ffffff' }}>Affiliated to Central Board of Secondary Education, New Delhi.</div>
@@ -1017,94 +1017,96 @@ export default function TransferCertificate() {
                                 {/* Right Seal */}
                                 <div style={{ width: '75px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                                     <div style={{ width: '52px', height: '52px', borderRadius: '50%', border: '1.5px dashed #ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.1)' }}>
-                                        <span style={{ fontSize: '7px', fontWeight: 'bold', textAlign: 'center', color: '#ffffff', lineHeight: '1.1' }}>SSV<br/>CAMPUS<br/>SEAL</span>
+                        <span style={{ fontSize: '7px', fontWeight: 'bold', textAlign: 'center', color: '#ffffff', lineHeight: '1.1' }}>SSV<br/>CAMPUS<br/>SEAL</span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Certificate Title */}
-                            <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-                                <span style={{
-                                    fontSize: '15px', 
-                                    fontWeight: 'bold', 
-                                    border: '2px solid #000000', 
-                                    borderRadius: '10px', 
-                                    padding: '3px 20px', 
-                                    display: 'inline-block',
-                                    fontFamily: 'Arial, sans-serif',
-                                    letterSpacing: '0.8px'
-                                }}>
-                                    TRANSFER CERTIFICATE
-                                </span>
-                            </div>
+                             {/* Certificate Title */}
+                             <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+                                 <span style={{
+                                     fontSize: '15px', 
+                                     fontWeight: 'bold', 
+                                     border: '2px solid #000000', 
+                                     borderRadius: '10px', 
+                                     padding: '4px 20px 12px 20px', 
+                                     display: 'inline-block',
+                                     textAlign: 'center',
+                                     fontFamily: 'Arial, sans-serif',
+                                     letterSpacing: '0.8px',
+                                     boxSizing: 'border-box'
+                                 }}>
+                                     TRANSFER CERTIFICATE
+                                 </span>
+                             </div>
 
-                            {/* Metadata row */}
-                            <div style={{ display: 'flex', justifyBetween: 'space-between', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px', padding: '0 4px', fontFamily: 'Arial, sans-serif' }}>
-                                <div>TC. No : <span style={{ borderBottom: '1px solid #000000', padding: '0 8px', display: 'inline-block', minWidth: '45px' }}>{previewData.tcNo}</span></div>
-                                <div>Gr No : <span style={{ borderBottom: '1px solid #000000', padding: '0 8px', display: 'inline-block', minWidth: '45px' }}>{previewData.grNo || '______'}</span></div>
-                                <div>Date: <span style={{ borderBottom: '1px solid #000000', padding: '0 8px', display: 'inline-block', minWidth: '70px' }}>{previewData.date}</span></div>
-                            </div>
+                             {/* Metadata row */}
+                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px', padding: '0 4px', fontFamily: 'Arial, sans-serif' }}>
+                                 <div>TC. No : <span style={{ borderBottom: '1px solid #000000', padding: '0 8px 3px 8px', display: 'inline-block', minWidth: '45px', lineHeight: '1.2' }}>{previewData.tcNo || '\u00A0'}</span></div>
+                                 <div>Gr No : <span style={{ borderBottom: '1px solid #000000', padding: '0 8px 3px 8px', display: 'inline-block', minWidth: '45px', lineHeight: '1.2' }}>{previewData.grNo || '______'}</span></div>
+                                 <div>Date: <span style={{ borderBottom: '1px solid #000000', padding: '0 8px 3px 8px', display: 'inline-block', minWidth: '70px', lineHeight: '1.2' }}>{previewData.date || '\u00A0'}</span></div>
+                             </div>
 
-                            {/* 27 Fields */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4.5px' }}>
-                                {(() => {
-                                    const renderRow = (num, label, val) => (
-                                        <div style={{ display: 'flex', alignItems: 'flex-end', fontSize: '11.5px', lineHeight: '1.2', fontFamily: 'Arial, sans-serif' }}>
-                                            <div style={{ width: '310px', flexShrink: 0, display: 'flex', justifyBetween: 'space-between', justifyContent: 'space-between', fontWeight: 'bold' }}>
-                                                <span>{num}. {label}</span>
-                                                <span>:</span>
-                                            </div>
-                                            <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', minHeight: '15px', paddingLeft: '4px', textTransform: 'uppercase' }}>
-                                                {val || ''}
-                                            </div>
-                                        </div>
-                                    );
+                             {/* 27 Fields */}
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                 {(() => {
+                                     const renderRow = (num, label, val) => (
+                                         <div style={{ display: 'flex', alignItems: 'baseline', fontSize: '11.5px', lineHeight: '1.2', fontFamily: 'Arial, sans-serif' }}>
+                                             <div style={{ width: '310px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                                                 <span>{num}. {label}</span>
+                                                 <span>:</span>
+                                             </div>
+                                             <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', paddingLeft: '4px', textTransform: 'uppercase', paddingBottom: '3px' }}>
+                                                 {val || '\u00A0'}
+                                             </div>
+                                         </div>
+                                     );
 
-                                    return (
-                                        <>
-                                            {renderRow('1', 'Name of Pupil', previewData.studentName)}
-                                            {renderRow('2', "Mother's Name", previewData.motherName)}
-                                            {renderRow('3', "Father's/Guardian's Name", previewData.fatherName)}
-                                            {renderRow('4', 'Nationality', previewData.nationality)}
-                                            {renderRow('5', 'Religion, Caste & Sub-Caste', previewData.religionCaste)}
-                                            {renderRow('6', 'Whether the Candidate belongs to Scheduled Caste/Scheduled Tribe', previewData.isScSt)}
-                                            
-                                            {/* Row 7 */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', fontSize: '11.5px', fontFamily: 'Arial, sans-serif' }}>
-                                                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                                                    <div style={{ width: '310px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
-                                                        <span>7. Date of Birth (in Christian Era) according to Admission Register(in figures & words)</span>
-                                                        <span>:</span>
-                                                    </div>
-                                                    <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', minHeight: '15px', paddingLeft: '4px' }}>
-                                                        {previewData.dateOfBirth}
-                                                    </div>
-                                                </div>
-                                                <div style={{ display: 'flex', alignItems: 'flex-end', marginTop: '1.5px' }}>
-                                                    <div style={{ width: '310px', flexShrink: 0 }} />
-                                                    <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', minHeight: '15px', paddingLeft: '4px', textTransform: 'uppercase' }}>
-                                                        {previewData.dateOfBirthWords}
-                                                    </div>
-                                                </div>
-                                            </div>
+                                     return (
+                                         <>
+                                             {renderRow('1', 'Name of Pupil', previewData.studentName)}
+                                             {renderRow('2', "Mother's Name", previewData.motherName)}
+                                             {renderRow('3', "Father's/Guardian's Name", previewData.fatherName)}
+                                             {renderRow('4', 'Nationality', previewData.nationality)}
+                                             {renderRow('5', 'Religion, Caste & Sub-Caste', previewData.religionCaste)}
+                                             {renderRow('6', 'Whether the Candidate belongs to Scheduled Caste/Scheduled Tribe', previewData.isScSt)}
+                                             
+                                             {/* Row 7 */}
+                                             <div style={{ display: 'flex', flexDirection: 'column', fontSize: '11.5px', fontFamily: 'Arial, sans-serif' }}>
+                                                 <div style={{ display: 'flex', alignItems: 'baseline' }}>
+                                                     <div style={{ width: '310px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                                                         <span>7. Date of Birth (in Christian Era) according to Admission Register(in figures & words)</span>
+                                                         <span>:</span>
+                                                     </div>
+                                                     <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', paddingLeft: '4px', paddingBottom: '3px' }}>
+                                                         {previewData.dateOfBirth || '\u00A0'}
+                                                     </div>
+                                                 </div>
+                                                 <div style={{ display: 'flex', alignItems: 'baseline' }}>
+                                                     <div style={{ width: '310px', flexShrink: 0 }}></div>
+                                                     <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', paddingLeft: '4px', textTransform: 'uppercase', paddingBottom: '3px' }}>
+                                                         {previewData.dateOfBirthWords || '\u00A0'}
+                                                     </div>
+                                                 </div>
+                                             </div>
 
-                                            {renderRow('8', 'Proof of Date of Birth Submitted at the time of admission', previewData.birthProof)}
-                                            {renderRow('9', 'Place of Birth', previewData.birthPlace)}
-                                            {renderRow('10', 'Date of Admission in the School with Class', previewData.admissionClass)}
-                                            {renderRow('11', 'Class in which the pupil last studied', previewData.classLastStudied)}
-                                            {renderRow('12', "School/Board's Annual examination last taken with result", previewData.lastExamResult)}
-                                            {renderRow('13', 'Whether failed, if so once/twice in the same class : ONCE/TWICE', previewData.isFailed)}
-                                            
-                                            {/* Row 14 */}
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', fontSize: '11.5px', lineHeight: '1.3', fontFamily: 'Arial, sans-serif' }}>
-                                                <div style={{ width: '310px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
-                                                    <span>14. Subjects Studies: All Compulsory Subjects,Third Language (if any)</span>
-                                                    <span>:</span>
-                                                </div>
-                                                <div className="lined-value" style={{ flexGrow: 1, marginLeft: '6px', fontWeight: 'bold', paddingLeft: '4px', textTransform: 'uppercase' }}>
-                                                    {previewData.subjects}
-                                                </div>
-                                            </div>
+                                             {renderRow('8', 'Proof of Date of Birth Submitted at the time of admission', previewData.birthProof)}
+                                             {renderRow('9', 'Place of Birth', previewData.birthPlace)}
+                                             {renderRow('10', 'Date of Admission in the School with Class', previewData.admissionClass)}
+                                             {renderRow('11', 'Class in which the pupil last studied', previewData.classLastStudied)}
+                                             {renderRow('12', "School/Board's Annual examination last taken with result", previewData.lastExamResult)}
+                                             {renderRow('13', 'Whether failed, if so once/twice in the same class : ONCE/TWICE', previewData.isFailed)}
+                                             
+                                             {/* Row 14 */}
+                                             <div style={{ display: 'flex', alignItems: 'flex-start', fontSize: '11.5px', lineHeight: '1.3', fontFamily: 'Arial, sans-serif' }}>
+                                                 <div style={{ width: '310px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                                                     <span>14. Subjects Studies: All Compulsory Subjects,Third Language (if any)</span>
+                                                     <span>:</span>
+                                                 </div>
+                                                 <div className="lined-value" style={{ flexGrow: 1, marginLeft: '6px', fontWeight: 'bold', paddingLeft: '4px', textTransform: 'uppercase' }}>
+                                                     {previewData.subjects}
+                                                 </div>
+                                             </div>
 
                                             {renderRow('15', 'Whether qualified for promotion to the higher class(in figures & words)', previewData.promotedClass)}
                                             {renderRow('16', 'Month upto which the pupil has paid school dues', previewData.schoolDuesPaid)}
@@ -1177,29 +1179,27 @@ export default function TransferCertificate() {
                         padding: 6mm 6mm !important;
                         box-sizing: border-box !important;
                     }
-                    .lined-value {
-                        line-height: 15.5px !important;
-                        background-image: linear-gradient(rgba(0,0,0,0) 14.5px, #000000 14.5px) !important;
-                        background-size: 100% 15.5px !important;
-                        background-repeat: repeat !important;
-                        display: inline-block !important;
-                        width: 100% !important;
-                        -webkit-print-color-adjust: exact !important;
-                        print-color-adjust: exact !important;
-                    }
-                    @page {
-                        size: portrait;
-                        margin: 0;
-                    }
-                }
-                .lined-value {
-                    line-height: 15.5px;
-                    background-image: linear-gradient(rgba(0,0,0,0) 14.5px, #000000 14.5px);
-                    background-size: 100% 15.5px;
-                    background-repeat: repeat;
-                    display: inline-block;
-                    width: 100%;
-                }
+                     .lined-value {
+                         line-height: 22px !important;
+                         background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%2222%22%3E%3Cline%20x1%3D%220%22%20y1%3D%2221%22%20x2%3D%22100%22%20y2%3D%2221%22%20stroke%3D%22black%22%20stroke-width%3D%221%22%2F%3E%3C%2Fsvg%3E") !important;
+                         background-repeat: repeat !important;
+                         display: inline-block !important;
+                         width: 100% !important;
+                         -webkit-print-color-adjust: exact !important;
+                         print-color-adjust: exact !important;
+                     }
+                     @page {
+                         size: portrait;
+                         margin: 0;
+                     }
+                 }
+                 .lined-value {
+                     line-height: 22px;
+                     background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%2222%22%3E%3Cline%20x1%3D%220%22%20y1%3D%2221%22%20x2%3D%22100%22%20y2%3D%2221%22%20stroke%3D%22black%22%20stroke-width%3D%221%22%2F%3E%3C%2Fsvg%3E");
+                     background-repeat: repeat;
+                     display: inline-block;
+                     width: 100%;
+                 }
                 `
             }} />
         </div>

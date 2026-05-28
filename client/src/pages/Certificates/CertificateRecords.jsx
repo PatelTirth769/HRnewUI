@@ -11,6 +11,7 @@ import {
 import dayjs from 'dayjs';
 import html2pdf from 'html2pdf.js';
 import ssvLogo from '../../assets/images/SSVLOGO.png';
+import schoolHeader from '../../assets/images/school_header.jpg';
 
 const { Title } = Typography;
 const RECORDS_PATH = 'schooler_system/certificates/records';
@@ -167,7 +168,8 @@ export default function CertificateRecords() {
                 const colorMap = {
                     'Bonafide': 'orange',
                     'Trial': 'cyan',
-                    'Transfer': 'magenta'
+                    'Transfer': 'magenta',
+                    'Domisile & Character': 'purple'
                 };
                 return <Tag color={colorMap[type] || 'blue'} className="rounded font-semibold">{type}</Tag>;
             }
@@ -300,7 +302,7 @@ export default function CertificateRecords() {
                     <div className="w-full overflow-x-auto bg-gray-100 p-6 rounded border border-gray-200 flex justify-center">
                         <div 
                             id="certificate-print-area"
-                            className={`bg-white shadow-md text-black ${selectedRecord.type === 'Trial' ? 'trial-cert' : (selectedRecord.type === 'Transfer' ? 'transfer-cert' : 'bonafide-cert')}`}
+                            className={`bg-white shadow-md text-black ${selectedRecord.type === 'Trial' ? 'trial-cert' : (selectedRecord.type === 'Transfer' ? 'transfer-cert' : (selectedRecord.type === 'Domisile & Character' ? 'domisile-cert' : 'bonafide-cert'))}`}
                             style={{
                                 width: '210mm',
                                 height: '297mm',
@@ -312,44 +314,52 @@ export default function CertificateRecords() {
                             }}
                         >
                             {selectedRecord.type === 'Trial' ? (
-                                <div
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        border: '6px double #000000',
-                                        padding: '20mm 16mm',
-                                        boxSizing: 'border-box',
-                                        position: 'relative',
-                                        display: 'flex',
-                                        flexDirection: 'column'
-                                    }}
-                                >
-                                    {/* Title centered */}
-                                    <div style={{ textAlign: 'center', marginTop: '30px', marginBottom: '2px' }}>
-                                        <span style={{ 
-                                            fontSize: '26px', 
-                                            fontWeight: 'bold', 
-                                            color: '#000000',
-                                            fontFamily: '"Times New Roman", Times, serif',
-                                            letterSpacing: '1px'
-                                        }}>
-                                            TRIAL CERTIFICATE
-                                        </span>
-                                    </div>
-                                    <div style={{ textAlign: 'center', marginBottom: '35px' }}>
-                                        <span style={{ 
-                                            fontSize: '18px', 
-                                            fontWeight: 'bold', 
-                                            color: '#000000',
-                                            fontFamily: '"Times New Roman", Times, serif',
-                                            letterSpacing: '0.5px'
-                                        }}>
-                                            SCHOOL INDEX NO. 55.0304
-                                        </span>
-                                    </div>
- 
-                                    {/* Metadata Details (Cert no / Date) */}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', color: '#000000', fontFamily: '"Times New Roman", Times, serif', marginBottom: '30px' }}>
+                                    <div
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            border: '6px double #000000',
+                                            padding: '16mm 14mm',
+                                            boxSizing: 'border-box',
+                                            position: 'relative',
+                                            display: 'flex',
+                                            flexDirection: 'column'
+                                        }}
+                                    >
+                                        {/* Header Section */}
+                                        <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '10px', width: '100%' }}>
+                                            <img src={schoolHeader} alt="School Header" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
+                                        </div>
+
+                                        {/* Divider Line */}
+                                        <div style={{ borderTop: '1.5px solid #000000', marginTop: '5px', marginBottom: '15px', width: '100%' }} />
+
+                                        {/* Title centered */}
+                                        <div style={{ textAlign: 'center', marginTop: '10px', marginBottom: '2px' }}>
+                                            <span style={{ 
+                                                fontSize: '26px', 
+                                                fontWeight: 'bold', 
+                                                color: '#000000',
+                                                fontFamily: '"Times New Roman", Times, serif',
+                                                letterSpacing: '1px'
+                                            }}>
+                                                TRIAL CERTIFICATE
+                                            </span>
+                                        </div>
+                                        <div style={{ textAlign: 'center', marginBottom: '15px' }}>
+                                            <span style={{ 
+                                                fontSize: '18px', 
+                                                fontWeight: 'bold', 
+                                                color: '#000000',
+                                                fontFamily: '"Times New Roman", Times, serif',
+                                                letterSpacing: '0.5px'
+                                            }}>
+                                                SCHOOL INDEX NO. 55.0304
+                                            </span>
+                                        </div>
+
+                                        {/* Metadata Details (Cert no / Date) */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', color: '#000000', fontFamily: '"Times New Roman", Times, serif', marginBottom: '20px' }}>
                                         <div>
                                             Certificate No. &nbsp; <strong>{selectedRecord.certificateNo || '______'}</strong>
                                         </div>
@@ -366,7 +376,7 @@ export default function CertificateRecords() {
                                             lineHeight: '2.3',
                                             color: '#000000',
                                             fontFamily: '"Times New Roman", Times, serif',
-                                            marginTop: '25px',
+                                            marginTop: '15px',
                                             textIndent: '30px'
                                         }}
                                     >
@@ -379,26 +389,26 @@ export default function CertificateRecords() {
                                         in the academic session <strong>{selectedRecord.academicYear || '______'}</strong> is a bonafide student of Shree Saraswati Vidhyalay, Gandhinagar.
                                         {pronouns.heShe} has passed {selectedRecord.examName || 'Secondary School Certificate Examination'} conducted by {selectedRecord.boardName || 'GSEB'} in the {selectedRecord.attemptType || 'First Trial'}.
                                     </div>
- 
+
                                     {/* Seat number */}
                                     <div 
                                         style={{ 
                                             fontSize: '18.5px', 
                                             color: '#000000',
                                             fontFamily: '"Times New Roman", Times, serif',
-                                            marginTop: '25px'
+                                            marginTop: '15px'
                                         }}
                                     >
                                         {pronouns.hisHer} seat number was <strong>{selectedRecord.seatNo || '________________'}</strong>
                                     </div>
- 
+
                                     {/* Character & Wishes */}
                                     <div 
                                         style={{ 
                                             fontSize: '18.5px', 
                                             color: '#000000',
                                             fontFamily: '"Times New Roman", Times, serif',
-                                            marginTop: '25px'
+                                            marginTop: '15px'
                                         }}
                                     >
                                         {pronouns.heShe} bears a good moral character. I wish {pronouns.himHer} success in all the future endeavours.
@@ -450,7 +460,7 @@ export default function CertificateRecords() {
                                         <div style={{ flex: 1, textAlign: 'center', padding: '0 8px' }}>
                                             <div style={{ fontSize: '17px', fontWeight: 'bold', letterSpacing: '0.3px', color: '#ffffff' }}>SHREE SARASWATI VIDHYALAY</div>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', marginTop: '1px' }}>
-                                                <span style={{ fontWeight: '800', background: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '2px', color: '#ffffff' }}>[ SSV CAMPUS ]</span>
+                                                <span style={{ fontWeight: '800', color: '#ffffff' }}>[ SSV CAMPUS ]</span>
                                                 <span style={{ marginLeft: '6px', fontStyle: 'italic', fontWeight: '500', color: '#ffffff' }}>Nurturing Mind, Shaping Future...</span>
                                             </div>
                                             <div style={{ fontSize: '8.5px', marginTop: '3px', opacity: 0.95, color: '#ffffff' }}>Affiliated to Central Board of Secondary Education, New Delhi.</div>
@@ -472,10 +482,12 @@ export default function CertificateRecords() {
                                             fontWeight: 'bold', 
                                             border: '2px solid #000000', 
                                             borderRadius: '10px', 
-                                            padding: '3px 20px', 
+                                            padding: '4px 20px 12px 20px', 
                                             display: 'inline-block',
+                                            textAlign: 'center',
                                             fontFamily: 'Arial, sans-serif',
-                                            letterSpacing: '0.8px'
+                                            letterSpacing: '0.8px',
+                                            boxSizing: 'border-box'
                                         }}>
                                             TRANSFER CERTIFICATE
                                         </span>
@@ -483,22 +495,22 @@ export default function CertificateRecords() {
 
                                     {/* Metadata row */}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px', padding: '0 4px', fontFamily: 'Arial, sans-serif' }}>
-                                        <div>TC. No : <span style={{ borderBottom: '1px solid #000000', padding: '0 8px', display: 'inline-block', minWidth: '45px' }}>{selectedRecord.certificateNo}</span></div>
-                                        <div>Gr No : <span style={{ borderBottom: '1px solid #000000', padding: '0 8px', display: 'inline-block', minWidth: '45px' }}>{selectedRecord.grNo || '______'}</span></div>
-                                        <div>Date: <span style={{ borderBottom: '1px solid #000000', padding: '0 8px', display: 'inline-block', minWidth: '70px' }}>{selectedRecord.date ? dayjs(selectedRecord.date).format('DD/MM/YYYY') : ''}</span></div>
+                                        <div>TC. No : <span style={{ borderBottom: '1px solid #000000', padding: '0 8px 3px 8px', display: 'inline-block', minWidth: '45px', lineHeight: '1.2' }}>{selectedRecord.certificateNo || '\u00A0'}</span></div>
+                                        <div>Gr No : <span style={{ borderBottom: '1px solid #000000', padding: '0 8px 3px 8px', display: 'inline-block', minWidth: '45px', lineHeight: '1.2' }}>{selectedRecord.grNo || '______'}</span></div>
+                                        <div>Date: <span style={{ borderBottom: '1px solid #000000', padding: '0 8px 3px 8px', display: 'inline-block', minWidth: '70px', lineHeight: '1.2' }}>{selectedRecord.date ? dayjs(selectedRecord.date).format('DD/MM/YYYY') : '\u00A0'}</span></div>
                                     </div>
 
                                     {/* 27 Fields */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4.5px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                         {(() => {
                                             const renderRow = (num, label, val) => (
-                                                <div style={{ display: 'flex', alignItems: 'flex-end', fontSize: '11.5px', lineHeight: '1.2', fontFamily: 'Arial, sans-serif' }}>
+                                                <div style={{ display: 'flex', alignItems: 'baseline', fontSize: '11.5px', lineHeight: '1.2', fontFamily: 'Arial, sans-serif' }}>
                                                     <div style={{ width: '310px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
                                                         <span>{num}. {label}</span>
                                                         <span>:</span>
                                                     </div>
-                                                    <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', minHeight: '15px', paddingLeft: '4px', textTransform: 'uppercase' }}>
-                                                        {val || ''}
+                                                    <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', paddingLeft: '4px', textTransform: 'uppercase', paddingBottom: '3px' }}>
+                                                        {val || '\u00A0'}
                                                     </div>
                                                 </div>
                                             );
@@ -514,19 +526,19 @@ export default function CertificateRecords() {
                                                     
                                                     {/* Row 7 */}
                                                     <div style={{ display: 'flex', flexDirection: 'column', fontSize: '11.5px', fontFamily: 'Arial, sans-serif' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'baseline' }}>
                                                             <div style={{ width: '310px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
                                                                 <span>7. Date of Birth (in Christian Era) according to Admission Register(in figures & words)</span>
                                                                 <span>:</span>
                                                             </div>
-                                                            <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', minHeight: '15px', paddingLeft: '4px' }}>
-                                                                {selectedRecord.dateOfBirth ? dayjs(selectedRecord.dateOfBirth).format('DD/MM/YYYY') : ''}
+                                                            <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', paddingLeft: '4px', paddingBottom: '3px' }}>
+                                                                {selectedRecord.dateOfBirth ? dayjs(selectedRecord.dateOfBirth).format('DD/MM/YYYY') : '\u00A0'}
                                                             </div>
                                                         </div>
-                                                        <div style={{ display: 'flex', alignItems: 'flex-end', marginTop: '1.5px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'baseline', marginTop: '1.5px' }}>
                                                             <div style={{ width: '310px', flexShrink: 0 }} />
-                                                            <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', minHeight: '15px', paddingLeft: '4px', textTransform: 'uppercase' }}>
-                                                                {selectedRecord.dateOfBirthWords}
+                                                            <div style={{ flexGrow: 1, borderBottom: '1px solid #000000', marginLeft: '6px', fontWeight: 'bold', paddingLeft: '4px', textTransform: 'uppercase', paddingBottom: '3px' }}>
+                                                                {selectedRecord.dateOfBirthWords || '\u00A0'}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -579,6 +591,89 @@ export default function CertificateRecords() {
                                         </div>
                                     </div>
                                 </div>
+                            ) : selectedRecord.type === 'Domisile & Character' ? (
+                                <div
+                                    style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        padding: '16mm 14mm',
+                                        boxSizing: 'border-box',
+                                        position: 'relative',
+                                        display: 'flex',
+                                        flexDirection: 'column'
+                                    }}
+                                >
+                                    {/* Page Corner Crop Brackets */}
+                                    <div className="corner-bracket top-left"></div>
+                                    <div className="corner-bracket top-right"></div>
+                                    <div className="corner-bracket bottom-left"></div>
+                                    <div className="corner-bracket bottom-right"></div>
+
+                                    {/* Header Section */}
+                                    <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '10px', width: '100%' }}>
+                                        <img src={schoolHeader} alt="School Header" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
+                                    </div>
+
+                                    {/* Divider Line */}
+                                    <div style={{ borderTop: '1.5px solid #000000', marginTop: '5px', marginBottom: '15px', width: '100%' }} />
+
+                                    {/* Title */}
+                                    <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                                        <span style={{ 
+                                            fontSize: '26px', 
+                                            fontWeight: 'bold', 
+                                            textDecoration: 'underline', 
+                                            color: '#000000',
+                                            fontFamily: '"Times New Roman", Times, serif',
+                                            letterSpacing: '1.2px'
+                                        }}>
+                                            CERTIFICATE
+                                        </span>
+                                    </div>
+
+                                    {/* GR Number */}
+                                    <div style={{ fontSize: '18px', color: '#000000', fontFamily: '"Times New Roman", Times, serif', marginBottom: '20px' }}>
+                                        GR.No.<strong>{selectedRecord.grNo || '______'}</strong>
+                                    </div>
+
+                                    {/* Paragraph Content */}
+                                    <div 
+                                        style={{ 
+                                            fontSize: '18.5px', 
+                                            textAlign: 'justify', 
+                                            lineHeight: '2.2',
+                                            color: '#000000',
+                                            fontFamily: '"Times New Roman", Times, serif',
+                                            marginTop: '20px'
+                                        }}
+                                    >
+                                        This is to certify that {pronouns.prefix && pronouns.prefix !== 'Student' ? pronouns.prefix + ' ' : ''}
+                                        <strong style={{ textTransform: 'uppercase', fontSize: '20px' }}>
+                                            {selectedRecord.studentName || '________________________________'}
+                                        </strong> is a bonafide student of Shree Saraswati Vidhyalay – SSV CAMPUS and {pronouns.heShe?.toLowerCase()} has been studying in the class <strong>{selectedRecord.std || '______'}</strong> in the academic year <strong>{selectedRecord.academicYear || '______'}</strong>. {pronouns.hisHer} birth date as recorded in the General Register of this school is <strong>{displayDob || 'DD/MM/YYYY'}</strong> ({selectedRecord.dateOfBirthWords || '________________________'}).
+                                    </div>
+
+                                    {/* Character paragraph */}
+                                    <div 
+                                        style={{ 
+                                            fontSize: '18.5px', 
+                                            textAlign: 'justify', 
+                                            lineHeight: '2.2',
+                                            color: '#000000',
+                                            fontFamily: '"Times New Roman", Times, serif',
+                                            marginTop: '25px'
+                                        }}
+                                    >
+                                        {pronouns.heShe} bears a good moral character.
+                                    </div>
+
+                                    {/* Principal signature block */}
+                                    <div style={{ position: 'absolute', bottom: '16mm', left: '14mm', fontSize: '17px', color: '#000000', fontFamily: '"Times New Roman", Times, serif', lineHeight: '1.4' }}>
+                                        <strong>{selectedRecord.principalName || 'Neeraj Kaushesh'}</strong>
+                                        <div style={{ marginTop: '1px' }}>Principal</div>
+                                        <div style={{ fontSize: '14px', marginTop: '1px' }}>Shree Saraswati Vidhyalay</div>
+                                    </div>
+                                </div>
                             ) : (
                                 <div
                                     style={{
@@ -593,45 +688,8 @@ export default function CertificateRecords() {
                                     }}
                                 >
                                     {/* Header Section */}
-                                    <div style={{ display: 'flex', alignItems: 'center', paddingBottom: '10px' }}>
-                                        {/* Left Logo Emblem */}
-                                        <div style={{ width: '90px', height: '95px', flexShrink: 0, marginRight: '15px' }}>
-                                            <svg width="90" height="95" viewBox="0 0 100 105" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M12 5 L88 5 C88 5 95 35 85 65 C75 82 50 98 50 98 C50 98 25 82 15 65 C5 35 12 5 12 5 Z" fill="#800020" stroke="#D4AF37" strokeWidth="3"/>
-                                                <path d="M18 10 L82 10 C82 10 88 37 79 62 C70 77 50 92 50 92 C50 92 30 77 21 62 C12 37 18 10 18 10 Z" fill="#F4D03F" stroke="#D4AF37" strokeWidth="1"/>
-                                                <path d="M30 72 C35 70 42 75 50 75 C58 75 65 70 70 72 C75 75 72 80 50 80 C28 80 25 75 30 72 Z" fill="#FFB6C1" stroke="#FF69B4" strokeWidth="1"/>
-                                                <circle cx="50" cy="38" r="15" fill="#FFFDE0" stroke="#F39C12" strokeWidth="1" strokeDasharray="2,2"/>
-                                                <path d="M46 22 L50 12 L54 22 Z" fill="#D4AF37" stroke="#9A7D0A" strokeWidth="1"/>
-                                                <circle cx="50" cy="27" r="5" fill="#FFE0BD" stroke="#8A5A36" strokeWidth="1"/>
-                                                <path d="M42 35 C42 35 35 55 40 68 L60 68 C65 55 58 35 58 35 Z" fill="#FFFFFF" stroke="#D4AF37" strokeWidth="1"/>
-                                                <path d="M32 60 L68 38" stroke="#5C3A21" strokeWidth="3.5" strokeLinecap="round"/>
-                                                <circle cx="31" cy="61" r="3" fill="#D4AF37"/>
-                                                <path d="M42 35 L33 50 M58 35 L65 50" stroke="#FFE0BD" strokeWidth="2" strokeLinecap="round"/>
-                                                <path d="M10 85 Q50 92 90 85 L85 97 Q50 104 15 97 Z" fill="#A30000" stroke="#D4AF37" strokeWidth="1.5"/>
-                                                <path d="M20 91 Q50 97 80 91" stroke="#FFFFFF" strokeWidth="1" strokeLinecap="round" fill="none"/>
-                                            </svg>
-                                        </div>
- 
-                                        {/* School Info */}
-                                        <div style={{ flex: 1, textAlign: 'center', paddingLeft: '5px' }}>
-                                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#000000', letterSpacing: '0.8px', fontFamily: '"Times New Roman", Times, serif' }}>
-                                                SHREE SARASWATI VIDHYALAY
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', marginTop: '2px' }}>
-                                                <span style={{ fontSize: '42px', fontWeight: '950', color: '#800020', letterSpacing: '1px', lineHeight: '1', fontFamily: 'Arial, sans-serif' }}>
-                                                    SSV CAMPUS
-                                                </span>
-                                                <span style={{ fontFamily: '"Alex Brush", "Brush Script MT", cursive', fontSize: '24px', color: '#800020', fontStyle: 'italic', marginLeft: '10px' }}>
-                                                    a new hope
-                                                </span>
-                                            </div>
-                                            <div style={{ fontSize: '12.5px', fontWeight: 'bold', color: '#000000', marginTop: '3px', fontFamily: 'Arial, sans-serif' }}>
-                                                Sector-3/B, Gandhinagar, 382006
-                                            </div>
-                                            <div style={{ fontSize: '11.5px', fontWeight: 'bold', color: '#000000', marginTop: '2px', fontFamily: 'Arial, sans-serif' }}>
-                                                M: 7622011101, E-mail: ssvprincipal3@gmail.com
-                                            </div>
-                                        </div>
+                                    <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '10px', width: '100%' }}>
+                                        <img src={schoolHeader} alt="School Header" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
                                     </div>
  
                                     {/* Divider Line */}
@@ -703,61 +761,97 @@ export default function CertificateRecords() {
                 )}
             </Modal>
 
-            {/* Print styling block for window.print() inside the logs page */}
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                @import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cinzel:wght@700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
-                @media print {
-                    body * {
-                        visibility: hidden;
-                        background: none !important;
-                    }
-                    .no-print, .no-print * {
-                        display: none !important;
-                        height: 0 !important;
-                        width: 0 !important;
-                        padding: 0 !important;
-                        margin: 0 !important;
-                        box-shadow: none !important;
-                    }
-                    #certificate-print-area, #certificate-print-area * {
-                        visibility: visible !important;
-                    }
-                    #certificate-print-area {
-                        position: absolute !important;
-                        top: 0 !important;
-                        left: 0 !important;
-                        width: 210mm !important;
-                        height: 297mm !important;
-                        padding: 8mm !important;
-                        background: #ffffff !important;
-                        box-sizing: border-box !important;
-                        margin: 0 !important;
-                        box-shadow: none !important;
-                    }
-                    #certificate-print-area > div {
-                        width: 100% !important;
-                        height: 100% !important;
-                        border: 6px double #000000 !important;
-                        box-sizing: border-box !important;
-                    }
-                    #certificate-print-area.bonafide-cert > div {
-                        padding: 16mm 14mm !important;
-                    }
-                    #certificate-print-area.trial-cert > div {
-                        padding: 20mm 16mm !important;
-                    }
+             {/* Print styling block for window.print() inside the logs page */}
+             <style dangerouslySetInnerHTML={{
+                 __html: `
+                 @import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cinzel:wght@700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+                 
+                 .corner-bracket {
+                     position: absolute;
+                     width: 12mm;
+                     height: 12mm;
+                     border-color: rgba(0, 0, 0, 0.2);
+                     border-style: solid;
+                     pointer-events: none;
+                 }
+                 .corner-bracket.top-left {
+                     top: 10mm;
+                     left: 10mm;
+                     border-width: 1px 0 0 1px;
+                 }
+                 .corner-bracket.top-right {
+                     top: 10mm;
+                     right: 10mm;
+                     border-width: 1px 1px 0 0;
+                 }
+                 .corner-bracket.bottom-left {
+                     bottom: 10mm;
+                     left: 10mm;
+                     border-width: 0 0 1px 1px;
+                 }
+                 .corner-bracket.bottom-right {
+                     bottom: 10mm;
+                     right: 10mm;
+                     border-width: 0 1px 1px 0;
+                 }
+
+                 @media print {
+                     body * {
+                         visibility: hidden;
+                         background: none !important;
+                     }
+                     .no-print, .no-print * {
+                         display: none !important;
+                         height: 0 !important;
+                         width: 0 !important;
+                         padding: 0 !important;
+                         margin: 0 !important;
+                         box-shadow: none !important;
+                     }
+                     #certificate-print-area, #certificate-print-area * {
+                         visibility: visible !important;
+                     }
+                     #certificate-print-area {
+                         position: absolute !important;
+                         top: 0 !important;
+                         left: 0 !important;
+                         width: 210mm !important;
+                         height: 297mm !important;
+                         padding: 8mm !important;
+                         background: #ffffff !important;
+                         box-sizing: border-box !important;
+                         margin: 0 !important;
+                         box-shadow: none !important;
+                     }
+                     #certificate-print-area > div {
+                         width: 100% !important;
+                         height: 100% !important;
+                         border: 6px double #000000 !important;
+                         box-sizing: border-box !important;
+                     }
+                     #certificate-print-area.domisile-cert > div {
+                         border: none !important;
+                         padding: 16mm 14mm !important;
+                     }
+                     .corner-bracket {
+                         border-color: rgba(0, 0, 0, 0.4) !important;
+                     }
+                     #certificate-print-area.bonafide-cert > div {
+                         padding: 16mm 14mm !important;
+                     }
+                     #certificate-print-area.trial-cert > div {
+                         padding: 16mm 14mm !important;
+                     }
                     #certificate-print-area.transfer-cert > div {
                         padding: 6mm 6mm !important;
                     }
                     .lined-value {
-                        line-height: 15.5px;
-                        background-image: linear-gradient(rgba(0,0,0,0) 14.5px, #000000 14.5px);
-                        background-size: 100% 15.5px;
-                        background-repeat: repeat;
-                        display: inline-block;
-                        width: 100%;
-                    }
+                         line-height: 22px;
+                         background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22100%22%20height%3D%2222%22%3E%3Cline%20x1%3D%220%22%20y1%3D%2221%22%20x2%3D%22100%22%20y2%3D%2221%22%20stroke%3D%22black%22%20stroke-width%3D%221%22%2F%3E%3C%2Fsvg%3E");
+                         background-repeat: repeat;
+                         display: inline-block;
+                         width: 100%;
+                     }
                     @page {
                         size: portrait;
                         margin: 0;

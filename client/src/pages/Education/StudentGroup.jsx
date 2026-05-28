@@ -16,6 +16,7 @@ const emptyForm = () => ({
     student_category: '',
     disabled: 0,
     instructors: [],
+    custom_class_teacher: '',
 });
 
 const StudentGroup = () => {
@@ -59,7 +60,7 @@ const StudentGroup = () => {
     const fetchGroups = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Student Group?fields=["name","student_group_name","academic_year","academic_term","group_based_on","program","batch","max_strength","disabled"]&limit_page_length=None&order_by=modified desc';
+            const url = '/api/resource/Student Group?fields=["name","student_group_name","academic_year","academic_term","group_based_on","program","batch","max_strength","disabled","custom_class_teacher"]&limit_page_length=None&order_by=modified desc';
             const response = await API.get(url);
             setGroups(response.data.data || []);
         } catch (err) {
@@ -106,6 +107,7 @@ const StudentGroup = () => {
                 student_category: d.student_category || '',
                 disabled: d.disabled ?? 0,
                 instructors: d.instructors || [],
+                custom_class_teacher: d.custom_class_teacher || '',
             });
         } catch (err) {
             console.error('Error fetching student group:', err);
@@ -198,7 +200,8 @@ const StudentGroup = () => {
                 (g.name || '').toLowerCase().includes(q) ||
                 (g.student_group_name || '').toLowerCase().includes(q) ||
                 (g.academic_year || '').toLowerCase().includes(q) ||
-                (g.program || '').toLowerCase().includes(q)
+                (g.program || '').toLowerCase().includes(q) ||
+                (g.custom_class_teacher || '').toLowerCase().includes(q)
             );
         });
 
@@ -239,15 +242,16 @@ const StudentGroup = () => {
                                 <th className="px-4 py-3 font-medium text-gray-600">Based on</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Academic Year</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Program</th>
+                                <th className="px-4 py-3 font-medium text-gray-600">Class Teacher</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 text-right">Max</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loadingList ? (
-                                <tr><td colSpan="7" className="text-center py-10 text-gray-400 italic">Fetching from ERPNext...</td></tr>
+                                <tr><td colSpan="8" className="text-center py-10 text-gray-400 italic">Fetching from ERPNext...</td></tr>
                             ) : filtered.length === 0 ? (
                                 <tr>
-                                    <td colSpan="7" className="text-center py-16 text-gray-500">
+                                    <td colSpan="8" className="text-center py-16 text-gray-500">
                                         <p className="text-lg font-medium mb-1">No Student Groups Found</p>
                                         <p className="text-sm">Try adjusting your search or add a new group.</p>
                                     </td>
@@ -269,6 +273,7 @@ const StudentGroup = () => {
                                         <td className="px-4 py-3 text-gray-600">{row.group_based_on || '-'}</td>
                                         <td className="px-4 py-3 text-gray-600">{row.academic_year || '-'}</td>
                                         <td className="px-4 py-3 text-gray-600">{row.program || '-'}</td>
+                                        <td className="px-4 py-3 text-gray-600">{row.custom_class_teacher || '-'}</td>
                                         <td className="px-4 py-3 text-gray-600 text-right">{row.max_strength || '0'}</td>
                                     </tr>
                                 ))
@@ -383,6 +388,13 @@ const StudentGroup = () => {
                                     <select className={inputStyle} value={form.student_category} onChange={e => updateField('student_category', e.target.value)}>
                                         <option value="">Select Category...</option>
                                         {studentCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className={labelStyle}>Class Teacher</label>
+                                    <select className={inputStyle} value={form.custom_class_teacher} onChange={e => updateField('custom_class_teacher', e.target.value)}>
+                                        <option value="">Select Class Teacher...</option>
+                                        {instructorsList.map(il => <option key={il.name} value={il.name}>{il.instructor_name}</option>)}
                                     </select>
                                 </div>
                             </div>

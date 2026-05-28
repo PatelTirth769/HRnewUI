@@ -98,7 +98,19 @@ const Header = ({ onModuleClick }) => {
               </>
             ) : (
               <>
-                {(isStudent || isInstructor || isGuardian) && <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Education</div>}
+                {(isStudent || isInstructor || isGuardian) && (
+                  (isStudent || isGuardian) ? (
+                    <div 
+                      className="text-gray-400 select-none truncate font-semibold" 
+                      style={{ opacity: 0.5, filter: 'blur(0.5px)', cursor: 'not-allowed', pointerEvents: 'none' }}
+                      title="Access Restricted"
+                    >
+                      Education
+                    </div>
+                  ) : (
+                    <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Education</div>
+                  )
+                )}
                 <Link 
                   to={isStudent ? "/student-dashboard" : isInstructor ? "/instructor-dashboard" : isGuardian ? "/guardian-dashboard" : "/employee-self-service"} 
                   target={(isStudent || isInstructor || isGuardian) ? "_self" : "_blank"} 

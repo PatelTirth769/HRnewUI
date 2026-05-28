@@ -554,6 +554,7 @@ export const moduleNavigation = {
                     { label: 'Student Group Creation Tool', path: '/education/student-group-creation-tool' },
                     { label: 'Program Enrollment Tool', path: '/education/program-enrollment-tool' },
                     { label: 'Course Scheduling Tool', path: '/education/course-scheduling-tool' },
+                    { label: 'Classwise Subject Allocation', path: '/education/classwise-subject-allocation-tool' },
                 ],
             },
             {
@@ -926,6 +927,8 @@ export const moduleNavigation = {
                 items: [
                     { label: 'Bonafide Certificate', path: '/certificates/bonafide' },
                     { label: 'Trial Certificate', path: '/certificates/trial' },
+                    { label: 'Transfer Certificate', path: '/certificates/transfer' },
+                    { label: 'Domisile & Character Certificate', path: '/certificates/domisile' },
                     { label: 'Certificate Records', path: '/certificates/records' }
                 ],
             },

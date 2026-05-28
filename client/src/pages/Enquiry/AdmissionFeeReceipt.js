@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import schoolLogo from '../../assets/images/SSVLOGO.png';
+import schoolHeader from '../../assets/images/school_header.jpg';
 
 /**
  * Convert number to words (reused from FeeReceiptTemplate)
@@ -42,18 +42,18 @@ export const numberToWords = (num) => {
  * @param {string} data.parent_name - Parent / Guardian name
  * @param {string} data.parent_mobile - Contact number
  */
-const getOptimizedLogoUrl = async (src) => {
+const getOptimizedHeaderUrl = async (src) => {
     return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'Anonymous';
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            canvas.width = 120;
-            canvas.height = 120;
+            canvas.width = img.naturalWidth || 750;
+            canvas.height = img.naturalHeight || 136;
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0, 0, 120, 120);
-            ctx.drawImage(img, 0, 0, 120, 120);
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             resolve(canvas.toDataURL('image/jpeg', 0.85));
         };
         img.onerror = () => resolve(src);
@@ -65,81 +65,71 @@ export const generateAdmissionReceipt = async (data) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    // ─── HEADER BACKGROUND ───
-    doc.setFillColor(30, 58, 138); // Deep blue
-    doc.rect(0, 0, pageWidth, 45, 'F');
-
-    // School Logo - Downscaled via canvas to prevent uncompressed 32MB raw PDF payloads
+    // ─── HEADER BANNERS ───
     try {
-        const optimizedLogo = await getOptimizedLogoUrl(schoolLogo);
-        const format = optimizedLogo.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
-        doc.addImage(optimizedLogo, format, 15, 8, 28, 28, undefined, 'FAST');
+        const optimizedHeader = await getOptimizedHeaderUrl(schoolHeader);
+        const format = optimizedHeader.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
+        // school_header has aspect ratio 753:136. Margin 15 on each side, width is pageWidth - 30 (180). Height is 180 * (136/753) = 32.5.
+        doc.addImage(optimizedHeader, format, 15, 10, 180, 32.5, undefined, 'FAST');
     } catch (e) {
-        console.warn('Could not add logo to PDF:', e);
+        console.warn('Could not add header to PDF:', e);
     }
 
-    // School Name & Info
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
-    doc.setFont('helvetica', 'bold');
-    doc.text('SSV CAMPUS - CBSE', 50, 22);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Sector-3B, Gandhinagar | Phone: +91 76220 11101', 50, 30);
-    doc.setFontSize(9);
-    doc.text('ssvcampus.gandhinagar@gmail.com | www.ssvschool.edu.in', 50, 37);
-
+    // Divider Line
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(15, 46, pageWidth - 15, 46);
     // ─── TITLE ───
-    let y = 58;
+    let y = 54;
     doc.setFillColor(241, 245, 249);
-    doc.rect(0, 48, pageWidth, 18, 'F');
+    doc.rect(0, 48, pageWidth, 10, 'F');
     doc.setTextColor(30, 58, 138);
-    doc.setFontSize(16);
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     const feeTypeLabel = (data.fee_type || 'ADMISSION').toUpperCase();
     doc.text(`${feeTypeLabel} FEE PAYMENT RECEIPT`, pageWidth / 2, y, { align: 'center' });
 
     // ─── RECEIPT META ───
-    y = 75;
+    y = 69;
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.3);
 
     // Receipt info box - left
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(15, y - 5, 85, 30, 3, 3, 'F');
+    doc.roundedRect(15, y - 4, 85, 22, 3, 3, 'F');
     doc.setTextColor(100, 116, 139);
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setFont('helvetica', 'normal');
-    doc.text('Receipt No:', 20, y + 3);
-    doc.text('Date:', 20, y + 14);
+    doc.text('Receipt No:', 20, y + 2);
+    doc.text('Date:', 20, y + 11);
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text(data.receipt_no || 'N/A', 20, y + 9);
     doc.setFontSize(10);
+    doc.text(data.receipt_no || 'N/A', 20, y + 6);
+    doc.setFontSize(9.5);
     const receiptDate = data.receipt_date
         ? new Date(data.receipt_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
         : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    doc.text(receiptDate, 20, y + 20);
+    doc.text(receiptDate, 20, y + 15);
 
     // Receipt info box - right
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(110, y - 5, 85, 30, 3, 3, 'F');
+    doc.roundedRect(110, y - 4, 85, 22, 3, 3, 'F');
     doc.setTextColor(100, 116, 139);
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setFont('helvetica', 'normal');
-    doc.text('Fee Type:', 115, y + 3);
-    doc.text('Academic Year:', 115, y + 14);
+    doc.text('Fee Type:', 115, y + 2);
+    doc.text('Academic Year:', 115, y + 11);
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text(`${data.fee_type || 'Admission'} Fee`, 115, y + 9);
-    doc.text(data.academic_year || '2025-2026', 115, y + 20);
+    doc.setFontSize(9.5);
+    doc.text(`${data.fee_type || 'Admission'} Fee`, 115, y + 6);
+    doc.text(data.academic_year || '2025-2026', 115, y + 15);
 
     // ─── STUDENT DETAILS TABLE ───
-    y = 112;
+    y = 96;
     doc.setTextColor(30, 58, 138);
-    doc.setFontSize(11);
+    doc.setFontSize(10.5);
     doc.setFont('helvetica', 'bold');
     doc.text('STUDENT DETAILS', 15, y);
     doc.setLineWidth(0.5);
@@ -159,11 +149,11 @@ export const generateAdmissionReceipt = async (data) => {
     }
 
     autoTable(doc, {
-        startY: y + 5,
+        startY: y + 4,
         head: [],
         body: studentDetails,
         theme: 'plain',
-        styles: { fontSize: 10, cellPadding: 3, lineColor: [226, 232, 240] },
+        styles: { fontSize: 9.5, cellPadding: 2.2, lineColor: [226, 232, 240] },
         columnStyles: {
             0: { fontStyle: 'bold', cellWidth: 55, textColor: [71, 85, 105] },
             1: { fontStyle: 'bold', textColor: [15, 23, 42] }
@@ -173,9 +163,9 @@ export const generateAdmissionReceipt = async (data) => {
     });
 
     // ─── FEE BREAKDOWN TABLE ───
-    let afterStudentY = doc.lastAutoTable.finalY + 12;
+    let afterStudentY = doc.lastAutoTable.finalY + 8;
     doc.setTextColor(30, 58, 138);
-    doc.setFontSize(11);
+    doc.setFontSize(10.5);
     doc.setFont('helvetica', 'bold');
     doc.text('FEE DETAILS', 15, afterStudentY);
     doc.setLineWidth(0.5);
@@ -184,25 +174,25 @@ export const generateAdmissionReceipt = async (data) => {
     const amount = parseFloat(data.amount) || 0;
 
     autoTable(doc, {
-        startY: afterStudentY + 5,
+        startY: afterStudentY + 4,
         head: [['Description', 'Amount (INR)']],
         body: [
             [data.fee_name || `${data.fee_type || 'Admission'} Fee`, `INR ${amount.toLocaleString('en-IN')}`]
         ],
         foot: [['Grand Total', `INR ${amount.toLocaleString('en-IN')}`]],
         theme: 'grid',
-        styles: { fontSize: 11, cellPadding: 6 },
+        styles: { fontSize: 10, cellPadding: 4.5 },
         headStyles: {
             fillColor: [241, 245, 249],
             textColor: [71, 85, 105],
             fontStyle: 'bold',
-            fontSize: 10
+            fontSize: 9.5
         },
         footStyles: {
             fillColor: [30, 58, 138],
             textColor: [255, 255, 255],
             fontStyle: 'bold',
-            fontSize: 11
+            fontSize: 10.5
         },
         columnStyles: {
             0: { cellWidth: 120 },
@@ -212,44 +202,38 @@ export const generateAdmissionReceipt = async (data) => {
     });
 
     // ─── PAYMENT DETAILS BOX ───
-    let afterFeeY = doc.lastAutoTable.finalY + 10;
-    
-    // Ensure we have enough space for the payment box and the footer without running off the page
+    let afterFeeY = doc.lastAutoTable.finalY + 6;
     const pageHeight = doc.internal.pageSize.getHeight();
-    if (afterFeeY + 55 > pageHeight) {
-        doc.addPage();
-        afterFeeY = 20;
-    }
 
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(15, afterFeeY, pageWidth - 30, 34, 3, 3, 'F');
+    doc.roundedRect(15, afterFeeY, pageWidth - 30, 28, 3, 3, 'F');
     doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(15, afterFeeY, pageWidth - 30, 34, 3, 3, 'S');
+    doc.roundedRect(15, afterFeeY, pageWidth - 30, 28, 3, 3, 'S');
 
     doc.setTextColor(71, 85, 105);
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setFont('helvetica', 'bold');
-    doc.text('Payment Mode:', 20, afterFeeY + 9);
-    doc.text('Transaction ID:', 20, afterFeeY + 18);
+    doc.text('Payment Mode:', 20, afterFeeY + 7);
+    doc.text('Transaction ID:', 20, afterFeeY + 15);
 
     doc.setTextColor(15, 23, 42);
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setFont('helvetica', 'normal');
     const paymentModeDisplay = (data.payment_mode || 'ONLINE').toUpperCase() === 'ONLINE'
         ? 'ONLINE PAYMENT (Razorpay)'
         : (data.payment_mode || '').toUpperCase();
-    doc.text(paymentModeDisplay, 60, afterFeeY + 9);
-    doc.text(data.payment_id || data.manual_receipt_ref || 'N/A', 60, afterFeeY + 18);
+    doc.text(paymentModeDisplay, 60, afterFeeY + 7);
+    doc.text(data.payment_id || data.manual_receipt_ref || 'N/A', 60, afterFeeY + 15);
 
     // Amount in words
     doc.setTextColor(30, 58, 138);
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setFont('helvetica', 'bolditalic');
-    doc.text(`Amount in Words: ${numberToWords(Math.round(amount))}`, 20, afterFeeY + 28);
+    doc.text(`Amount in Words: ${numberToWords(Math.round(amount))}`, 20, afterFeeY + 23);
 
     // ─── FOOTER ───
     // Beautifully spaced below the box, guaranteed to be inside printable margins
-    const footerY = Math.min(afterFeeY + 44, pageHeight - 20);
+    const footerY = Math.min(afterFeeY + 36, pageHeight - 20);
 
     doc.setTextColor(148, 163, 184);
     doc.setFontSize(8);

@@ -245,6 +245,68 @@ const SectionHeader = ({ title, color = 'blue' }) => {
 const REGISTRATIONS_PATH = 'schooler_system/enquiry_management/registrations';
 const FEES_PATH = 'schooler_system/enquiry_management/form_fee_setup';
 
+const generateUniqueEmail = (firstName, lastName, existingList, extraExclusions = []) => {
+    const cleanFirst = (firstName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanLast = (lastName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    let base = 'student';
+    if (cleanFirst && cleanLast) {
+        base = `${cleanFirst}.${cleanLast}`;
+    } else if (cleanFirst) {
+        base = cleanFirst;
+    } else if (cleanLast) {
+        base = cleanLast;
+    }
+    
+    let suffix = 1;
+    let email = `${base}${suffix}@ssvschool.edu.in`;
+    
+    const existingEmails = new Set([
+        ...existingList.map(s => (s.student_email_id || '').trim().toLowerCase()),
+        ...extraExclusions.map(e => e.trim().toLowerCase())
+    ]);
+    
+    while (existingEmails.has(email)) {
+        suffix++;
+        email = `${base}${suffix}@ssvschool.edu.in`;
+    }
+    
+    return email;
+};
+
+const generateUniqueGuardianEmail = (guardianName, existingGuardiansList, extraExclusions = []) => {
+    const nameParts = (guardianName || '').trim().split(/\s+/);
+    let first = nameParts[0] || '';
+    let last = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+    
+    const cleanFirst = first.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanLast = last.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    let base = 'guardian';
+    if (cleanFirst && cleanLast) {
+        base = `${cleanFirst}.${cleanLast}`;
+    } else if (cleanFirst) {
+        base = cleanFirst;
+    } else if (cleanLast) {
+        base = cleanLast;
+    }
+    
+    let suffix = 1;
+    let email = `${base}${suffix}@guardian.ssvschool.edu.in`;
+    
+    const existingEmails = new Set([
+        ...existingGuardiansList.map(g => (g.email_address || '').trim().toLowerCase()),
+        ...extraExclusions.map(e => e.trim().toLowerCase())
+    ]);
+    
+    while (existingEmails.has(email)) {
+        suffix++;
+        email = `${base}${suffix}@guardian.ssvschool.edu.in`;
+    }
+    
+    return email;
+};
+
 export default function RegistrationForm({ initialView = 'list' }) {
     const initFormData = {
         // Student Detail
@@ -515,13 +577,13 @@ export default function RegistrationForm({ initialView = 'list' }) {
             const [progRes, yearRes, guardianRes] = await Promise.all([
                 API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
-                API.get('/api/resource/Guardian?fields=["name","guardian_name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
             ]);
             const programs = progRes.data.data?.map(p => p.name) || [];
             const years = yearRes.data.data?.map(y => y.name) || [];
             
             setAcademicYears(years);
-            setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name })));
+            setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '' })));
             await fetchRestrictions(programs);
         } catch (err) {
             console.error('Error fetching ERPNext data:', err);
@@ -590,9 +652,33 @@ export default function RegistrationForm({ initialView = 'list' }) {
     };
 
     const handleSave = async () => {
-        if (!formData.first_name || !formData.program || !formData.student_mobile_number) {
+        if (!formData.first_name || !formData.program || !formData.student_mobile_number || !formData.student_mobile_number.trim()) {
             notification.warning({ message: 'Required Fields Missing', description: 'Please fill in Student Name, Program, and Mobile Number.' });
             return;
+        }
+
+        // Validate guardians
+        for (let i = 0; i < (formData.guardians || []).length; i++) {
+            const g = formData.guardians[i];
+            if (g.is_new) {
+                if (!g.guardian_name || !g.guardian_name.trim()) {
+                    notification.warning({ message: 'Required Fields Missing', description: `Guardian Name is required for Guardian #${i + 1}.` });
+                    return;
+                }
+                if (!g.mobile_number || !g.mobile_number.trim()) {
+                    notification.warning({ message: 'Required Fields Missing', description: `Mobile Number is required for Guardian #${i + 1}.` });
+                    return;
+                }
+            } else {
+                if (!g.guardian) {
+                    notification.warning({ message: 'Required Fields Missing', description: `Please select an existing guardian for Guardian #${i + 1} or remove it.` });
+                    return;
+                }
+            }
+            if (!g.relation) {
+                notification.warning({ message: 'Required Fields Missing', description: `Relation is required for Guardian #${i + 1}.` });
+                return;
+            }
         }
 
         setSaving(true);
@@ -604,17 +690,6 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 if (formData.program && !availableClasses.includes(formData.program)) {
                     throw new Error(`Program '${formData.program}' not found in ERPNext. Please select a valid program.`);
                 }
-
-                // Validate guardians
-                for (let i = 0; i < (formData.guardians || []).length; i++) {
-                    const g = formData.guardians[i];
-                    if (g.is_new && !g.guardian_name) throw new Error(`Guardian Name is required for Guardian #${i + 1}.`);
-                    if (!g.is_new && !g.guardian) throw new Error(`Please select an existing guardian for Guardian #${i + 1} or remove it.`);
-                    if (!g.relation) throw new Error(`Relation is required for Guardian #${i + 1}.`);
-                }
-
-                // Removed ERPNext sync from Registration stage.
-                // Student and Guardian will only be created during Final Admission.
             } catch (erpErr) {
                 console.error('Validation failed:', erpErr);
             }
@@ -701,6 +776,12 @@ export default function RegistrationForm({ initialView = 'list' }) {
             if (key === 'guardian') {
                 const found = guardiansList.find(gl => gl.name === val);
                 if (found) g[idx].guardian_name = found.guardian_name;
+            }
+            if (key === 'guardian_name' && g[idx].is_new) {
+                const otherNewEmails = g
+                    .filter((item, i) => i !== idx && item.is_new && item.email_address)
+                    .map(item => item.email_address);
+                g[idx].email_address = generateUniqueGuardianEmail(val, guardiansList, otherNewEmails);
             }
             return { ...prev, guardians: g };
         });
@@ -858,9 +939,21 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
                     <SectionHeader title="Basic Detail" color="green" />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <InputField label="First Name" required value={formData.first_name} onChange={(v) => updateField('first_name', v)} placeholder="Enter First Name" />
+                        <InputField label="First Name" required value={formData.first_name} onChange={(v) => {
+                            setFormData(prev => {
+                                const next = { ...prev, first_name: v };
+                                next.student_email_id = generateUniqueEmail(v, next.last_name, data);
+                                return next;
+                            });
+                        }} placeholder="Enter First Name" />
                         <InputField label="Middle Name" value={formData.middle_name} onChange={(v) => updateField('middle_name', v)} placeholder="Enter Middle Name" />
-                        <InputField label="Last Name" value={formData.last_name} onChange={(v) => updateField('last_name', v)} placeholder="Enter Last Name" />
+                        <InputField label="Last Name" value={formData.last_name} onChange={(v) => {
+                            setFormData(prev => {
+                                const next = { ...prev, last_name: v };
+                                next.student_email_id = generateUniqueEmail(next.first_name, v, data);
+                                return next;
+                            });
+                        }} placeholder="Enter Last Name" />
                     </div>
                     <div className="mt-4">
                         <InputField label="Student Full Name" value={formData.student_full_name} onChange={(v) => updateField('student_full_name', v)} placeholder="Enter Student Full Name" />
@@ -877,7 +970,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     <SectionHeader title="Communication" color="red" />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <InputField label="Student Mobile Number" required value={formData.student_mobile_number} onChange={(v) => updateField('student_mobile_number', v)} placeholder="Enter Mobile Number" />
-                        <InputField label="Student Email Address" type="email" value={formData.student_email_id} onChange={(v) => updateField('student_email_id', v)} placeholder="Enter Email Address" />
+                        <InputField label="Student Email Address" required type="email" value={formData.student_email_id} onChange={(v) => updateField('student_email_id', v)} placeholder="Enter Email Address" />
                         <InputField label="Emergency Mobile Number" value={formData.emergency_mobile_number} onChange={(v) => updateField('emergency_mobile_number', v)} placeholder="Enter Emergency Mobile Number" />
                     </div>
 
@@ -944,8 +1037,8 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                     ) : (
                                         <>
                                             <InputField label="Guardian Name *" value={g.guardian_name || ''} onChange={v => updateGuardian(idx, 'guardian_name', v)} placeholder="Full Name" />
-                                            <InputField label="Email Address" type="email" value={g.email_address || ''} onChange={v => updateGuardian(idx, 'email_address', v)} placeholder="email@example.com" />
-                                            <InputField label="Mobile Number" value={g.mobile_number || ''} onChange={v => updateGuardian(idx, 'mobile_number', v)} placeholder="+91 ..." />
+                                            <InputField label="Email Address *" type="email" value={g.email_address || ''} onChange={v => updateGuardian(idx, 'email_address', v)} placeholder="email@example.com" />
+                                            <InputField label="Mobile Number *" value={g.mobile_number || ''} onChange={v => updateGuardian(idx, 'mobile_number', v)} placeholder="+91 ..." />
                                             <InputField label="Alternate Number" value={g.alternate_number || ''} onChange={v => updateGuardian(idx, 'alternate_number', v)} />
                                             <InputField label="Date of Birth" type="date" value={g.date_of_birth || ''} onChange={v => updateGuardian(idx, 'date_of_birth', v)} />
                                             <InputField label="User Id" value={g.user || ''} onChange={v => updateGuardian(idx, 'user', v)} placeholder="User ID" />

@@ -330,6 +330,7 @@ import AssessmentResultTool from './pages/Education/AssessmentResultTool';
 import StudentGroupCreationTool from './pages/Education/StudentGroupCreationTool';
 import ProgramEnrollmentTool from './pages/Education/ProgramEnrollmentTool';
 import CourseSchedulingTool from './pages/Education/CourseSchedulingTool';
+import ClasswiseSubjectAllocationTool from './pages/Education/ClasswiseSubjectAllocationTool';
 import StudentAndGuardianContactDetailsReport from './pages/Education/StudentAndGuardianContactDetailsReport';
 import Article from './pages/Education/Article';
 import Video from './pages/Education/Video';
@@ -391,6 +392,7 @@ import CertificatesDashboard from './pages/Certificates/CertificatesDashboard';
 import BonafideCertificate from './pages/Certificates/BonafideCertificate';
 import TrialCertificate from './pages/Certificates/TrialCertificate';
 import TransferCertificate from './pages/Certificates/TransferCertificate';
+import DomisileCharacterCertificate from './pages/Certificates/DomisileCharacterCertificate';
 import CertificateRecords from './pages/Certificates/CertificateRecords';
 
 const RootRedirect = () => {
@@ -774,6 +776,7 @@ function App() {
                 <Route path="/education/student-group-creation-tool" element={<StudentGroupCreationTool />} />
                 <Route path="/education/program-enrollment-tool" element={<ProgramEnrollmentTool />} />
                 <Route path="/education/course-scheduling-tool" element={<CourseSchedulingTool />} />
+                <Route path="/education/classwise-subject-allocation-tool" element={<ClasswiseSubjectAllocationTool />} />
                 <Route path="/education/student-and-guardian-contact-details-report" element={<StudentAndGuardianContactDetailsReport />} />
 
                 {/* Selling */}
@@ -902,6 +905,7 @@ function App() {
                 <Route path="/certificates/bonafide" element={<BonafideCertificate />} />
                 <Route path="/certificates/trial" element={<TrialCertificate />} />
                 <Route path="/certificates/transfer" element={<TransferCertificate />} />
+                <Route path="/certificates/domisile" element={<DomisileCharacterCertificate />} />
                 <Route path="/certificates/records" element={<CertificateRecords />} />
 
               </Route> {/* End of Protected Routes */}

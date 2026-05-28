@@ -47,6 +47,68 @@ const emptyForm = () => ({
     confirm_password: DEFAULT_USER_PASSWORD,
 });
 
+const generateUniqueEmail = (firstName, lastName, existingStudentsList, extraExclusions = []) => {
+    const cleanFirst = (firstName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanLast = (lastName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    let base = 'student';
+    if (cleanFirst && cleanLast) {
+        base = `${cleanFirst}.${cleanLast}`;
+    } else if (cleanFirst) {
+        base = cleanFirst;
+    } else if (cleanLast) {
+        base = cleanLast;
+    }
+    
+    let suffix = 1;
+    let email = `${base}${suffix}@ssvschool.edu.in`;
+    
+    const existingEmails = new Set([
+        ...existingStudentsList.map(s => (s.student_email_id || '').trim().toLowerCase()),
+        ...extraExclusions.map(e => e.trim().toLowerCase())
+    ]);
+    
+    while (existingEmails.has(email)) {
+        suffix++;
+        email = `${base}${suffix}@ssvschool.edu.in`;
+    }
+    
+    return email;
+};
+
+const generateUniqueGuardianEmail = (guardianName, existingGuardiansList, extraExclusions = []) => {
+    const nameParts = (guardianName || '').trim().split(/\s+/);
+    let first = nameParts[0] || '';
+    let last = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+    
+    const cleanFirst = first.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanLast = last.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    let base = 'guardian';
+    if (cleanFirst && cleanLast) {
+        base = `${cleanFirst}.${cleanLast}`;
+    } else if (cleanFirst) {
+        base = cleanFirst;
+    } else if (cleanLast) {
+        base = cleanLast;
+    }
+    
+    let suffix = 1;
+    let email = `${base}${suffix}@guardian.ssvschool.edu.in`;
+    
+    const existingEmails = new Set([
+        ...existingGuardiansList.map(g => (g.email_address || '').trim().toLowerCase()),
+        ...extraExclusions.map(e => e.trim().toLowerCase())
+    ]);
+    
+    while (existingEmails.has(email)) {
+        suffix++;
+        email = `${base}${suffix}@guardian.ssvschool.edu.in`;
+    }
+    
+    return email;
+};
+
 const Student = () => {
     const [api, contextHolder] = notification.useNotification();
     // View state
@@ -146,12 +208,12 @@ const Student = () => {
             const [countryRes, custGroupRes, guardianRes, programRes] = await Promise.all([
                 API.get('/api/resource/Country?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Customer Group?fields=["name"]&limit_page_length=None&order_by=name asc'),
-                API.get('/api/resource/Guardian?fields=["name","guardian_name"]&limit_page_length=None&order_by=name asc'),
+                API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Program?fields=["name"]&limit_page_length=None&order_by=name asc'),
             ]);
             setCountries((countryRes.data.data || []).map(c => c.name));
             setCustomerGroups((custGroupRes.data.data || []).map(c => c.name));
-            setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name })));
+            setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '' })));
             setPrograms((programRes.data.data || []).map(p => p.name));
         } catch (err) {
             console.error('Error fetching dropdown data:', err);
@@ -211,6 +273,11 @@ const Student = () => {
             return;
         }
 
+        if (!form.student_mobile_number || !form.student_mobile_number.trim()) {
+            api.warning({ message: 'Student Mobile Number is required.' });
+            return;
+        }
+
         if (form.password && form.password !== form.confirm_password) {
             api.warning({ message: 'Passwords do not match.' });
             return;
@@ -219,9 +286,15 @@ const Student = () => {
         // Validate guardians
         for (let i = 0; i < form.guardians.length; i++) {
             const g = form.guardians[i];
-            if (g.is_new && !g.guardian_name) {
-                api.warning({ message: `Guardian Name is required for Guardian #${i + 1}.` });
-                return;
+            if (g.is_new) {
+                if (!g.guardian_name || !g.guardian_name.trim()) {
+                    api.warning({ message: `Guardian Name is required for Guardian #${i + 1}.` });
+                    return;
+                }
+                if (!g.mobile_number || !g.mobile_number.trim()) {
+                    api.warning({ message: `Mobile Number is required for Guardian #${i + 1}.` });
+                    return;
+                }
             }
             if (!g.is_new && !g.guardian) {
                 api.warning({ message: `Please select an existing guardian for Guardian #${i + 1} or remove it.` });
@@ -237,11 +310,12 @@ const Student = () => {
         try {
             // Process guardians
             const finalGuardians = [];
+            const finalGuardiansEmails = [];
             for (let i = 0; i < form.guardians.length; i++) {
                 const g = form.guardians[i];
-                const cleanGName = (g.guardian_name || 'guardian').replace(/\s+/g, '').toLowerCase();
                 const baseGEmail = g.email_address || g.user;
-                const gEmail = baseGEmail ? baseGEmail.trim() : `${cleanGName}.${Date.now().toString().slice(-4)}${i}@guardian.ssvschool.edu.in`;
+                const gEmail = baseGEmail ? baseGEmail.trim() : generateUniqueGuardianEmail(g.guardian_name, guardiansList, finalGuardiansEmails);
+                finalGuardiansEmails.push(gEmail);
 
                 let finalGuardianName = g.guardian;
                 let finalGuardianDisplayName = g.guardian_name || `Parent of ${form.first_name || 'Student'}`;
@@ -570,6 +644,13 @@ const Student = () => {
             if (key === 'guardian') {
                 const found = guardiansList.find(gl => gl.name === val);
                 if (found) g[idx].guardian_name = found.guardian_name;
+            }
+            // Auto-fill email_address when guardian_name is changed (for new guardians)
+            if (key === 'guardian_name' && g[idx].is_new) {
+                const otherNewEmails = g
+                    .filter((item, i) => i !== idx && item.is_new && item.email_address)
+                    .map(item => item.email_address);
+                g[idx].email_address = generateUniqueGuardianEmail(val, guardiansList, otherNewEmails);
             }
             return { ...prev, guardians: g };
         });
@@ -931,6 +1012,8 @@ const Student = () => {
         let successCount = 0;
         let failCount = 0;
         const errorMessages = [];
+        const allocatedEmails = [];
+        const allocatedGuardianEmails = [];
 
         try {
             let dataImportName = null;
@@ -996,6 +1079,10 @@ const Student = () => {
                 try {
                     if (importType === 'Insert New Records' && !firstName) {
                         throw new Error("Missing 'First Name'");
+                    }
+
+                    if (importType === 'Insert New Records' && !mobile) {
+                        throw new Error("Missing 'Student Mobile Number'");
                     }
 
                     const parseDate = (d) => {
@@ -1125,14 +1212,20 @@ const Student = () => {
 
                         let resolvedGuardianId = guardianID || undefined;
                         let finalGuardianDisplayName = guardianName ? guardianName.trim() : `Parent of ${firstName || 'Student'}`;
-                        const cleanGName = finalGuardianDisplayName.replace(/\s+/g, '').toLowerCase();
-                        const gEmail = guardianEmail ? guardianEmail.trim() : `${cleanGName}.${Date.now().toString().slice(-4)}@guardian.ssvschool.edu.in`;
+                        let gEmail = guardianEmail ? guardianEmail.trim() : '';
+                        if (!gEmail) {
+                            gEmail = generateUniqueGuardianEmail(finalGuardianDisplayName, guardiansList, allocatedGuardianEmails);
+                        }
+                        allocatedGuardianEmails.push(gEmail);
 
                         if (!resolvedGuardianId && guardianName) {
                             const found = guardiansList.find(g => g.guardian_name?.toLowerCase() === guardianName.trim().toLowerCase());
                             if (found) {
                                 resolvedGuardianId = found.name;
                             } else {
+                                if (!guardianMobile) {
+                                    throw new Error("Missing 'Guardian Mobile Number' for new Guardian: " + guardianName);
+                                }
                                 const guardianPayload = {
                                     guardian_name: guardianName.trim(),
                                     email_address: gEmail,
@@ -1242,8 +1335,11 @@ const Student = () => {
                     }
 
                     // Student email resolution
-                    const cleanFirstName = (firstName || 'student').replace(/\s+/g, '').toLowerCase();
-                    const safeEmail = email ? email.trim() : `${cleanFirstName}.${Date.now().toString().slice(-5)}@ssvschool.edu.in`;
+                    let safeEmail = email ? email.trim() : '';
+                    if (!safeEmail) {
+                        safeEmail = generateUniqueEmail(firstName, lastName, students, allocatedEmails);
+                    }
+                    allocatedEmails.push(safeEmail);
 
                     const payload = {
                         first_name: firstName || undefined,
@@ -1334,6 +1430,9 @@ const Student = () => {
 
                     // Sync/Create Student User account
                     if (erpNextStudentName) {
+                        const cleanPhone = mobile ? String(mobile).replace(/[\s+-]/g, '') : '';
+                        const cleanStudentUsername = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
                         const userPayload = {
                             mobile_no: mobile || null,
                             role_profile_name: 'Student',
@@ -2157,7 +2256,14 @@ const Student = () => {
                         <div className="grid grid-cols-2 gap-x-12 gap-y-6">
                             <div>
                                 <label className={labelStyle}>First Name *</label>
-                                <input className={inputStyle} value={form.first_name || ''} onChange={e => updateField('first_name', e.target.value)} placeholder="First Name" />
+                                <input className={inputStyle} value={form.first_name || ''} onChange={e => {
+                                    const val = e.target.value;
+                                    setForm(prev => {
+                                        const next = { ...prev, first_name: val };
+                                        next.student_email_id = generateUniqueEmail(val, next.last_name, students);
+                                        return next;
+                                    });
+                                }} placeholder="First Name" />
                             </div>
                             <div>
                                 <label className={labelStyle}>Naming Series</label>
@@ -2194,7 +2300,14 @@ const Student = () => {
                             </div>
                             <div>
                                 <label className={labelStyle}>Last Name</label>
-                                <input className={inputStyle} value={form.last_name || ''} onChange={e => updateField('last_name', e.target.value)} placeholder="Last Name" />
+                                <input className={inputStyle} value={form.last_name || ''} onChange={e => {
+                                    const val = e.target.value;
+                                    setForm(prev => {
+                                        const next = { ...prev, last_name: val };
+                                        next.student_email_id = generateUniqueEmail(next.first_name, val, students);
+                                        return next;
+                                    });
+                                }} placeholder="Last Name" />
                             </div>
                             <div>
                                 <label className={labelStyle}>Password</label>
@@ -2214,7 +2327,7 @@ const Student = () => {
                                     <input type="email" className={inputStyle} value={form.student_email_id} onChange={e => updateField('student_email_id', e.target.value)} placeholder="email@college.edu" />
                                 </div>
                                 <div>
-                                    <label className={labelStyle}>Student Mobile Number</label>
+                                    <label className={labelStyle}>Student Mobile Number *</label>
                                     <input className={inputStyle} value={form.student_mobile_number} onChange={e => updateField('student_mobile_number', e.target.value)} />
                                 </div>
                                 <div>
@@ -2328,11 +2441,11 @@ const Student = () => {
                                                     <input className={inputStyle} value={g.guardian_name || ''} onChange={e => updateGuardian(idx, 'guardian_name', e.target.value)} placeholder="Full Name" />
                                                 </div>
                                                 <div>
-                                                    <label className={labelStyle}>Email Address</label>
+                                                    <label className={labelStyle}>Email Address *</label>
                                                     <input type="email" className={inputStyle} value={g.email_address || ''} onChange={e => updateGuardian(idx, 'email_address', e.target.value)} placeholder="email@example.com" />
                                                 </div>
                                                 <div>
-                                                    <label className={labelStyle}>Mobile Number</label>
+                                                    <label className={labelStyle}>Mobile Number *</label>
                                                     <input className={inputStyle} value={g.mobile_number || ''} onChange={e => updateGuardian(idx, 'mobile_number', e.target.value)} placeholder="+91 ..." />
                                                 </div>
                                                 <div>
