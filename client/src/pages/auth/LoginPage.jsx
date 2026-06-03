@@ -262,6 +262,35 @@ const LoginPage = () => {
           </div>
         </div>
       </div>
+
+      {/* ─── COMPLIANCE FOOTER ─── */}
+      <footer className="login-footer" style={{
+        textAlign: 'center',
+        padding: '24px 10px',
+        width: '100%',
+        zIndex: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.4)',
+        backdropFilter: 'blur(8px)',
+        borderTop: '1px solid rgba(229, 231, 235, 0.5)',
+        fontSize: '13px',
+        color: '#4B5563',
+        marginTop: 'auto'
+      }}>
+        <div style={{ marginBottom: '8px' }}>
+          &copy; {new Date().getFullYear()} Shree Saraswati Vidhyalay. All rights reserved.
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap' }}>
+          <a href="/policies.html#terms" target="_blank" rel="noopener noreferrer" style={{ color: '#4F46E5', fontWeight: '600', textDecoration: 'none' }}>Terms & Conditions</a>
+          <span style={{ color: '#D1D5DB' }}>|</span>
+          <a href="/policies.html#privacy" target="_blank" rel="noopener noreferrer" style={{ color: '#4F46E5', fontWeight: '600', textDecoration: 'none' }}>Privacy Policy</a>
+          <span style={{ color: '#D1D5DB' }}>|</span>
+          <a href="/policies.html#refund" target="_blank" rel="noopener noreferrer" style={{ color: '#4F46E5', fontWeight: '600', textDecoration: 'none' }}>Refund Policy</a>
+          <span style={{ color: '#D1D5DB' }}>|</span>
+          <a href="/policies.html#shipping" target="_blank" rel="noopener noreferrer" style={{ color: '#4F46E5', fontWeight: '600', textDecoration: 'none' }}>Shipping Policy</a>
+          <span style={{ color: '#D1D5DB' }}>|</span>
+          <a href="/policies.html#contact" target="_blank" rel="noopener noreferrer" style={{ color: '#4F46E5', fontWeight: '600', textDecoration: 'none' }}>Contact Us</a>
+        </div>
+      </footer>
     </div>
   );
 };

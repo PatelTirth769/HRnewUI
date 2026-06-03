@@ -227,6 +227,13 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
     const [availableClasses, setAvailableClasses] = useState([]);
     const [academicYears, setAcademicYears] = useState([]);
 
+    // Filters state
+    const [filterDateFrom, setFilterDateFrom] = useState('');
+    const [filterDateTo, setFilterDateTo] = useState('');
+    const [filterProgram, setFilterProgram] = useState('All');
+    const [filterStatus, setFilterStatus] = useState('All');
+    const [filterFeeStatus, setFilterFeeStatus] = useState('All');
+
 
     const initFormData = {
         admissionNo: '',
@@ -411,7 +418,8 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                     }
 
                     // Synchronize and auto-create the Guardian User account mapped with the correct role profiles and mobile number for seamless login
-                    if (finalGuardianDisplayName) {
+                    const shouldCreateUser = guardiansArray.length === 1 || g.create_user_account;
+                    if (finalGuardianDisplayName && shouldCreateUser) {
                         try {
                             const cleanPhone = g.mobile_number ? String(g.mobile_number).replace(/[\s+-]/g, '') : '';
                             const cleanGUsername = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
@@ -482,6 +490,9 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                     academic_year: formData.academic_year || selectedRegistration?.academic_year,
                     program: formData.program || selectedRegistration?.program,
                     status: 'Admitted',
+                    custom_aadhaar_uid: selectedRegistration?.custom_aadhaar_uid || null,
+                    custom_pen_number: selectedRegistration?.custom_pen_number || null,
+                    custom_apaar_id: selectedRegistration?.custom_apaar_id || null,
                     guardians: linkedGuardians
                 };
 
@@ -612,12 +623,58 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
 
     const filteredData = useMemo(() => {
         const term = searchQuery.toLowerCase();
-        return registrations.filter(d => 
-            (d.first_name || '').toLowerCase().includes(term) || 
-            (d.registrationNo || '').toLowerCase().includes(term) ||
-            (d.enquiryCode || '').toLowerCase().includes(term)
-        );
-    }, [registrations, searchQuery]);
+        return registrations.filter(d => {
+            // 1. Text Search Query filter
+            const matchesSearch = 
+                (d.first_name || '').toLowerCase().includes(term) || 
+                (d.registrationNo || '').toLowerCase().includes(term) ||
+                (d.enquiryCode || '').toLowerCase().includes(term);
+            
+            if (!matchesSearch) return false;
+
+            // 2. Program Filter
+            if (filterProgram !== 'All' && d.program !== filterProgram) {
+                return false;
+            }
+
+            // 3. Status Filter
+            if (filterStatus !== 'All') {
+                const isAdmitted = d.admissionStatus === 'Admitted';
+                if (filterStatus === 'Pending' && isAdmitted) return false;
+                if (filterStatus === 'Confirmed' && !isAdmitted) return false;
+            }
+
+            // 4. Fee Status Filter
+            if (filterFeeStatus !== 'All') {
+                const isPaid = !!d.isFeePaid;
+                if (filterFeeStatus === 'Paid' && !isPaid) return false;
+                if (filterFeeStatus === 'Unpaid' && isPaid) return false;
+            }
+
+            // 5. Date Range Filter
+            if (filterDateFrom || filterDateTo) {
+                const regDate = d.created_at?.toDate ? d.created_at.toDate() : d.created_at ? new Date(d.created_at) : null;
+                if (!regDate) return false;
+                
+                const dateToCheck = new Date(regDate);
+                dateToCheck.setHours(0, 0, 0, 0);
+
+                if (filterDateFrom) {
+                    const from = new Date(filterDateFrom);
+                    from.setHours(0, 0, 0, 0);
+                    if (dateToCheck < from) return false;
+                }
+
+                if (filterDateTo) {
+                    const to = new Date(filterDateTo);
+                    to.setHours(23, 59, 59, 999);
+                    if (dateToCheck > to) return false;
+                }
+            }
+
+            return true;
+        });
+    }, [registrations, searchQuery, filterProgram, filterStatus, filterDateFrom, filterDateTo, filterFeeStatus]);
 
     if (view === 'form') {
         return (
@@ -680,6 +737,81 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                 <div className="flex items-center gap-3">
                     <button onClick={fetchRegistrations} className="p-2.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all shadow-sm">
                         <FiRefreshCw className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Filter Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Start Date</label>
+                        <input
+                            type="date"
+                            value={filterDateFrom}
+                            onChange={(e) => setFilterDateFrom(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none w-full"
+                        />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">End Date</label>
+                        <input
+                            type="date"
+                            value={filterDateTo}
+                            onChange={(e) => setFilterDateTo(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none w-full"
+                        />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Program</label>
+                        <select
+                            value={filterProgram}
+                            onChange={(e) => setFilterProgram(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                        >
+                            <option value="All">All Programs</option>
+                            {availableClasses.map((p) => (
+                                <option key={p} value={p}>{p}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Admission Status</label>
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                        >
+                            <option value="All">All Statuses</option>
+                            <option value="Pending">Admission Pending</option>
+                            <option value="Confirmed">Confirmed Admission</option>
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Fee Status</label>
+                        <select
+                            value={filterFeeStatus}
+                            onChange={(e) => setFilterFeeStatus(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                        >
+                            <option value="All">All Payments</option>
+                            <option value="Paid">✅ PAID</option>
+                            <option value="Unpaid">⏳ UNPAID</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="mt-4 flex justify-end">
+                    <button
+                        onClick={() => {
+                            setFilterDateFrom('');
+                            setFilterDateTo('');
+                            setFilterProgram('All');
+                            setFilterStatus('All');
+                            setFilterFeeStatus('All');
+                        }}
+                        className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all cursor-pointer"
+                    >
+                        Reset Filters
                     </button>
                 </div>
             </div>

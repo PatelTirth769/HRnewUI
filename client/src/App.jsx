@@ -888,7 +888,7 @@ function App() {
                 <Route path="/enquiry/registration/add" element={<RegistrationForm initialView="form" />} />
                 <Route path="/enquiry/registration/manage" element={<RegistrationForm initialView="list" />} />
                 <Route path="/enquiry/admission/fee-setup" element={<FormFeeSetup />} />
-                <Route path="/enquiry/admission/final-form" element={<FinalAdmissionForm initialView="form" />} />
+                <Route path="/enquiry/admission/final-form" element={<FinalAdmissionForm initialView="list" />} />
                 <Route path="/enquiry/admission/download" element={<DownloadAdmissionForm />} />
                 <Route path="/enquiry/reports/enquiry" element={<EnquiryReport />} />
                 <Route path="/enquiry/reports/registration" element={<RegistrationReport />} />

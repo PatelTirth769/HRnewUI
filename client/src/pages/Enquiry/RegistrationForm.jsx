@@ -379,6 +379,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
         belonging_ews: '',
         pen_number: '',
         abha_number: '',
+        custom_aadhaar_uid: '',
+        custom_pen_number: '',
+        custom_apaar_id: '',
 
         // Document Detail (New for Registration)
         documents: [
@@ -397,15 +400,21 @@ export default function RegistrationForm({ initialView = 'list' }) {
         siblings: []
     };
 
-    const [view, setView] = useState(initialView);
+    const [view, setView] = useState(() => sessionStorage.getItem('reg_view') || initialView);
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState('1');
+    const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('reg_tab') || '1');
     const [regFee, setRegFee] = useState(0);
-    const [formData, setFormData] = useState(initFormData);
+    const [formData, setFormData] = useState(() => {
+        const saved = sessionStorage.getItem('reg_form_data');
+        if (saved) {
+            try { return JSON.parse(saved); } catch (e) {}
+        }
+        return initFormData;
+    });
     const [selectedSibling, setSelectedSibling] = useState('');
     const [availableClasses, setAvailableClasses] = useState([]);
     const [academicYears, setAcademicYears] = useState([]);
@@ -413,7 +422,23 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const [paymentProcessing, setPaymentProcessing] = useState(false);
     const [previewModal, setPreviewModal] = useState({ visible: false, url: '', name: '', type: '' });
 
+    // Filters state
+    const [filterDateFrom, setFilterDateFrom] = useState('');
+    const [filterDateTo, setFilterDateTo] = useState('');
+    const [filterProgram, setFilterProgram] = useState('All');
+    const [filterStatus, setFilterStatus] = useState('All');
+    const [filterFeeStatus, setFilterFeeStatus] = useState('All');
+
     const navigate = useNavigate();
+
+    // Sync state to sessionStorage to prevent data loss on camera/scanner refresh
+    useEffect(() => { sessionStorage.setItem('reg_view', view); }, [view]);
+    useEffect(() => { sessionStorage.setItem('reg_tab', activeTab); }, [activeTab]);
+    useEffect(() => { 
+        if (!editingRecord) {
+            sessionStorage.setItem('reg_form_data', JSON.stringify(formData)); 
+        }
+    }, [formData, editingRecord]);
 
     // Load Razorpay checkout script
     useEffect(() => {
@@ -596,7 +621,11 @@ export default function RegistrationForm({ initialView = 'list' }) {
         else {
             fetchRegFee();
             if (!editingRecord) {
-                setFormData({ ...initFormData, registrationNo: `REG-${Date.now().toString().slice(-6)}` });
+                // Only initialize if we didn't just load a draft from sessionStorage
+                const hasDraft = !!sessionStorage.getItem('reg_form_data');
+                if (!hasDraft) {
+                    setFormData({ ...initFormData, registrationNo: `REG-${Date.now().toString().slice(-6)}` });
+                }
             } else {
                 const mergedDocs = initFormData.documents.map(defaultDoc => {
                     const existing = (editingRecord.documents || []).find(d => d.name === defaultDoc.name);
@@ -702,6 +731,8 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 updated_at: serverTimestamp()
             };
 
+            console.log('[Registration Save] 💾 Saving Registration to Firebase. Document Data inside payload:', finalData.documents);
+
             if (editingRecord) {
                 const docRef = doc(db, REGISTRATIONS_PATH, editingRecord.id);
                 await updateDoc(docRef, finalData);
@@ -713,6 +744,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 });
                 notification.success({ message: 'Registration Created Successfully' });
             }
+            sessionStorage.removeItem('reg_form_data');
             setView('list');
             setEditingRecord(null);
         } catch (err) {
@@ -736,13 +768,58 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
     const filteredData = useMemo(() => {
         const term = searchQuery.trim().toLowerCase();
-        if (!term) return data;
-        return data.filter(d => 
-            (d.first_name || '').toLowerCase().includes(term) ||
-            (d.registrationNo || '').toLowerCase().includes(term) ||
-            (d.student_mobile_number || '').toLowerCase().includes(term)
-        );
-    }, [data, searchQuery]);
+        return data.filter(d => {
+            // 1. Text Search Query filter
+            const matchesSearch = !term || 
+                (d.first_name || '').toLowerCase().includes(term) ||
+                (d.registrationNo || '').toLowerCase().includes(term) ||
+                (d.student_mobile_number || '').toLowerCase().includes(term);
+            
+            if (!matchesSearch) return false;
+
+            // 2. Program Filter
+            if (filterProgram !== 'All' && d.program !== filterProgram) {
+                return false;
+            }
+
+            // 3. Status Filter (Converted vs Open)
+            if (filterStatus !== 'All') {
+                const isConverted = d.status === 'Converted';
+                if (filterStatus === 'Converted' && !isConverted) return false;
+                if (filterStatus === 'Open' && isConverted) return false;
+            }
+
+            // 4. Fee Status Filter (Paid vs Unpaid)
+            if (filterFeeStatus !== 'All') {
+                const isPaid = !!d.isFeePaid;
+                if (filterFeeStatus === 'Paid' && !isPaid) return false;
+                if (filterFeeStatus === 'Unpaid' && isPaid) return false;
+            }
+
+            // 5. Date Range Filter
+            if (filterDateFrom || filterDateTo) {
+                const regDate = d.registration_date ? new Date(d.registration_date) : d.created_at?.toDate ? d.created_at.toDate() : d.created_at ? new Date(d.created_at) : null;
+                if (!regDate) return false;
+                
+                const dateToCheck = new Date(regDate);
+                dateToCheck.setHours(0, 0, 0, 0);
+
+                if (filterDateFrom) {
+                    const from = new Date(filterDateFrom);
+                    from.setHours(0, 0, 0, 0);
+                    if (dateToCheck < from) return false;
+                }
+
+                if (filterDateTo) {
+                    const to = new Date(filterDateTo);
+                    to.setHours(23, 59, 59, 999);
+                    if (dateToCheck > to) return false;
+                }
+            }
+
+            return true;
+        });
+    }, [data, searchQuery, filterProgram, filterStatus, filterFeeStatus, filterDateFrom, filterDateTo]);
 
     const updateField = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -753,6 +830,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             ...prev,
             guardians: [...(prev.guardians || []), { 
                 is_new: true,
+                create_user_account: (prev.guardians || []).length === 0,
                 guardian: '', 
                 guardian_name: '', 
                 relation: '',
@@ -837,17 +915,35 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 continue;
             }
 
-            const base64Data = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.readAsDataURL(file);
-            });
+            try {
+                console.log(`[AWS S3] ⏳ Requesting presigned URL for file: ${file.name}`);
+                const response = await axios.post('/local-api/api/s3/presigned-url', {
+                    fileName: file.name,
+                    fileType: file.type
+                });
+                
+                const { presignedUrl, fileUrl } = response.data;
+                console.log(`[AWS S3] 🚀 Received presigned URL. Uploading directly to S3...`);
 
-            newFiles.push({
-                fileName: file.name,
-                fileUrl: base64Data,
-                uploadedAt: new Date().toISOString()
-            });
+                await axios.put(presignedUrl, file, {
+                    headers: { 'Content-Type': file.type }
+                });
+
+                console.log(`[AWS S3] ✅ Successfully uploaded "${file.name}" to AWS S3! \nPublic URL:`, fileUrl);
+
+                newFiles.push({
+                    fileName: file.name,
+                    fileUrl: fileUrl,
+                    uploadedAt: new Date().toISOString()
+                });
+            } catch (error) {
+                console.error('[AWS S3 Upload Error] ❌ Failed to upload:', error.response?.data || error.message);
+                notification.error({
+                    message: 'Upload Failed',
+                    description: `Failed to upload "${file.name}". Please check your network and AWS config.`
+                });
+                continue;
+            }
         }
 
         if (newFiles.length === 0) return;
@@ -943,14 +1039,22 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             setFormData(prev => {
                                 const next = { ...prev, first_name: v };
                                 next.student_email_id = generateUniqueEmail(v, next.last_name, data);
+                                next.student_full_name = [v, next.middle_name, next.last_name].filter(Boolean).join(' ').trim();
                                 return next;
                             });
                         }} placeholder="Enter First Name" />
-                        <InputField label="Middle Name" value={formData.middle_name} onChange={(v) => updateField('middle_name', v)} placeholder="Enter Middle Name" />
+                        <InputField label="Middle Name" value={formData.middle_name} onChange={(v) => {
+                            setFormData(prev => {
+                                const next = { ...prev, middle_name: v };
+                                next.student_full_name = [next.first_name, v, next.last_name].filter(Boolean).join(' ').trim();
+                                return next;
+                            });
+                        }} placeholder="Enter Middle Name" />
                         <InputField label="Last Name" value={formData.last_name} onChange={(v) => {
                             setFormData(prev => {
                                 const next = { ...prev, last_name: v };
                                 next.student_email_id = generateUniqueEmail(next.first_name, v, data);
+                                next.student_full_name = [next.first_name, next.middle_name, v].filter(Boolean).join(' ').trim();
                                 return next;
                             });
                         }} placeholder="Enter Last Name" />
@@ -965,6 +1069,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         <SelectField label="Caste" value={formData.caste} options={['General', 'OBC', 'SC', 'ST']} onChange={(v) => updateField('caste', v)} />
                         <SelectField label="Religion" value={formData.religion} options={['Hindu', 'Muslim', 'Christian', 'Sikh', 'Jain']} onChange={(v) => updateField('religion', v)} />
                         <SelectField label="Blood Group" value={formData.blood_group} options={['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']} onChange={(v) => updateField('blood_group', v)} />
+                        <InputField label="Aadhaar (UID)" value={formData.custom_aadhaar_uid} onChange={(v) => updateField('custom_aadhaar_uid', v)} placeholder="12-digit Aadhaar" />
+                        <InputField label="PEN Number (Custom)" value={formData.custom_pen_number} onChange={(v) => updateField('custom_pen_number', v)} placeholder="Permanent Education Number" />
+                        <InputField label="APAAR ID" value={formData.custom_apaar_id} onChange={(v) => updateField('custom_apaar_id', v)} placeholder="APAAR ID" />
                     </div>
 
                     <SectionHeader title="Communication" color="red" />
@@ -1001,13 +1108,26 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             <div key={idx} className="mb-6 p-5 border border-gray-200 rounded-lg bg-gray-50/40 relative shadow-sm">
                                 <button onClick={() => removeGuardian(idx)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 font-bold transition" title="Remove Guardian">✕</button>
                                 
-                                <div className="flex gap-6 mb-6 pb-4 border-b border-gray-100">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-                                        <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!g.is_new} onChange={() => updateGuardian(idx, 'is_new', false)} /> Link Existing Guardian
-                                    </label>
-                                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-                                        <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!!g.is_new} onChange={() => updateGuardian(idx, 'is_new', true)} /> Create New Guardian
-                                    </label>
+                                <div className="flex flex-col gap-3 mb-6 pb-4 border-b border-gray-100">
+                                    <div className="flex gap-6">
+                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                            <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!g.is_new} onChange={() => updateGuardian(idx, 'is_new', false)} /> Link Existing Guardian
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                            <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!!g.is_new} onChange={() => updateGuardian(idx, 'is_new', true)} /> Create New Guardian
+                                        </label>
+                                    </div>
+                                    {(formData.guardians || []).length > 1 && (
+                                        <label className="flex items-center gap-2 text-sm font-medium text-blue-700 cursor-pointer mt-1">
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" 
+                                                checked={!!g.create_user_account}
+                                                onChange={(e) => updateGuardian(idx, 'create_user_account', e.target.checked)} 
+                                            /> 
+                                            Create Portal User Account for this Guardian
+                                        </label>
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
@@ -1410,7 +1530,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
             <div className="p-6 max-w-[1200px] mx-auto pb-24 text-gray-800 font-inter">
                 <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm rounded-t-xl">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setView('list')} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
+                        <button onClick={() => {
+                            // If they go back, ask if they want to clear draft? No, just keep it in case they return.
+                            setView('list');
+                        }} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
                             <FiArrowLeft className="w-5 h-5" />
                         </button>
                         <h1 className="text-xl font-bold text-gray-800 tracking-tight">
@@ -1447,8 +1570,89 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95">
                         <FiDownload className="w-4 h-4" /> Export
                     </button>
-                    <button onClick={() => { setEditingRecord(null); setView('form'); }} className="px-5 py-2 bg-[#8C3A3A] text-white rounded-lg text-sm font-black hover:bg-[#732929] transition-all shadow-lg shadow-black/10 flex items-center gap-2 active:scale-95">
+                    <button onClick={() => { 
+                        sessionStorage.removeItem('reg_form_data');
+                        setFormData({ ...initFormData, registrationNo: `REG-${Date.now().toString().slice(-6)}` });
+                        setEditingRecord(null); 
+                        setView('form'); 
+                        setActiveTab('1');
+                    }} className="px-5 py-2 bg-[#8C3A3A] text-white rounded-lg text-sm font-black hover:bg-[#732929] transition-all shadow-lg shadow-black/10 flex items-center gap-2 active:scale-95">
                         <FiPlus className="w-4 h-4" /> Add New
+                    </button>
+                </div>
+            </div>
+
+            {/* Filter Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Start Date</label>
+                        <input
+                            type="date"
+                            value={filterDateFrom}
+                            onChange={(e) => setFilterDateFrom(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none w-full"
+                        />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">End Date</label>
+                        <input
+                            type="date"
+                            value={filterDateTo}
+                            onChange={(e) => setFilterDateTo(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none w-full"
+                        />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Program</label>
+                        <select
+                            value={filterProgram}
+                            onChange={(e) => setFilterProgram(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                        >
+                            <option value="All">All Programs</option>
+                            {availableClasses.map((p) => (
+                                <option key={p} value={p}>{p}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Status</label>
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                        >
+                            <option value="All">All Statuses</option>
+                            <option value="Open">Open</option>
+                            <option value="Converted">Converted</option>
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Fee Status</label>
+                        <select
+                            value={filterFeeStatus}
+                            onChange={(e) => setFilterFeeStatus(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                        >
+                            <option value="All">All Payments</option>
+                            <option value="Paid">✅ PAID</option>
+                            <option value="Unpaid">⏳ UNPAID</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="mt-4 flex justify-end">
+                    <button
+                        onClick={() => {
+                            setFilterDateFrom('');
+                            setFilterDateTo('');
+                            setFilterProgram('All');
+                            setFilterStatus('All');
+                            setFilterFeeStatus('All');
+                        }}
+                        className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all cursor-pointer"
+                    >
+                        Reset Filters
                     </button>
                 </div>
             </div>

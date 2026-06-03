@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms & Policies - Shree Saraswati Vidhyalay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-dark: #3730A3;
+            --primary-light: #EEF2F6;
+            --text-main: #1F2937;
+            --text-muted: #4B5563;
+            --bg: #F9FAFB;
+            --card-bg: #FFFFFF;
+            --border: #E5E7EB;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 30px;
+        }
+
+        @media (min-width: 768px) {
+            .layout {
+                grid-template-columns: 280px 1fr;
+            }
+        }
+
+        /* Sidebar/Navigation */
+        .sidebar {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            height: fit-content;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo-text {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .nav-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .nav-btn {
+            background: none;
+            border: 1px solid transparent;
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-muted);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+        }
+
+        .nav-btn:hover {
+            background-color: #F3F4F6;
+            color: var(--text-main);
+        }
+
+        .nav-btn.active {
+            background-color: var(--primary-light);
+            color: var(--primary);
+            border-color: rgba(79, 70, 229, 0.1);
+        }
+
+        /* Content Area */
+        .content-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            padding: 40px;
+            min-height: 450px;
+        }
+
+        .policy-content {
+            display: none;
+        }
+
+        .policy-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            font-size: 26px;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 24px;
+            color: var(--text-main);
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 12px;
+        }
+
+        h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-top: 24px;
+            margin-bottom: 12px;
+            color: var(--text-main);
+        }
+
+        p, ul, ol {
+            font-size: 15px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        ul {
+            padding-left: 20px;
+        }
+
+        .contact-info {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        @media (min-width: 600px) {
+            .contact-info {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .info-block {
+            background-color: #F3F4F6;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .info-title {
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 4px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .info-value {
+            font-size: 15px;
+            color: var(--primary);
+            font-weight: 500;
+            word-break: break-all;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="layout">
+            <!-- Sidebar Navigation -->
+            <aside class="sidebar">
+                <div class="logo-container">
+                    <span class="logo-text">🏫 SSV Campus</span>
+                </div>
+                <div class="nav-list">
+                    <button class="nav-btn active" onclick="switchTab('contact')">Contact Us</button>
+                    <button class="nav-btn" onclick="switchTab('terms')">Terms & Conditions</button>
+                    <button class="nav-btn" onclick="switchTab('privacy')">Privacy Policy</button>
+                    <button class="nav-btn" onclick="switchTab('refund')">Refund Policy</button>
+                    <button class="nav-btn" onclick="switchTab('shipping')">Shipping Policy</button>
+                </div>
+            </aside>
+
+            <!-- Main Content Card -->
+            <main class="content-card">
+                <!-- CONTACT US -->
+                <div id="content-contact" class="policy-content active">
+                    <h1>Contact Us</h1>
+                    <p>If you have any questions, feedback, or need support regarding student fee payments, please feel free to reach out to us. Our administrative team will be happy to assist you.</p>
+                    
+                    <div class="contact-info">
+                        <div class="info-block">
+                            <div class="info-title">Email Support</div>
+                            <div class="info-value">ssvprincipal3@gmail.com</div>
+                        </div>
+                        <div class="info-block">
+                            <div class="info-title">Mobile Number</div>
+                            <div class="info-value">+91 76220 11101</div>
+                        </div>
+                        <div class="info-block" style="grid-column: span 2;">
+                            <div class="info-title">Campus Address</div>
+                            <div class="info-value" style="color: var(--text-muted);">Sector-3/B, Gandhinagar, 382006, Gujarat, India</div>
+                        </div>
+                    </div>
+                    
+                    <h2>Office Hours</h2>
+                    <p>Our administration office is open for inquiries during the following hours:</p>
+                    <ul>
+                        <li><strong>Monday to Friday:</strong> 9:00 AM – 4:00 PM</li>
+                        <li><strong>Saturday:</strong> 9:00 AM – 1:00 PM</li>
+                        <li><strong>Sunday:</strong> Closed</li>
+                    </ul>
+                </div>
+
+                <!-- TERMS AND CONDITIONS -->
+                <div id="content-terms" class="policy-content">
+                    <h1>Terms and Conditions</h1>
+                    <p>Welcome to Shree Saraswati Vidhyalay. These terms and conditions outline the rules and regulations for the use of Shree Saraswati Vidhyalay's online fee payment portal.</p>
+                    
+                    <h2>1. Acceptance of Terms</h2>
+                    <p>By accessing and using this portal to make fee payments, you accept and agree to be bound by the terms and provisions of this agreement.</p>
+                    
+                    <h2>2. Payment Information & Accuracy</h2>
+                    <p>Users must provide accurate details of the student (such as Student ID, Name, Grade, and Term/Quarter) and valid payment information. Shree Saraswati Vidhyalay is not responsible for transactions that fail or are incorrectly credited due to inaccurate information provided by the user.</p>
+                    
+                    <h2>3. Transaction Charges</h2>
+                    <p>Any service tax, payment gateway transaction charges, or convenience fees levied by the payment processor or bank are the responsibility of the payer and will be displayed at the checkout page before payment is completed.</p>
+                    
+                    <h2>4. Security of Payments</h2>
+                    <p>We use secure industry-standard payment gateways (e.g. Razorpay) to process payments. We do not store your credit card, debit card, or net banking credentials on our servers.</p>
+                    
+                    <h2>5. System Failure or Double Payments</h2>
+                    <p>If money is deducted from your account but a payment confirmation receipt is not generated, or if a payment is made twice due to technical issues, please contact the school administration office immediately with details of the transaction.</p>
+                    
+                    <h2>6. Governing Law</h2>
+                    <p>These terms and conditions are governed by and construed in accordance with the laws of India, and any disputes shall be subject to the exclusive jurisdiction of the local courts.</p>
+                </div>
+
+                <!-- PRIVACY POLICY -->
+                <div id="content-privacy" class="policy-content">
+                    <h1>Privacy Policy</h1>
+                    <p>At Shree Saraswati Vidhyalay, we are committed to protecting the privacy and security of our students' and parents' personal information. This Privacy Policy describes how we collect, use, and share information when you make payment transactions through our online portal.</p>
+                    
+                    <h2>1. Information We Collect</h2>
+                    <p>When you use our portal to pay school fees, we collect details relevant to the student and payment registration, including:</p>
+                    <ul>
+                        <li>Student Name, Student ID, and Class/Grade.</li>
+                        <li>Payer name, contact email address, and mobile number.</li>
+                        <li>Transaction details such as transaction amount, order ID, and date/time of payment.</li>
+                    </ul>
+                    
+                    <h2>2. Payment Information Handling</h2>
+                    <p>All online transaction details (card numbers, UPI IDs, net banking details) are processed directly by our secure payment gateway partner, Razorpay, under industry-standard security protocols. Shree Saraswati Vidhyalay does not see, access, or store your credit/debit card numbers or passwords.</p>
+                    
+                    <h2>3. How We Use Your Information</h2>
+                    <p>The information we collect is strictly used to:</p>
+                    <ul>
+                        <li>Record and verify the fee payment against the student's ledger.</li>
+                        <li>Generate and email/SMS payment confirmation receipts.</li>
+                        <li>Respond to customer support requests and troubleshoot transaction issues.</li>
+                    </ul>
+                    
+                    <h2>4. Information Sharing & Disclosure</h2>
+                    <p>We do not sell or rent parent/student information to third parties. Information is only shared with our payment gateway partner (Razorpay) as required to complete the transaction process and as required by legal authorities.</p>
+                    
+                    <h2>5. Data Security</h2>
+                    <p>We use administrative, technical, and physical security measures to protect your personal information from unauthorized access, alteration, or disclosure.</p>
+                </div>
+
+                <!-- REFUND POLICY -->
+                <div id="content-refund" class="policy-content">
+                    <h1>Cancellation and Refund Policy</h1>
+                    
+                    <h2>1. Policy Overview</h2>
+                    <p>Shree Saraswati Vidhyalay's online fee payment portal is designed to facilitate quick and secure fee payments for our students. All payments made through the portal are subject to this Cancellation and Refund Policy.</p>
+                    
+                    <h2>2. Payment Cancellation</h2>
+                    <p>Once a payment transaction is successfully initiated and processed, the transaction cannot be cancelled by the user. Please ensure all student details and payment amounts are verified before proceeding to the final payment checkout.</p>
+                    
+                    <h2>3. Duplicate or Erroneous Transactions</h2>
+                    <p>In case of technical issues or system errors leading to a double payment or an incorrect amount being deducted, the extra amount will be refunded. Parents/payers must notify the school administration within 7 business days of the transaction with proof of payment (such as bank statement and transaction references).</p>
+                    
+                    <h2>4. Refund Processing Time</h2>
+                    <p>Once the double payment or error is verified by the school administration, refunds will be approved and initiated. Approved refunds are credited back to the original bank account or card used to make the payment within 7 to 10 working days, depending on bank processing times.</p>
+                    
+                    <h2>5. Service and Convenience Fees</h2>
+                    <p>Please note that any non-refundable convenience charges, platform fees, or service taxes charged by banks or card networks during the transaction may not be eligible for a refund, except in cases where the system itself failed to record a valid attempt.</p>
+                </div>
+
+                <!-- SHIPPING POLICY -->
+                <div id="content-shipping" class="policy-content">
+                    <h1>Shipping and Delivery Policy</h1>
+                    
+                    <h2>1. Nature of Services</h2>
+                    <p>Shree Saraswati Vidhyalay's online fee payment portal provides electronic payment services for school/institution fees, registration, and administrative charges. We do not sell or ship physical goods or merchandise.</p>
+                    
+                    <h2>2. Shipping & Delivery Methods</h2>
+                    <p>Since our services are entirely educational and digital, physical shipping and logistics delivery are <strong>not applicable</strong>. No physical products will be shipped or delivered to your billing/shipping address.</p>
+                    
+                    <h2>3. Service Delivery Timeline</h2>
+                    <p>Upon successful payment confirmation through the gateway:</p>
+                    <ul>
+                        <li>A digital receipt is generated immediately on-screen.</li>
+                        <li>An automated payment confirmation is sent to your registered email address and mobile number.</li>
+                        <li>The student's fee ledger/records in the Shree Saraswati Vidhyalay portal are updated dynamically to reflect the paid fees.</li>
+                    </ul>
+                </div>
+            </main>
+        </div>
+        <div class="footer">
+            &copy; 2026 Shree Saraswati Vidhyalay. All rights reserved.
+        </div>
+    </div>
+
+    <script>
+        const tabMap = {
+            'contact': 0,
+            'terms': 1,
+            'privacy': 2,
+            'refund': 3,
+            'shipping': 4
+        };
+
+        const keys = Object.keys(tabMap);
+
+        function switchTab(tabId) {
+            // Update button styles
+            const buttons = document.querySelectorAll('.nav-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            
+            const activeIndex = tabMap[tabId] !== undefined ? tabMap[tabId] : 0;
+            buttons[activeIndex].classList.add('active');
+
+            // Show active policy section
+            const sections = document.querySelectorAll('.policy-content');
+            sections.forEach(sec => sec.classList.remove('active'));
+
+            const activeSection = document.getElementById(`content-${tabId}`);
+            if (activeSection) {
+                activeSection.classList.add('active');
+            }
+
+            // Update URL hash without reload
+            if (window.location.hash !== `#${tabId}`) {
+                history.pushState(null, null, `#${tabId}`);
+            }
+        }
+
+        // Handle URL hash on load and back/forward browser navigation
+        function handleRouting() {
+            const hash = window.location.hash.replace('#', '');
+            if (keys.includes(hash)) {
+                switchTab(hash);
+            } else {
+                switchTab('contact');
+            }
+        }
+
+        window.addEventListener('hashchange', handleRouting);
+        window.addEventListener('load', handleRouting);
+    </script>
+</body>
+</html>

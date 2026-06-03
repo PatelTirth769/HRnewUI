@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import { db } from '../../config/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { DEFAULT_USER_PASSWORD } from '../../config/settings';
+import { FiEdit2, FiTrash2, FiPlus, FiRefreshCw, FiSearch, FiDownload } from 'react-icons/fi';
 
 const TABS = ['Details', 'Address', 'Relations', 'Customer Details', 'Exit'];
 const BLOOD_GROUPS = ['', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
@@ -27,6 +28,9 @@ const emptyForm = () => ({
     gender: '',
     blood_group: '',
     nationality: '',
+    custom_aadhaar_uid: '',
+    custom_pen_number: '',
+    custom_apaar_id: '',
     // Address
     address_line_1: '',
     address_line_2: '',
@@ -152,6 +156,7 @@ const Student = () => {
     const [loadingList, setLoadingList] = useState(true);
     const [search, setSearch] = useState('');
     const [selectedProgram, setSelectedProgram] = useState('');
+    const [sortByRollNo, setSortByRollNo] = useState(false);
     const [pageSize, setPageSize] = useState(20);
     const [visibleCount, setVisibleCount] = useState(20);
 
@@ -241,13 +246,16 @@ const Student = () => {
                 gender: d.gender || '',
                 blood_group: d.blood_group || '',
                 nationality: d.nationality || '',
+                custom_aadhaar_uid: d.custom_aadhaar_uid || '',
+                custom_pen_number: d.custom_pen_number || '',
+                custom_apaar_id: d.custom_apaar_id || '',
                 address_line_1: d.address_line_1 || '',
                 address_line_2: d.address_line_2 || '',
                 pincode: d.pincode || '',
                 city: d.city || '',
                 state: d.state || '',
                 country: d.country || 'India',
-                guardians: d.guardians || [],
+                guardians: (d.guardians || []).map((g, idx) => ({ ...g, create_user_account: idx === 0 })),
                 siblings: d.siblings || [],
                 program: d.program || '',
                 customer_group: d.customer_group || '',
@@ -387,7 +395,8 @@ const Student = () => {
                 }
 
                 // Sync Guardian User account
-                if (finalGuardianDisplayName) {
+                const shouldCreateUser = form.guardians.length === 1 || g.create_user_account;
+                if (finalGuardianDisplayName && shouldCreateUser) {
                     try {
                         const cleanPhone = g.mobile_number ? String(g.mobile_number).replace(/[\s+-]/g, '') : '';
                         const cleanGUsername = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
@@ -605,12 +614,18 @@ const Student = () => {
         }
     };
 
-    const handleDelete = async () => {
-        if (!window.confirm('Are you sure you want to delete this student?')) return;
+    const handleDelete = async (id) => {
+        const targetId = id || editingRecord;
+        if (!targetId) return;
+        if (!window.confirm(`Are you sure you want to delete student "${targetId}"?`)) return;
         try {
-            await API.delete(`/api/resource/Student/${encodeURIComponent(editingRecord)}`);
+            await API.delete(`/api/resource/Student/${encodeURIComponent(targetId)}`);
             api.success({ message: 'Student deleted.' });
-            setView('list');
+            if (view === 'list') {
+                fetchStudents();
+            } else {
+                setView('list');
+            }
         } catch (err) {
             api.error({ message: 'Delete Failed', description: err.message });
         }
@@ -622,6 +637,7 @@ const Student = () => {
             ...prev,
             guardians: [...prev.guardians, { 
                 is_new: true,
+                create_user_account: prev.guardians.length === 0,
                 guardian: '', 
                 guardian_name: '', 
                 relation: '',
@@ -2060,106 +2076,163 @@ const Student = () => {
             return matchesSearch && matchesProgram;
         });
 
+        if (sortByRollNo) {
+            filtered.sort((a, b) => {
+                const rollA = parseInt(a.roll_number, 10) || 0;
+                const rollB = parseInt(b.roll_number, 10) || 0;
+                return rollA - rollB;
+            });
+        }
+
         return (
-            <div className="p-6">
+            <div className="p-6 max-w-[1400px] mx-auto pb-24 text-gray-800 font-inter">
                 {contextHolder}
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-semibold text-gray-800">Students</h1>
-                    <div className="flex gap-2">
-                        <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 transition font-medium" onClick={() => setView('import')}>
+                    <div>
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Students</h1>
+                        <div className="flex items-center gap-2 text-[12px] text-gray-500 mt-1 font-medium">
+                            <span>Home</span> / <span>Education</span> / <span className="text-blue-600 font-bold">Students</span>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95 cursor-pointer" onClick={() => setView('import')}>
                             Data Import
                         </button>
-                        <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 flex items-center gap-2 transition" onClick={fetchStudents} disabled={loadingList}>
-                            {loadingList ? '⟳ Loading...' : '⟳ Refresh'}
+                        <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95 cursor-pointer" onClick={fetchStudents} disabled={loadingList}>
+                            <FiRefreshCw className={`w-4 h-4 ${loadingList ? 'animate-spin' : ''}`} /> Refresh
                         </button>
-                        <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium" onClick={() => { setEditingRecord(null); setView('form'); }}>
-                            + Add Student
+                        <button className="px-5 py-2 bg-[#8C3A3A] text-white rounded-lg text-sm font-black hover:bg-[#732929] transition-all shadow-lg shadow-black/10 flex items-center gap-2 active:scale-95 cursor-pointer" onClick={() => { setEditingRecord(null); setView('form'); }}>
+                            <FiPlus className="w-4 h-4" /> Add Student
                         </button>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-80" placeholder="Search ID, Name or Email..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                    <select 
-                        className="border border-gray-300 rounded px-3 py-2 text-sm w-60" 
-                        value={selectedProgram} 
-                        onChange={(e) => setSelectedProgram(e.target.value)}
-                    >
-                        <option value="">Filter by Program...</option>
-                        {programs.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                    {(search || selectedProgram) && (
-                        <button className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1" onClick={() => { setSearch(''); setSelectedProgram(''); }}>
-                            ✕ Clear Filters
-                        </button>
-                    )}
-                    <div className="ml-auto text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                        {!loadingList && `${Math.min(visibleCount, filtered.length)} of ${filtered.length}`}
-                    </div>
-                </div>
-
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 border-b">
-                            <tr>
-                                <th className="px-4 py-3 font-medium text-gray-600">ID</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">Status</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">GR No.</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">Roll No.</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">First Name</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">Last Name</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">Email</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">Mobile</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">Joining Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loadingList ? (
-                                <tr><td colSpan="9" className="text-center py-10 text-gray-400 italic">Fetching from ERPNext...</td></tr>
-                            ) : filtered.length === 0 ? (
-                                <tr>
-                                    <td colSpan="9" className="text-center py-16 text-gray-500">
-                                        <p className="text-lg font-medium mb-1">No Students Found</p>
-                                        <p className="text-sm">Try adjusting your search or add a new student.</p>
-                                    </td>
-                                </tr>
-                            ) : (
-                                filtered.slice(0, visibleCount).map((row) => (
-                                    <tr key={row.name} className="border-b hover:bg-gray-50 transition-colors">
-                                        <td className="px-4 py-3">
-                                            <button className="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-left text-base" onClick={() => { setEditingRecord(row.name); setView('form'); }}>
-                                                {row.name}
-                                            </button>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wide border ${
-                                                row.enabled ? 'bg-[#DEF7EC] text-[#03543F] border-[#BCF0DA]' : 'bg-[#FDE2E2] text-[#9B1C1C] border-[#F8B4B4]'
-                                            }`}>
-                                                {row.enabled ? 'Active/Enabled' : 'Disabled'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-gray-700 font-bold">{row.gr_number || '-'}</td>
-                                        <td className="px-4 py-3 text-gray-700 font-bold">{row.roll_number || '-'}</td>
-                                        <td className="px-4 py-3 text-gray-900 font-medium">{row.first_name || '-'}</td>
-                                        <td className="px-4 py-3 text-gray-600 font-medium">{row.last_name || '-'}</td>
-                                        <td className="px-4 py-3 text-gray-500 italic">{row.student_email_id || '-'}</td>
-                                        <td className="px-4 py-3 text-gray-600">{row.student_mobile_number || '-'}</td>
-                                        <td className="px-4 py-3 text-gray-600">{row.joining_date || '-'}</td>
-                                    </tr>
-                                ))
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-5 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
+                        <div className="flex items-center gap-3 w-full max-w-xl">
+                            <div className="relative flex-1">
+                                <FiSearch className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                <input 
+                                    type="text" 
+                                    className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:border-blue-400 focus:outline-none transition-all placeholder:text-gray-400" 
+                                    placeholder="Search ID, Name or Email..." 
+                                    value={search} 
+                                    onChange={(e) => setSearch(e.target.value)} 
+                                />
+                            </div>
+                            <div className="relative">
+                                <select 
+                                    className="bg-white border border-gray-200 rounded-xl pl-4 pr-8 py-2 text-sm focus:border-blue-400 focus:outline-none transition-all font-semibold text-gray-700 appearance-none cursor-pointer"
+                                    value={selectedProgram} 
+                                    onChange={(e) => setSelectedProgram(e.target.value)}
+                                >
+                                    <option value="">Filter by Program...</option>
+                                    {programs.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                </div>
+                            </div>
+                            {(search || selectedProgram || sortByRollNo) && (
+                                <button className="text-red-500 hover:text-red-700 text-sm font-bold flex items-center gap-1 active:scale-95 cursor-pointer shrink-0" onClick={() => { setSearch(''); setSelectedProgram(''); setSortByRollNo(false); }}>
+                                    ✕ Clear
+                                </button>
                             )}
-                        </tbody>
-                    </table>
+                            {selectedProgram && (
+                                <label className="flex items-center gap-2 text-[13px] font-medium text-gray-700 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg cursor-pointer hover:bg-gray-100 transition shrink-0 ml-1">
+                                    <input 
+                                        type="checkbox" 
+                                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                        checked={sortByRollNo}
+                                        onChange={(e) => setSortByRollNo(e.target.checked)}
+                                    />
+                                    Sort by Roll No.
+                                </label>
+                            )}
+                        </div>
+                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest shrink-0">
+                            {!loadingList && `${Math.min(visibleCount, filtered.length)} of ${filtered.length} TOTAL STUDENTS`}
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[12px]">
+                            <thead>
+                                <tr className="bg-gray-50/50">
+                                    <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">ID</th>
+                                    <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Status</th>
+                                    <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">GR No.</th>
+                                    <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Roll No.</th>
+                                    <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Student Name</th>
+                                    <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Email</th>
+                                    <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Mobile</th>
+                                    <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Joining Date</th>
+                                    <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {loadingList ? (
+                                    <tr>
+                                        <td colSpan="9" className="px-6 py-20 text-center">
+                                            <div className="flex flex-col items-center gap-3">
+                                                <div className="w-10 h-10 border-4 border-gray-100 border-t-blue-600 rounded-full animate-spin"></div>
+                                                <span className="text-sm font-medium text-gray-400 font-inter animate-pulse">Loading records...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : filtered.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="9" className="px-6 py-12 text-center text-gray-400 font-medium font-inter italic">No matching records found</td>
+                                    </tr>
+                                ) : (
+                                    filtered.slice(0, visibleCount).map((row) => (
+                                        <tr key={row.name} className="hover:bg-blue-50/30 transition-all cursor-pointer group" onClick={() => { setEditingRecord(row.name); setView('form'); }}>
+                                            <td className="px-6 py-4 font-bold text-blue-600 tracking-tight">{row.name}</td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${row.enabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-650'}`}>
+                                                    {row.enabled ? 'ACTIVE/ENABLED' : 'DISABLED'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-gray-700 font-bold">{row.gr_number || '-'}</td>
+                                            <td className="px-6 py-4 text-gray-700 font-bold">{row.roll_number || '-'}</td>
+                                            <td className="px-6 py-4 font-bold text-gray-900 tracking-tight">{`${row.first_name || ''} ${row.last_name || ''}`.trim() || '-'}</td>
+                                            <td className="px-6 py-4 text-gray-500 italic font-medium">{row.student_email_id || '-'}</td>
+                                            <td className="px-6 py-4 text-gray-600 font-bold">{row.student_mobile_number || '-'}</td>
+                                            <td className="px-6 py-4 text-gray-600 font-medium">{row.joining_date || '-'}</td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setEditingRecord(row.name); setView('form'); }} 
+                                                        className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors cursor-pointer border border-blue-100"
+                                                        title="Edit"
+                                                    >
+                                                        <FiEdit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); handleDelete(row.name); }} 
+                                                        className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors cursor-pointer border border-red-100"
+                                                        title="Delete"
+                                                    >
+                                                        <FiTrash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
 
                     {/* Pagination Controls */}
                     {!loadingList && filtered.length > 0 && (
-                        <div className="flex justify-between items-center p-4 bg-gray-50 border-t border-gray-200">
-                            <div className="flex items-center border border-gray-300 rounded bg-white overflow-hidden shadow-sm">
+                        <div className="flex justify-between items-center p-4 bg-gray-50/30 border-t border-gray-100">
+                            <div className="flex items-center border border-gray-200 rounded-xl bg-white overflow-hidden shadow-xs">
                                 {[20, 100, 500, 2500].map((size) => (
                                     <button
                                         key={size}
-                                        className={`px-3 py-1.5 text-xs font-semibold border-r last:border-r-0 hover:bg-gray-50 transition ${
-                                            pageSize === size ? 'bg-gray-100 text-gray-800' : 'text-gray-600'
+                                        className={`px-4 py-1.5 text-xs font-bold border-r border-gray-200 last:border-r-0 hover:bg-gray-50 transition cursor-pointer ${
+                                            pageSize === size ? 'bg-gray-100 text-gray-800' : 'text-gray-500'
                                         }`}
                                         onClick={() => setPageSize(size)}
                                     >
@@ -2169,7 +2242,7 @@ const Student = () => {
                             </div>
                             {visibleCount < filtered.length && (
                                 <button
-                                    className="px-4 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded shadow-sm hover:bg-gray-50 transition"
+                                    className="px-5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl shadow-xs hover:bg-gray-50 transition active:scale-95 cursor-pointer"
                                     onClick={() => setVisibleCount(prev => prev + pageSize)}
                                 >
                                     Load More
@@ -2348,7 +2421,19 @@ const Student = () => {
                                 </div>
                                 <div>
                                     <label className={labelStyle}>Nationality</label>
-                                    <input className={inputStyle} value={form.nationality} onChange={e => updateField('nationality', e.target.value)} />
+                                    <input className={inputStyle} value={form.nationality || ''} onChange={e => updateField('nationality', e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className={labelStyle}>Aadhaar (UID)</label>
+                                    <input className={inputStyle} value={form.custom_aadhaar_uid || ''} onChange={e => updateField('custom_aadhaar_uid', e.target.value)} placeholder="12-digit Aadhaar" />
+                                </div>
+                                <div>
+                                    <label className={labelStyle}>PEN Number</label>
+                                    <input className={inputStyle} value={form.custom_pen_number || ''} onChange={e => updateField('custom_pen_number', e.target.value)} placeholder="Permanent Education Number" />
+                                </div>
+                                <div>
+                                    <label className={labelStyle}>APAAR ID</label>
+                                    <input className={inputStyle} value={form.custom_apaar_id || ''} onChange={e => updateField('custom_apaar_id', e.target.value)} placeholder="APAAR ID" />
                                 </div>
                             </div>
                         </div>
@@ -2400,13 +2485,26 @@ const Student = () => {
                                 <div key={idx} className="mb-6 p-5 border border-gray-200 rounded-lg bg-gray-50/40 relative shadow-sm">
                                     <button onClick={() => removeGuardian(idx)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 font-bold transition" title="Remove Guardian">✕</button>
                                     
-                                    <div className="flex gap-6 mb-6 pb-4 border-b border-gray-100">
-                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-                                            <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!g.is_new} onChange={() => updateGuardian(idx, 'is_new', false)} /> Link Existing Guardian
-                                        </label>
-                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-                                            <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!!g.is_new} onChange={() => updateGuardian(idx, 'is_new', true)} /> Create New Guardian
-                                        </label>
+                                    <div className="flex flex-col gap-3 mb-6 pb-4 border-b border-gray-100">
+                                        <div className="flex gap-6">
+                                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                                <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!g.is_new} onChange={() => updateGuardian(idx, 'is_new', false)} /> Link Existing Guardian
+                                            </label>
+                                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                                <input type="radio" className="text-blue-600 focus:ring-blue-500" name={`g_type_${idx}`} checked={!!g.is_new} onChange={() => updateGuardian(idx, 'is_new', true)} /> Create New Guardian
+                                            </label>
+                                        </div>
+                                        {form.guardians.length > 1 && (
+                                            <label className="flex items-center gap-2 text-sm font-medium text-blue-700 cursor-pointer mt-1">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" 
+                                                    checked={!!g.create_user_account}
+                                                    onChange={(e) => updateGuardian(idx, 'create_user_account', e.target.checked)} 
+                                                /> 
+                                                Create Portal User Account for this Guardian
+                                            </label>
+                                        )}
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-x-12 gap-y-6">

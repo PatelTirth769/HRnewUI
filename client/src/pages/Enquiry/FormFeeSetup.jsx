@@ -118,9 +118,31 @@ export default function FormFeeSetup() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                            <button onClick={() => { setEditingRecord(row); setFormData(row); setModalVisible(true); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"><FiEdit2 /></button>
-                                            <button onClick={() => handleDelete(row.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors"><FiTrash2 /></button>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <button 
+                                                onClick={() => { 
+                                                    setEditingRecord(row); 
+                                                    setFormData({
+                                                        feeType: row.feeType || '',
+                                                        feeName: row.feeName || '',
+                                                        academicYear: row.academicYear || '2025-2026',
+                                                        amount: row.amount || '',
+                                                        status: row.status || 'Active'
+                                                    }); 
+                                                    setModalVisible(true); 
+                                                }} 
+                                                className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"
+                                                title="Edit"
+                                            >
+                                                <FiEdit2 />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDelete(row.id)} 
+                                                className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors"
+                                                title="Delete"
+                                            >
+                                                <FiTrash2 />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -186,6 +208,20 @@ export default function FormFeeSetup() {
                             >
                                 <option value="2025-2026">2025-2026</option>
                                 <option value="2024-2025">2024-2025</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[13px] font-bold text-gray-700">Status</label>
+                            <select 
+                                value={formData.status} 
+                                onChange={(e) => setFormData({...formData, status: e.target.value})}
+                                className="border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none transition-all appearance-none bg-white"
+                            >
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
                             </select>
                         </div>
                     </div>
