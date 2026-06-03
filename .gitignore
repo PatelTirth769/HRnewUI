@@ -9,7 +9,8 @@ ser/resume-parser/temp/
 ser/temp_uploads/
 
 # Environment
-# .env
+.env
+ser/.env
 
 # OS files
 .DS_Store
