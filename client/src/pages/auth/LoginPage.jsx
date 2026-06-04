@@ -24,26 +24,28 @@ const LoginPage = () => {
   const [accessToken, setAccessToken] = useState('');
   const [profile, setProfile] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
-  const [discoveredRole, setDiscoveredRole] = useState(null);
+  const [discoveredAccounts, setDiscoveredAccounts] = useState([]);
+  const [selectedAccountIndex, setSelectedAccountIndex] = useState(0);
   const emailInputValue = Form.useWatch('email', form);
 
   // Discover role as user types or on blur (local role hint, purely visual)
   useEffect(() => {
-    const fetchDiscoveredRole = async () => {
+    const fetchDiscoveredAccounts = async () => {
       const identifier = (emailInputValue || '').trim();
       if (!identifier || identifier.length < 3) {
-        setDiscoveredRole(null);
+        setDiscoveredAccounts([]);
         return;
       }
       try {
         const res = await axios.get(`/local-api/local/users/get-role/${encodeURIComponent(identifier)}`);
-        setDiscoveredRole(res.data?.role);
+        setDiscoveredAccounts(res.data?.accounts || []);
+        setSelectedAccountIndex(0);
       } catch (err) {
-        setDiscoveredRole(null);
+        setDiscoveredAccounts([]);
       }
     };
     
-    const timeoutId = setTimeout(fetchDiscoveredRole, 500); // 500ms debounce
+    const timeoutId = setTimeout(fetchDiscoveredAccounts, 500); // 500ms debounce
     return () => clearTimeout(timeoutId);
   }, [emailInputValue]);
 
@@ -78,9 +80,19 @@ const LoginPage = () => {
     setActiveSystem('schooler');
 
     try {
+      let loginUsr = values.email;
+      console.log('--- DEBUG LOGIN ---');
+      console.log('values.email:', values.email);
+      console.log('discoveredAccounts:', discoveredAccounts);
+      console.log('selectedAccountIndex:', selectedAccountIndex);
+      if (discoveredAccounts.length > 1) {
+          loginUsr = discoveredAccounts[selectedAccountIndex]?.email || values.email;
+      }
+      console.log('FINAL loginUsr:', loginUsr);
+
       // ERPNext Login Endpoint (routed through proxy to schooler)
       const response = await API.post('/api/method/login', {
-        usr: values.email,
+        usr: loginUsr,
         pwd: values.password
       });
 
@@ -203,11 +215,36 @@ const LoginPage = () => {
               label="Email (Employee id or Phone No)"
               name="email"
               rules={[{ required: true, message: 'Email or ID is required' }]}
-              extra={discoveredRole && (
-                <div style={{ marginTop: '4px', fontSize: '12px', color: '#10b981', fontWeight: '500' }}>
-                  Schooler User | Role: {discoveredRole}
+              extra={
+                <div style={{ marginTop: '4px' }}>
+                  {discoveredAccounts.length === 1 && (
+                    <div style={{ fontSize: '12px', color: '#10b981', fontWeight: '500' }}>
+                      Schooler User | Role: {discoveredAccounts[0].role}
+                    </div>
+                  )}
+                  {discoveredAccounts.length > 1 && (
+                    <div style={{ marginTop: '8px', padding: '10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>
+                        Multiple accounts found. Please select which one to log into:
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {discoveredAccounts.map((acc, index) => (
+                          <label key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#334155', margin: 0 }}>
+                            <input 
+                              type="radio" 
+                              name="accountSelection"
+                              checked={selectedAccountIndex === index}
+                              onChange={() => setSelectedAccountIndex(index)}
+                              style={{ accentColor: '#10b981', width: '16px', height: '16px', margin: 0 }}
+                            />
+                            <span>Login as <strong>{acc.role}</strong></span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              }
             >
               <Input
                 prefix={<FaUser style={{ color: '#888' }} />}

@@ -31,6 +31,7 @@ const emptyForm = () => ({
     custom_aadhaar_uid: '',
     custom_pen_number: '',
     custom_apaar_id: '',
+    custom_aadhaar_card_number: '',
     // Address
     address_line_1: '',
     address_line_2: '',
@@ -249,6 +250,7 @@ const Student = () => {
                 custom_aadhaar_uid: d.custom_aadhaar_uid || '',
                 custom_pen_number: d.custom_pen_number || '',
                 custom_apaar_id: d.custom_apaar_id || '',
+                custom_aadhaar_card_number: d.custom_aadhaar_card_number || '',
                 address_line_1: d.address_line_1 || '',
                 address_line_2: d.address_line_2 || '',
                 pincode: d.pincode || '',
@@ -724,14 +726,14 @@ const Student = () => {
             id: { label: 'ID', api: 'name', width: 25 }, enabled: { label: 'Enabled', api: 'enabled', width: 10 },
             first_name: { label: 'First Name', api: 'first_name', width: 20 }, middle_name: { label: 'Middle Name', api: 'middle_name', width: 20 },
             gr_number: { label: 'GR Number', api: 'gr_number', width: 15 }, roll_number: { label: 'Roll Number', api: 'roll_number', width: 15 },
-            last_name: { label: 'Last Name', api: 'last_name', width: 20 }, program: { label: 'Program', api: 'program', width: 20 },
+            last_name: { label: 'Last Name', api: 'last_name', width: 20 }, program: { label: 'Program (Class)', api: 'program', width: 20 },
             naming_series: { label: 'Naming Series', api: 'naming_series', width: 20 }, joining_date: { label: 'Joining Date', api: 'joining_date', width: 15 },
             user_id: { label: 'User ID', api: 'user_id', width: 20 }, student_applicant: { label: 'Student Applicant', api: 'student_applicant', width: 20 },
             image: { label: 'Image', api: 'image', width: 20 }, student_email_address: { label: 'Student Email Address', api: 'student_email_id', width: 25 },
             date_of_birth: { label: 'Date of Birth', api: 'date_of_birth', width: 15 }, blood_group: { label: 'Blood Group', api: 'blood_group', width: 12 },
             student_mobile_number: { label: 'Student Mobile Number', api: 'student_mobile_number', width: 15 }, gender: { label: 'Gender', api: 'gender', width: 12 },
-            nationality: { label: 'Nationality', api: 'nationality', width: 15 }, address_line_1: { label: 'Address Line 1', api: 'address_line_1', width: 25 },
-            address_line_2: { label: 'Address Line 2', api: 'address_line_2', width: 25 }, pincode: { label: 'Pincode', api: 'pincode', width: 12 },
+            nationality: { label: 'Nationality', api: 'nationality', width: 15 }, address_line_1: { label: 'Address Line 1 (Current)', api: 'address_line_1', width: 25 },
+            address_line_2: { label: 'Address Line 2 (Permanent)', api: 'address_line_2', width: 25 }, pincode: { label: 'Pincode', api: 'pincode', width: 12 },
             city: { label: 'City', api: 'city', width: 15 }, state: { label: 'State', api: 'state', width: 15 },
             country: { label: 'Country', api: 'country', width: 15 }, customer: { label: 'Customer', api: 'customer', width: 20 },
             customer_group: { label: 'Customer Group', api: 'customer_group', width: 20 }, date_of_leaving: { label: 'Date of Leaving', api: 'date_of_leaving', width: 15 },
@@ -749,7 +751,7 @@ const Student = () => {
             guardian_work_address: { label: 'Guardian Work Address', api: null, width: 25 },
             sibling_date_of_birth: { label: 'Date of Birth', api: null, width: 15 }, sibling_full_name: { label: 'Full Name', api: null, width: 20 },
             sibling_gender: { label: 'Gender', api: null, width: 12 }, sibling_id: { label: 'ID', api: null, width: 20 },
-            sibling_institution: { label: 'Institution', api: null, width: 20 }, sibling_program: { label: 'Program', api: null, width: 20 },
+            sibling_institution: { label: 'Institution', api: null, width: 20 }, sibling_program: { label: 'Program (Class)', api: null, width: 20 },
             sibling_student_id: { label: 'Student ID', api: null, width: 20 }, sibling_studying_in_same_institute: { label: 'Studying in Same Institute', api: null, width: 15 }
         };
 
@@ -1068,8 +1070,8 @@ const Student = () => {
                 const namingSeries    = String(getField(row, 'Naming Series', 'naming_series')).trim();
                 const bloodGroup      = String(getField(row, 'Blood Group', 'blood_group')).trim();
                 const nationality     = String(getField(row, 'Nationality', 'nationality')).trim();
-                const addressLine1    = String(getField(row, 'Address Line 1', 'address_line_1')).trim();
-                const addressLine2    = String(getField(row, 'Address Line 2', 'address_line_2')).trim();
+                const addressLine1    = String(getField(row, 'Address Line 1 (Current)', 'address_line_1')).trim();
+                const addressLine2    = String(getField(row, 'Address Line 2 (Permanent)', 'address_line_2')).trim();
                 const pincode         = String(getField(row, 'Pincode', 'pincode')).trim();
                 const city            = String(getField(row, 'City', 'city')).trim();
                 const state           = String(getField(row, 'State', 'state')).trim();
@@ -1969,7 +1971,7 @@ const Student = () => {
                                                 <CheckboxField name="gr_number" label="GR Number" />
                                                 <CheckboxField name="roll_number" label="Roll Number" />
                                                 <CheckboxField name="last_name" label="Last Name" />
-                                                <CheckboxField name="program" label="Program" />
+                                                <CheckboxField name="program" label="Program (Class)" />
                                                 <CheckboxField name="naming_series" label="Naming Series" />
                                                 <CheckboxField name="joining_date" label="Joining Date" />
                                                 <CheckboxField name="user_id" label="User ID" />
@@ -1984,8 +1986,8 @@ const Student = () => {
                                                 <CheckboxField name="student_mobile_number" label="Student Mobile Number" />
                                                 <CheckboxField name="gender" label="Gender" />
                                                 <CheckboxField name="nationality" label="Nationality" />
-                                                <CheckboxField name="address_line_1" label="Address Line 1" />
-                                                <CheckboxField name="address_line_2" label="Address Line 2" />
+                                                <CheckboxField name="address_line_1" label="Address Line 1 (Current)" />
+                                                <CheckboxField name="address_line_2" label="Address Line 2 (Permanent)" />
                                                 <CheckboxField name="pincode" label="Pincode" />
                                                 <CheckboxField name="city" label="City" />
                                                 <CheckboxField name="state" label="State" />
@@ -2035,7 +2037,7 @@ const Student = () => {
                                             </div>
                                             <div className="flex flex-col gap-3">
                                                 <CheckboxField name="sibling_institution" label="Institution" />
-                                                <CheckboxField name="sibling_program" label="Program" />
+                                                <CheckboxField name="sibling_program" label="Program (Class)" />
                                                 <CheckboxField name="sibling_student_id" label="Student ID" />
                                                 <CheckboxField name="sibling_studying_in_same_institute" label="Studying in Same Institute" />
                                             </div>
@@ -2365,9 +2367,9 @@ const Student = () => {
                                 <input className={inputStyle} value={form.roll_number || ''} onChange={e => updateField('roll_number', e.target.value)} placeholder="Roll Number" />
                             </div>
                             <div>
-                                <label className={labelStyle}>Program</label>
+                                <label className={labelStyle}>Program (Class)</label>
                                 <select className={inputStyle} value={form.program || ''} onChange={e => updateField('program', e.target.value)}>
-                                    <option value="">Select Program...</option>
+                                    <option value="">Select Program (Class)...</option>
                                     {programs.map(p => <option key={p} value={p}>{p}</option>)}
                                 </select>
                             </div>
@@ -2424,8 +2426,8 @@ const Student = () => {
                                     <input className={inputStyle} value={form.nationality || ''} onChange={e => updateField('nationality', e.target.value)} />
                                 </div>
                                 <div>
-                                    <label className={labelStyle}>Aadhaar (UID)</label>
-                                    <input className={inputStyle} value={form.custom_aadhaar_uid || ''} onChange={e => updateField('custom_aadhaar_uid', e.target.value)} placeholder="12-digit Aadhaar" />
+                                    <label className={labelStyle}>Aadhaar DISE number (UID)</label>
+                                    <input className={inputStyle} value={form.custom_aadhaar_uid || ''} onChange={e => updateField('custom_aadhaar_uid', e.target.value)} placeholder="18-digit Aadhaar DISE number" />
                                 </div>
                                 <div>
                                     <label className={labelStyle}>PEN Number</label>
@@ -2434,6 +2436,10 @@ const Student = () => {
                                 <div>
                                     <label className={labelStyle}>APAAR ID</label>
                                     <input className={inputStyle} value={form.custom_apaar_id || ''} onChange={e => updateField('custom_apaar_id', e.target.value)} placeholder="APAAR ID" />
+                                </div>
+                                <div>
+                                    <label className={labelStyle}>Aadhaar Card Number</label>
+                                    <input className={inputStyle} type="tel" maxLength={12} value={form.custom_aadhaar_card_number || ''} onChange={e => updateField('custom_aadhaar_card_number', e.target.value)} placeholder="12-digit Aadhaar Card Number" />
                                 </div>
                             </div>
                         </div>
@@ -2446,7 +2452,7 @@ const Student = () => {
                         <h3 className={sectionTitleStyle}>Residential Address</h3>
                         <div className="grid grid-cols-2 gap-x-12 gap-y-6">
                             <div>
-                                <label className={labelStyle}>Address Line 1</label>
+                                <label className={labelStyle}>Address Line 1 (Current)</label>
                                 <input className={inputStyle} value={form.address_line_1} onChange={e => updateField('address_line_1', e.target.value)} placeholder="House No, Street" />
                             </div>
                             <div>
@@ -2454,7 +2460,7 @@ const Student = () => {
                                 <input className={inputStyle} value={form.city} onChange={e => updateField('city', e.target.value)} />
                             </div>
                             <div>
-                                <label className={labelStyle}>Address Line 2</label>
+                                <label className={labelStyle}>Address Line 2 (Permanent)</label>
                                 <input className={inputStyle} value={form.address_line_2} onChange={e => updateField('address_line_2', e.target.value)} />
                             </div>
                             <div>

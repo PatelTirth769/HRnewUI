@@ -394,6 +394,10 @@ import TrialCertificate from './pages/Certificates/TrialCertificate';
 import TransferCertificate from './pages/Certificates/TransferCertificate';
 import DomisileCharacterCertificate from './pages/Certificates/DomisileCharacterCertificate';
 import CertificateRecords from './pages/Certificates/CertificateRecords';
+import UserList from './pages/masters/UserList';
+import RoleList from './pages/masters/RoleList';
+import RoleProfileList from './pages/masters/RoleProfileList';
+import ModuleProfileList from './pages/masters/ModuleProfileList';
 
 const RootRedirect = () => {
   const { isAdmin, isStudent, isInstructor, isGuardian } = useUserRole();
@@ -437,6 +441,10 @@ function App() {
         navigate('/selling/customer');
     } else if (moduleKey === 'buying') {
         navigate('/buying/purchase-order');
+    } else if (moduleKey === 'master') {
+        navigate('/dashboard');
+    } else if (moduleKey === 'users') {
+        navigate('/users');
     } else if (moduleKey === 'stock') {
         navigate('/stock/item');
     } else if (moduleKey === 'transport') {
@@ -487,6 +495,12 @@ function App() {
                 <Route path="/instructor-dashboard" element={<InstructorDashboard />} />
                 <Route path="/guardian-dashboard" element={<GuardianDashboard />} />
                 <Route path="/approver/*" element={<Approver />} />
+                
+                {/* Users Routes */}
+                <Route path="/users" element={<UserList />} />
+                <Route path="/users/roles" element={<RoleList />} />
+                <Route path="/users/role-profiles" element={<RoleProfileList />} />
+                <Route path="/users/module-profiles" element={<ModuleProfileList />} />
 
                 <Route path="/employee-mis" element={<EmployeeMIS />} />
                 <Route path="/companies" element={<CompanyMaster />} />

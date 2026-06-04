@@ -248,6 +248,8 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
         email: '',
         enquiryCode: '',
         registrationCode: '',
+        roll_number: '',
+        gr_number: '',
         status: 'Confirmed',
         remarks: '',
         // Payment fields
@@ -315,9 +317,23 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
             email: reg.student_email_id || reg.email,
             enquiryCode: reg.enquiryCode || '-',
             registrationCode: reg.registrationNo || reg.id,
+            roll_number: reg.roll_number || '',
+            gr_number: reg.gr_number || '',
             academic_year: reg.academic_year
         });
         setView('form');
+    };
+
+    const handleDelete = async (record) => {
+        if (!window.confirm(`Are you sure you want to delete this record for "${record.first_name}"?`)) return;
+        try {
+            const docRef = doc(db, REGISTRATIONS_PATH, record.id);
+            await deleteDoc(docRef);
+            notification.success({ message: 'Record Deleted' });
+            fetchRegistrations();
+        } catch (err) {
+            notification.error({ message: 'Delete Failed', description: err.message });
+        }
     };
 
     const handleSave = async () => {
@@ -484,15 +500,20 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                     date_of_birth: formData.date_of_birth || selectedRegistration?.date_of_birth || null,
                     blood_group: selectedRegistration?.blood_group || null,
                     address_line_1: selectedRegistration?.address_line_1 || selectedRegistration?.perm_address || null,
+                    address_line_2: selectedRegistration?.address_line_2 || null,
                     city: selectedRegistration?.city || selectedRegistration?.perm_city || null,
                     state: selectedRegistration?.state || selectedRegistration?.perm_state || null,
                     pincode: selectedRegistration?.pincode || selectedRegistration?.perm_pincode || null,
+                    country: selectedRegistration?.country || 'India',
                     academic_year: formData.academic_year || selectedRegistration?.academic_year,
                     program: formData.program || selectedRegistration?.program,
                     status: 'Admitted',
+                    roll_number: formData.roll_number || selectedRegistration?.roll_number || null,
+                    gr_number: formData.gr_number || selectedRegistration?.gr_number || null,
                     custom_aadhaar_uid: selectedRegistration?.custom_aadhaar_uid || null,
                     custom_pen_number: selectedRegistration?.custom_pen_number || null,
                     custom_apaar_id: selectedRegistration?.custom_apaar_id || null,
+                    custom_aadhaar_card_number: selectedRegistration?.custom_aadhaar_card_number || null,
                     guardians: linkedGuardians
                 };
 
@@ -698,7 +719,10 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                             <InputField label="Admission No" disabled value={formData.admissionNo} />
                             <InputField label="Admission Date" type="date" value={formData.admission_date} onChange={(v) => setFormData({...formData, admission_date: v})} />
                             <SelectField label="Academic Year" value={formData.academic_year} options={academicYears} onChange={(v) => setFormData({...formData, academic_year: v})} />
-                            <SelectField label="Final Admission Program" required value={formData.program} options={availableClasses} onChange={(v) => setFormData({...formData, program: v})} />
+                            <SelectField label="Final Admission Program (Class)" required value={formData.program} options={availableClasses} onChange={(v) => setFormData({...formData, program: v})} />
+
+                            <InputField label="Roll Number" value={formData.roll_number} onChange={(v) => setFormData({...formData, roll_number: v})} placeholder="Enter Roll Number" />
+                            <InputField label="GR Number" value={formData.gr_number} onChange={(v) => setFormData({...formData, gr_number: v})} placeholder="Enter GR Number" />
 
                             <InputField label="Enquiry Code" disabled value={formData.enquiryCode} />
                             <InputField label="Registration Code" disabled value={formData.registrationCode} />
@@ -763,7 +787,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                         />
                     </div>
                     <div className="flex flex-col gap-2">
-                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Program</label>
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Program (Class)</label>
                         <select
                             value={filterProgram}
                             onChange={(e) => setFilterProgram(e.target.value)}
@@ -837,7 +861,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                         <thead>
                             <tr className="bg-gray-50/80 border-b border-gray-100">
                                 <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Student Details</th>
-                                <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Program</th>
+                                <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Program (Class)</th>
                                 <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Academic Year</th>
                                 <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Reference Codes</th>
                                 <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Date of Birth</th>
@@ -884,14 +908,19 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                                                     >
                                                         <FiFileText className="w-3.5 h-3.5 text-blue-500" /> Form
                                                     </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(row); }} className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors" title="Delete"><FiTrash2 className="w-4 h-4" /></button>
                                                 </div>
                                             ) : (
-                                                <button 
-                                                    onClick={() => handleConvert(row)}
-                                                    className="px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all shadow-sm bg-blue-600 text-white hover:bg-blue-700 active:scale-95"
-                                                >
-                                                    Add Admission
-                                                </button>
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button 
+                                                        onClick={() => handleConvert(row)}
+                                                        className="px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all shadow-sm bg-blue-600 text-white hover:bg-blue-700 active:scale-95"
+                                                    >
+                                                        Add Admission
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); handleConvert(row); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title="Edit"><FiEdit2 className="w-4 h-4" /></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(row); }} className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors" title="Delete"><FiTrash2 className="w-4 h-4" /></button>
+                                                </div>
                                             )}
                                         </td>
                                     </tr>

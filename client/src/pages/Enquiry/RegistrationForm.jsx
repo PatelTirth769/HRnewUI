@@ -179,7 +179,7 @@ const generatePDF = async (record) => {
     doc.save(`Registration_Full_${record.registrationNo}.pdf`);
 };
 
-const InputField = ({ label, value, required = false, onChange, type = 'text', placeholder = '', disabled = false }) => (
+const InputField = ({ label, value, required = false, onChange, type = 'text', placeholder = '', disabled = false, maxLength }) => (
     <div className="flex flex-col gap-1">
         <label className="text-[13px] font-semibold text-gray-700">
             {label} {required && <span className="text-red-500">*</span>}
@@ -190,6 +190,7 @@ const InputField = ({ label, value, required = false, onChange, type = 'text', p
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
                 disabled={disabled}
+                maxLength={maxLength}
                 rows={3}
                 className={`border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${disabled ? 'bg-gray-50' : 'bg-white'}`}
             />
@@ -197,7 +198,16 @@ const InputField = ({ label, value, required = false, onChange, type = 'text', p
             <input
                 type={type}
                 value={value || ''}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={(e) => {
+                    if (type === 'tel') {
+                        const val = e.target.value.replace(/\D/g, '');
+                        if (maxLength && val.length > maxLength) return;
+                        onChange(val);
+                    } else {
+                        onChange(e.target.value);
+                    }
+                }}
+                maxLength={maxLength}
                 placeholder={placeholder}
                 disabled={disabled}
                 className={`border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${disabled ? 'bg-gray-50' : 'bg-white'}`}
@@ -308,10 +318,13 @@ const generateUniqueGuardianEmail = (guardianName, existingGuardiansList, extraE
 };
 
 export default function RegistrationForm({ initialView = 'list' }) {
+    const [api, contextHolder] = notification.useNotification();
     const initFormData = {
         // Student Detail
         academic_year: '2025-2026',
         program: '',
+        roll_number: '',
+        gr_number: '',
         registration_date: new Date().toISOString().split('T')[0],
         first_name: '',
         middle_name: '',
@@ -382,6 +395,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
         custom_aadhaar_uid: '',
         custom_pen_number: '',
         custom_apaar_id: '',
+        custom_aadhaar_card_number: '',
+        address_line_2: '',
+        country: 'India',
 
         // Document Detail (New for Registration)
         documents: [
@@ -417,6 +433,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
     });
     const [selectedSibling, setSelectedSibling] = useState('');
     const [availableClasses, setAvailableClasses] = useState([]);
+    const [availableCastes, setAvailableCastes] = useState(['General', 'OBC', 'SC', 'ST']);
     const [academicYears, setAcademicYears] = useState([]);
     const [guardiansList, setGuardiansList] = useState([]);
     const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -452,12 +469,12 @@ export default function RegistrationForm({ initialView = 'list' }) {
     // Razorpay online payment handler
     const handleOnlinePayment = async () => {
         if (!formData.first_name || !formData.program) {
-            notification.warning({ message: 'Missing Fields', description: 'Please fill Student Name and Program before payment.' });
+            api.warning({ message: 'Missing Fields', description: 'Please fill Student Name and Program before payment.' });
             return;
         }
         const payAmount = parseFloat(formData.feeAmount || regFee);
         if (payAmount < 1) {
-            notification.warning({ message: 'Invalid Amount', description: 'Fee amount must be at least ₹1.' });
+            api.warning({ message: 'Invalid Amount', description: 'Fee amount must be at least ₹1.' });
             return;
         }
         setPaymentProcessing(true);
@@ -513,10 +530,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                 orderId: response.razorpay_order_id,
                                 paymentDate: new Date().toISOString(),
                             }));
-                            notification.success({ message: '✅ Payment Successful!', description: `Receipt: ${verifyRes.data.receipt_no}` });
+                            api.success({ message: '✅ Payment Successful!', description: `Receipt: ${verifyRes.data.receipt_no}` });
                         }
                     } catch (vErr) {
-                        notification.error({ message: 'Verification Failed', description: vErr.message });
+                        api.error({ message: 'Verification Failed', description: vErr.message });
                     }
                     setPaymentProcessing(false);
                 },
@@ -531,7 +548,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             const rzp = new window.Razorpay(options);
             rzp.open();
         } catch (err) {
-            notification.error({ message: 'Payment Failed', description: err.message });
+            api.error({ message: 'Payment Failed', description: err.message });
             setPaymentProcessing(false);
         }
     };
@@ -539,13 +556,13 @@ export default function RegistrationForm({ initialView = 'list' }) {
     // Manual (Cash/Cheque) payment handler
     const handleManualPayment = async () => {
         if (!formData.first_name || !formData.program) {
-            notification.warning({ message: 'Missing Fields', description: 'Please fill Student Name and Program.' });
+            api.warning({ message: 'Missing Fields', description: 'Please fill Student Name and Program.' });
             return;
         }
         const payAmount = parseFloat(formData.feeAmount || regFee);
-        if (payAmount < 1) { notification.warning({ message: 'Invalid Amount' }); return; }
+        if (payAmount < 1) { api.warning({ message: 'Invalid Amount' }); return; }
         if (!formData.paymentMode || formData.paymentMode === 'Online') {
-            notification.warning({ message: 'Select Mode', description: 'Choose Cash or Cheque for manual payment.' }); return;
+            api.warning({ message: 'Select Mode', description: 'Choose Cash or Cheque for manual payment.' }); return;
         }
         setPaymentProcessing(true);
         try {
@@ -571,10 +588,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     paymentId: res.data.payment_id,
                     paymentDate: new Date().toISOString(),
                 }));
-                notification.success({ message: '✅ Payment Recorded!', description: `Receipt: ${res.data.receipt_no}` });
+                api.success({ message: '✅ Payment Recorded!', description: `Receipt: ${res.data.receipt_no}` });
             }
         } catch (err) {
-            notification.error({ message: 'Recording Failed', description: err.message });
+            api.error({ message: 'Recording Failed', description: err.message });
         } finally { setPaymentProcessing(false); }
     };
 
@@ -599,13 +616,20 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
     const fetchERPNextData = async () => {
         try {
-            const [progRes, yearRes, guardianRes] = await Promise.all([
+            const [progRes, yearRes, guardianRes, casteRes] = await Promise.all([
                 API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Student Category?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
             ]);
             const programs = progRes.data.data?.map(p => p.name) || [];
             const years = yearRes.data.data?.map(y => y.name) || [];
+            const guards = guardianRes.data.data || [];
+            const castes = casteRes.data.data?.map(c => c.name) || [];
+            
+            if (castes.length > 0) {
+                setAvailableCastes(castes);
+            }
             
             setAcademicYears(years);
             setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '' })));
@@ -681,32 +705,104 @@ export default function RegistrationForm({ initialView = 'list' }) {
     };
 
     const handleSave = async () => {
-        if (!formData.first_name || !formData.program || !formData.student_mobile_number || !formData.student_mobile_number.trim()) {
-            notification.warning({ message: 'Required Fields Missing', description: 'Please fill in Student Name, Program, and Mobile Number.' });
+        if (!formData.academic_year) {
+            api.warning({ message: 'Required Field Missing', description: 'Academic Year is required.' });
+            return;
+        }
+        if (!formData.program) {
+            api.warning({ message: 'Required Field Missing', description: 'Program is required.' });
+            return;
+        }
+        if (!formData.first_name || !formData.first_name.trim()) {
+            api.warning({ message: 'Required Field Missing', description: 'First Name is required.' });
+            return;
+        }
+        if (!formData.gender) {
+            api.warning({ message: 'Required Field Missing', description: 'Gender is required.' });
+            return;
+        }
+        if (!formData.student_mobile_number || !formData.student_mobile_number.trim()) {
+            api.warning({ message: 'Required Field Missing', description: 'Student Mobile Number is required.' });
+            return;
+        }
+        if (formData.student_mobile_number && formData.student_mobile_number.trim().length !== 10) {
+            api.warning({ message: 'Invalid Input', description: 'Student Mobile Number must be exactly 10 digits.' });
+            return;
+        }
+        if (formData.emergency_mobile_number && formData.emergency_mobile_number.trim().length !== 10) {
+            api.warning({ message: 'Invalid Input', description: 'Emergency Mobile Number must be exactly 10 digits.' });
+            return;
+        }
+        if (formData.custom_aadhaar_uid && formData.custom_aadhaar_uid.trim().length !== 18) {
+            api.warning({ message: 'Invalid Input', description: 'Aadhaar DISE number (UID) must be exactly 18 digits.' });
+            return;
+        }
+        if (formData.custom_pen_number && formData.custom_pen_number.trim().length !== 11) {
+            api.warning({ message: 'Invalid Input', description: 'PEN Number must be exactly 11 digits.' });
+            return;
+        }
+        if (formData.custom_aadhaar_card_number && formData.custom_aadhaar_card_number.trim().length !== 12) {
+            api.warning({ message: 'Invalid Input', description: 'Aadhaar Card Number must be exactly 12 digits.' });
+            return;
+        }
+        if (formData.studentAadhar && formData.studentAadhar.trim().length !== 18) {
+            api.warning({ message: 'Invalid Input', description: 'Aadhaar DISE number (UID) must be exactly 18 digits.' });
+            return;
+        }
+        if (formData.pen_number && formData.pen_number.trim().length !== 11) {
+            api.warning({ message: 'Invalid Input', description: 'Personal Education Number(PEN) must be exactly 11 digits.' });
+            return;
+        }
+        if (!formData.student_email_id || !formData.student_email_id.trim()) {
+            api.warning({ message: 'Required Field Missing', description: 'Student Email Address is required.' });
+            return;
+        }
+        if (!formData.status) {
+            api.warning({ message: 'Required Field Missing', description: 'Status is required.' });
             return;
         }
 
         // Validate guardians
-        for (let i = 0; i < (formData.guardians || []).length; i++) {
+        if (!formData.guardians || formData.guardians.length === 0) {
+            api.warning({ message: 'Required Field Missing', description: 'At least one Parent/Guardian is required.' });
+            return;
+        }
+
+        for (let i = 0; i < formData.guardians.length; i++) {
             const g = formData.guardians[i];
+            
+            // Relation is the first field in UI
+            if (!g.relation) {
+                api.warning({ message: 'Required Field Missing', description: `Relation with Student is required for Guardian #${i + 1}.` });
+                return;
+            }
+
             if (g.is_new) {
                 if (!g.guardian_name || !g.guardian_name.trim()) {
-                    notification.warning({ message: 'Required Fields Missing', description: `Guardian Name is required for Guardian #${i + 1}.` });
+                    api.warning({ message: 'Required Field Missing', description: `Guardian Name is required for Guardian #${i + 1}.` });
+                    return;
+                }
+                if (!g.email_address || !g.email_address.trim()) {
+                    api.warning({ message: 'Required Field Missing', description: `Email Address is required for Guardian #${i + 1}.` });
                     return;
                 }
                 if (!g.mobile_number || !g.mobile_number.trim()) {
-                    notification.warning({ message: 'Required Fields Missing', description: `Mobile Number is required for Guardian #${i + 1}.` });
-                    return;
-                }
-            } else {
+            api.warning({ message: 'Required Field Missing', description: `Mobile Number is required for Guardian #${i + 1}.` });
+            return;
+        }
+        if (g.mobile_number && g.mobile_number.trim().length !== 10) {
+            api.warning({ message: 'Invalid Input', description: `Mobile Number must be exactly 10 digits for Guardian #${i + 1}.` });
+            return;
+        }
+        if (g.alternate_number && g.alternate_number.trim().length !== 10) {
+            api.warning({ message: 'Invalid Input', description: `Alternate Number must be exactly 10 digits for Guardian #${i + 1}.` });
+            return;
+        }
+    } else {
                 if (!g.guardian) {
-                    notification.warning({ message: 'Required Fields Missing', description: `Please select an existing guardian for Guardian #${i + 1} or remove it.` });
+                    api.warning({ message: 'Required Field Missing', description: `Please select an existing guardian for Guardian #${i + 1} or remove it.` });
                     return;
                 }
-            }
-            if (!g.relation) {
-                notification.warning({ message: 'Required Fields Missing', description: `Relation is required for Guardian #${i + 1}.` });
-                return;
             }
         }
 
@@ -736,19 +832,19 @@ export default function RegistrationForm({ initialView = 'list' }) {
             if (editingRecord) {
                 const docRef = doc(db, REGISTRATIONS_PATH, editingRecord.id);
                 await updateDoc(docRef, finalData);
-                notification.success({ message: 'Registration Updated Successfully' });
+                api.success({ message: 'Registration Updated Successfully' });
             } else {
                 await addDoc(colRef, {
                     ...finalData,
                     created_at: serverTimestamp()
                 });
-                notification.success({ message: 'Registration Created Successfully' });
+                api.success({ message: 'Registration Created Successfully' });
             }
             sessionStorage.removeItem('reg_form_data');
             setView('list');
             setEditingRecord(null);
         } catch (err) {
-            notification.error({ message: 'Save Failed', description: err.message });
+            api.error({ message: 'Save Failed', description: err.message });
         } finally {
             setSaving(false);
         }
@@ -759,10 +855,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
         try {
             const docRef = doc(db, REGISTRATIONS_PATH, record.id);
             await deleteDoc(docRef);
-            notification.success({ message: 'Registration Deleted' });
+            api.success({ message: 'Registration Deleted' });
             fetchData();
         } catch (err) {
-            notification.error({ message: 'Delete Failed', description: err.message });
+            api.error({ message: 'Delete Failed', description: err.message });
         }
     };
 
@@ -888,7 +984,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             });
             return { ...prev, documents: updatedDocs };
         });
-        notification.success({ message: '⚡ All Uploaded Documents Verified Instantly!' });
+        api.success({ message: '⚡ All Uploaded Documents Verified Instantly!' });
     };
 
     const handleFileUpload = async (index, fileList) => {
@@ -901,14 +997,14 @@ export default function RegistrationForm({ initialView = 'list' }) {
         for (let i = 0; i < fileList.length; i++) {
             const file = fileList[i];
             if (!validTypes.includes(file.type)) {
-                notification.error({ 
+                api.error({ 
                     message: 'Invalid File Format', 
                     description: `Skipped "${file.name}": Only JPG, JPEG, and PDF files are supported.` 
                 });
                 continue;
             }
             if (file.size > maxSize) {
-                notification.error({ 
+                api.error({ 
                     message: 'File Too Large', 
                     description: `Skipped "${file.name}": Maximum file size is 5 MB.` 
                 });
@@ -938,7 +1034,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 });
             } catch (error) {
                 console.error('[AWS S3 Upload Error] ❌ Failed to upload:', error.response?.data || error.message);
-                notification.error({
+                api.error({
                     message: 'Upload Failed',
                     description: `Failed to upload "${file.name}". Please check your network and AWS config.`
                 });
@@ -963,7 +1059,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             }
             return { ...prev, documents: updatedDocs };
         });
-        notification.success({ message: `Successfully uploaded ${newFiles.length} file(s)!` });
+        api.success({ message: `Successfully uploaded ${newFiles.length} file(s)!` });
     };
 
     const handleRemoveFile = (docIndex, fileIndex) => {
@@ -985,7 +1081,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             }
             return { ...prev, documents: updatedDocs };
         });
-        notification.info({ message: 'File removed.' });
+        api.info({ message: 'File removed.' });
     };
 
     const handleViewDocument = (fileUrl, fileName) => {
@@ -1002,7 +1098,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const addSibling = () => {
         if (!selectedSibling) return;
         if (formData.siblings.includes(selectedSibling)) {
-            notification.info({ message: 'Sibling already added' });
+            api.info({ message: 'Sibling already added' });
             return;
         }
         setFormData(prev => ({
@@ -1028,7 +1124,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     <SectionHeader title="Academic Detail" color="red" />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <SelectField label="Academic Year" required value={formData.academic_year} options={academicYears} onChange={(v) => updateField('academic_year', v)} />
-                        <SelectField label="Program" required value={formData.program} options={availableClasses} onChange={(v) => updateField('program', v)} />
+                        <SelectField label="Program (Class)" required value={formData.program} options={availableClasses} onChange={(v) => updateField('program', v)} />
+                        <InputField label="Roll Number" value={formData.roll_number} onChange={(v) => updateField('roll_number', v)} placeholder="Enter Roll Number" />
+                        <InputField label="GR Number" value={formData.gr_number} onChange={(v) => updateField('gr_number', v)} placeholder="Enter GR Number" />
 
                         <InputField label="Registration Date" type="date" value={formData.registration_date} onChange={(v) => updateField('registration_date', v)} />
                     </div>
@@ -1066,19 +1164,32 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         <SelectField label="Gender" required value={formData.gender} options={['Male', 'Female', 'Other']} onChange={(v) => updateField('gender', v)} />
                         <InputField label="Date of Birth" type="date" value={formData.date_of_birth} onChange={(v) => updateField('date_of_birth', v)} />
                         <InputField label="Place of Birth" value={formData.place_of_birth} onChange={(v) => updateField('place_of_birth', v)} placeholder="Enter Place of Birth" />
-                        <SelectField label="Caste" value={formData.caste} options={['General', 'OBC', 'SC', 'ST']} onChange={(v) => updateField('caste', v)} />
+                        <SelectField label="Caste" value={formData.caste} options={availableCastes} onChange={(v) => updateField('caste', v)} />
                         <SelectField label="Religion" value={formData.religion} options={['Hindu', 'Muslim', 'Christian', 'Sikh', 'Jain']} onChange={(v) => updateField('religion', v)} />
                         <SelectField label="Blood Group" value={formData.blood_group} options={['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']} onChange={(v) => updateField('blood_group', v)} />
-                        <InputField label="Aadhaar (UID)" value={formData.custom_aadhaar_uid} onChange={(v) => updateField('custom_aadhaar_uid', v)} placeholder="12-digit Aadhaar" />
-                        <InputField label="PEN Number (Custom)" value={formData.custom_pen_number} onChange={(v) => updateField('custom_pen_number', v)} placeholder="Permanent Education Number" />
+                        <InputField label="Aadhaar DISE number (UID)" type="tel" maxLength={18} value={formData.custom_aadhaar_uid} onChange={(v) => updateField('custom_aadhaar_uid', v)} placeholder="18-digit Aadhaar DISE number" />
+                        <InputField label="PEN Number (Custom)" type="tel" maxLength={11} value={formData.custom_pen_number} onChange={(v) => updateField('custom_pen_number', v)} placeholder="11-digit PEN Number" />
                         <InputField label="APAAR ID" value={formData.custom_apaar_id} onChange={(v) => updateField('custom_apaar_id', v)} placeholder="APAAR ID" />
+                        <InputField label="Aadhaar Card Number" type="tel" maxLength={12} value={formData.custom_aadhaar_card_number} onChange={(v) => updateField('custom_aadhaar_card_number', v)} placeholder="12-digit Aadhaar Card Number" />
+                    </div>
+
+                    <SectionHeader title="Residential Address" color="gray" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <InputField label="Address Line 1 (Current)" value={formData.address_line_1} onChange={(v) => updateField('address_line_1', v)} placeholder="House No, Street" />
+                        <InputField label="Address Line 2 (Permanent)" value={formData.address_line_2} onChange={(v) => updateField('address_line_2', v)} placeholder="Locality, Landmark" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+                        <InputField label="City" value={formData.city} onChange={(v) => updateField('city', v)} placeholder="Enter City" />
+                        <InputField label="State" value={formData.state} onChange={(v) => updateField('state', v)} placeholder="Enter State" />
+                        <InputField label="Pincode" value={formData.pincode} onChange={(v) => updateField('pincode', v)} placeholder="Enter Pincode" />
+                        <SelectField label="Country" value={formData.country || 'India'} options={['India']} onChange={(v) => updateField('country', v)} />
                     </div>
 
                     <SectionHeader title="Communication" color="red" />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <InputField label="Student Mobile Number" required value={formData.student_mobile_number} onChange={(v) => updateField('student_mobile_number', v)} placeholder="Enter Mobile Number" />
+                        <InputField label="Student Mobile Number" required type="tel" maxLength={10} value={formData.student_mobile_number} onChange={(v) => updateField('student_mobile_number', v)} placeholder="Enter 10-digit Mobile Number" />
                         <InputField label="Student Email Address" required type="email" value={formData.student_email_id} onChange={(v) => updateField('student_email_id', v)} placeholder="Enter Email Address" />
-                        <InputField label="Emergency Mobile Number" value={formData.emergency_mobile_number} onChange={(v) => updateField('emergency_mobile_number', v)} placeholder="Enter Emergency Mobile Number" />
+                        <InputField label="Emergency Mobile Number" type="tel" maxLength={10} value={formData.emergency_mobile_number} onChange={(v) => updateField('emergency_mobile_number', v)} placeholder="Enter 10-digit Emergency Mobile Number" />
                     </div>
 
                     <SectionHeader title="Additional Information" color="orange" />
@@ -1158,8 +1269,8 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                         <>
                                             <InputField label="Guardian Name *" value={g.guardian_name || ''} onChange={v => updateGuardian(idx, 'guardian_name', v)} placeholder="Full Name" />
                                             <InputField label="Email Address *" type="email" value={g.email_address || ''} onChange={v => updateGuardian(idx, 'email_address', v)} placeholder="email@example.com" />
-                                            <InputField label="Mobile Number *" value={g.mobile_number || ''} onChange={v => updateGuardian(idx, 'mobile_number', v)} placeholder="+91 ..." />
-                                            <InputField label="Alternate Number" value={g.alternate_number || ''} onChange={v => updateGuardian(idx, 'alternate_number', v)} />
+                                            <InputField label="Mobile Number *" type="tel" maxLength={10} value={g.mobile_number || ''} onChange={v => updateGuardian(idx, 'mobile_number', v)} placeholder="10-digit Number" />
+                                            <InputField label="Alternate Number" type="tel" maxLength={10} value={g.alternate_number || ''} onChange={v => updateGuardian(idx, 'alternate_number', v)} placeholder="10-digit Number" />
                                             <InputField label="Date of Birth" type="date" value={g.date_of_birth || ''} onChange={v => updateGuardian(idx, 'date_of_birth', v)} />
                                             <InputField label="User Id" value={g.user || ''} onChange={v => updateGuardian(idx, 'user', v)} placeholder="User ID" />
                                             <div>
@@ -1214,14 +1325,16 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     </div>
 
                     <SectionHeader title="Additional Detail" color="blue" />
-                    <div className="mt-4">
-                        <InputField label="Student Adhar Card Number" value={formData.studentAadhar} onChange={(v) => updateField('studentAadhar', v)} placeholder="Enter Student Adhar Card Number" />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                        <InputField label="Nationality" value={formData.nationality} onChange={(v) => updateField('nationality', v)} placeholder="Enter Nationality" />
+                        <InputField label="Aadhaar DISE number (UID)" type="tel" maxLength={18} value={formData.studentAadhar} onChange={(v) => updateField('studentAadhar', v)} placeholder="Enter 18-digit Aadhaar DISE number (UID)" />
+                        <SelectField label="Belonging EWS" value={formData.belongingEws} options={['Yes', 'No']} onChange={(v) => updateField('belongingEws', v)} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                         <SelectField label="Single Girl Child?" value={formData.single_girl_child} options={['Yes', 'No']} onChange={(v) => updateField('single_girl_child', v)} placeholder="Single Girl Child?" />
                         <SelectField label="Specially Abled (Divyangjan)?" value={formData.specially_abled} options={['Yes', 'No']} onChange={(v) => updateField('specially_abled', v)} placeholder="Specially Abled (Divyangjan)?" />
                         <SelectField label="Belonging to the EWS?" value={formData.belonging_ews} options={['Yes', 'No']} onChange={(v) => updateField('belonging_ews', v)} placeholder="Belonging to the EWS?" />
-                        <InputField label="Personal Education Number(PEN)" value={formData.pen_number} onChange={(v) => updateField('pen_number', v)} placeholder="Enter Personal Education Number" />
+                        <InputField label="Personal Education Number(PEN)" type="tel" maxLength={11} value={formData.pen_number} onChange={(v) => updateField('pen_number', v)} placeholder="Enter 11-digit PEN Number" />
                         <InputField label="ABHA Number" value={formData.abha_number} onChange={(v) => updateField('abha_number', v)} placeholder="Enter ABHA Number" />
                     </div>
                 </div>
@@ -1528,6 +1641,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
     if (view === 'form') {
         return (
             <div className="p-6 max-w-[1200px] mx-auto pb-24 text-gray-800 font-inter">
+                {contextHolder}
                 <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm rounded-t-xl">
                     <div className="flex items-center gap-4">
                         <button onClick={() => {
@@ -1556,6 +1670,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
     return (
         <div className="p-6 max-w-[1400px] mx-auto pb-24 text-gray-800 font-inter">
+            {contextHolder}
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-black text-gray-900 tracking-tight">Manage Registration</h1>
@@ -1746,7 +1861,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                            <div className="flex items-center justify-end gap-2 transition-all">
                                                 <button onClick={(e) => { e.stopPropagation(); setEditingRecord(row); setView('form'); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"><FiEdit2 className="w-4 h-4" /></button>
                                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(row); }} className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors"><FiTrash2 className="w-4 h-4" /></button>
                                             </div>

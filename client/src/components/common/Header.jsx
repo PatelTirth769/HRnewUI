@@ -72,6 +72,19 @@ const Header = ({ onModuleClick }) => {
           <>
             {isAdmin ? (
               <>
+                <div key="master-dropdown" className="nav-dropdown-group">
+                  <div 
+                    className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors"
+                    onClick={() => { navigate('/users'); onModuleClick('users'); }}
+                  >
+                    Master
+                  </div>
+                  <div className="nav-dropdown-content">
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/users'); onModuleClick('users'); }}>
+                      Users
+                    </div>
+                  </div>
+                </div>
                 <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Education</div>
                 <div key="more-dropdown" className="nav-dropdown-group">
                   <div className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors">

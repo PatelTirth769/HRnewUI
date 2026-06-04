@@ -934,6 +934,28 @@ export const moduleNavigation = {
             },
         ],
     },
+    users: {
+        title: 'Users',
+        sections: [
+            {
+                title: 'User Management',
+                icon: 'user-group',
+                items: [
+                    { label: 'Users', path: '/users', adminOnly: true },
+                    { label: 'Role', path: '/users/roles', adminOnly: true },
+                    { label: 'Role Profile', path: '/users/role-profiles', adminOnly: true },
+                    { label: 'Module Profile', path: '/users/module-profiles', adminOnly: true },
+                ],
+            },
+            {
+                title: 'Settings',
+                icon: 'cog',
+                items: [
+                    { label: 'Settings', path: '/settings' },
+                ],
+            },
+        ],
+    },
 };
 
 
