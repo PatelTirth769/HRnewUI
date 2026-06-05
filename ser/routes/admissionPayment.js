@@ -291,19 +291,62 @@ router.post('/record-manual', async (req, res) => {
 
 /**
  * GET /history-all
- * Fetches ALL admission fee payment records for reporting
+ * Fetches ALL admission fee payment records for reporting, including UNPAID registrations
  */
 router.get('/history-all', async (req, res) => {
     try {
-        const snapshot = await db.collection(PAYMENTS_PATH)
+        // 1. Fetch actual payment records
+        const paySnapshot = await db.collection(PAYMENTS_PATH)
             .orderBy('created_at', 'desc')
             .limit(2000)
             .get();
 
-        const history = [];
-        snapshot.forEach(doc => history.push(doc.data()));
+        const payments = [];
+        paySnapshot.forEach(doc => payments.push(doc.data()));
 
-        console.log(`[AdmissionPayment] Fetched ${history.length} payment records`);
+        // 2. Fetch all registrations to find unpaid students
+        const regSnapshot = await db.collection('schooler_system/enquiry_management/registrations')
+            .orderBy('created_at', 'desc')
+            .get();
+
+        const history = [];
+
+        // Add all actual payments
+        payments.forEach(p => history.push(p));
+
+        // Add unpaid registrations
+        regSnapshot.forEach(doc => {
+            const reg = doc.data();
+            // Skip disabled/left students
+            if (reg.isDisabled) return;
+            
+            // Check if this registration already has a payment
+            const hasPayment = payments.some(p => p.registration_no === reg.registrationNo);
+            
+            if (!hasPayment) {
+                history.push({
+                    order_id: `unpaid_${reg.registrationNo}`,
+                    payment_id: '-',
+                    student_name: reg.student_full_name || reg.first_name || 'Unknown',
+                    registration_no: reg.registrationNo || '',
+                    admission_no: '',
+                    program: reg.program || '',
+                    academic_year: reg.academic_year || '',
+                    fee_name: 'Registration Fee',
+                    fee_type: 'Registration',
+                    amount: parseFloat(reg.feeAmount) || 0,
+                    status: 'unpaid',
+                    payment_mode: '-',
+                    receipt_no: '-',
+                    created_at: reg.created_at ? (reg.created_at.toDate ? reg.created_at.toDate().toISOString() : new Date(reg.created_at).toISOString()) : new Date().toISOString()
+                });
+            }
+        });
+
+        // Sort combined history by created_at desc
+        history.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        console.log(`[AdmissionPayment] Fetched ${history.length} combined fee records`);
         res.json({ success: true, data: history });
     } catch (err) {
         console.error('[AdmissionPayment] Fetch All Error:', err);

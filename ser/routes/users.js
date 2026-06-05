@@ -68,6 +68,10 @@ router.get('/get-role/:identifier', async (req, res) => {
         if (!regSnap.empty) {
             regSnap.forEach(doc => {
                 const data = doc.data();
+                
+                // Skip disabled students from being able to log in
+                if (data.isDisabled) return;
+                
                 if (data.student_email_id && !seenEmails.has(data.student_email_id)) {
                     accounts.push({
                         role: 'Student',

@@ -13,6 +13,7 @@ import StudentDashboard from './pages/Education/StudentDashboard';
 import InstructorDashboard from './pages/Education/InstructorDashboard';
 import GuardianDashboard from './pages/Education/GuardianDashboard';
 import ImportLogs from './pages/Education/ImportLogs';
+import RegistrationImportLogs from './pages/Enquiry/RegistrationImportLogs';
 
 import CompanyMaster from './components/company/CompanyMaster';
 import EmployeeMIS from './pages/EmployeeMIS';
@@ -913,6 +914,7 @@ function App() {
                 <Route path="/enquiry/setup/class-restriction" element={<ClassRestrictionSetup />} />
                 {/* Import Logs Routes */}
                 <Route path="/import-logs/students" element={<ImportLogs />} />
+                <Route path="/import-logs/registrations" element={<RegistrationImportLogs />} />
 
                 {/* Certificates Routes */}
                 <Route path="/certificates/dashboard" element={<CertificatesDashboard />} />

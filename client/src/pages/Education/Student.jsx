@@ -3,7 +3,7 @@ import { notification } from 'antd';
 import API from '../../services/api';
 import * as XLSX from 'xlsx';
 import { db } from '../../config/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { DEFAULT_USER_PASSWORD } from '../../config/settings';
 import { FiEdit2, FiTrash2, FiPlus, FiRefreshCw, FiSearch, FiDownload } from 'react-icons/fi';
 
@@ -481,6 +481,27 @@ const Student = () => {
                 await API.put(`/api/resource/Student/${encodeURIComponent(editingRecord)}`, payload);
                 erpNextStudentName = editingRecord;
                 api.success({ message: 'Student updated successfully.' });
+
+                // --- REVERSE SYNC TO FIREBASE ---
+                try {
+                    const admsQuery = query(collection(db, 'schooler_system/enquiry_management/final_admissions'), where('erp_student_id', '==', editingRecord));
+                    const admsSnap = await getDocs(admsQuery);
+                    if (!admsSnap.empty) {
+                        const admDoc = admsSnap.docs[0];
+                        const isDisabled = payload.enabled === 0;
+                        
+                        await updateDoc(doc(db, 'schooler_system/enquiry_management/final_admissions', admDoc.id), { isDisabled });
+                        
+                        const regId = admDoc.data().registrationId;
+                        if (regId) {
+                            await updateDoc(doc(db, 'schooler_system/enquiry_management/registrations', regId), { isDisabled });
+                        }
+                        console.log('[Firebase Reverse Sync] Updated disabled status:', isDisabled);
+                    }
+                } catch (syncErr) {
+                    console.warn('Failed to reverse-sync disabled status to Firebase', syncErr);
+                }
+                // ---------------------------------
 
                 // Explicitly update Student record with guardians in child table
                 if (finalGuardians.length > 0) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { notification, Spin, Tabs, Dropdown, Button, Space, Popconfirm } from 'antd';
-import { FiChevronDown, FiChevronLeft, FiChevronRight, FiPrinter, FiMoreHorizontal } from 'react-icons/fi';
+import { FiChevronDown, FiChevronLeft, FiChevronRight, FiPrinter, FiMoreHorizontal, FiEye, FiEyeOff } from 'react-icons/fi';
 import API from '../../services/api';
 
 // ERPNext-style searchable Link Field dropdown
@@ -82,12 +82,16 @@ const LinkField = ({ label, value, options, onChange, placeholder = '', maxWidth
 };
 
 const UserList = () => {
+    const [api, contextHolder] = notification.useNotification();
     const [view, setView] = useState('list');
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
     const [search, setSearch] = useState('');
+    const [pageSize, setPageSize] = useState(20);
+    const [visibleCount, setVisibleCount] = useState(20);
+    const [showPassword, setShowPassword] = useState(false);
 
     // Dropdown masters
     const [roles, setRoles] = useState([]);
@@ -148,7 +152,7 @@ const UserList = () => {
             const res = await API.get('/api/resource/User?fields=["name","full_name","email","enabled","user_type","last_active"]&limit_page_length=None&order_by=modified desc');
             setUsers(res.data.data || []);
         } catch (err) {
-            notification.error({ message: 'Error', description: 'Failed to fetch users' });
+            api.error({ message: 'Error', description: 'Failed to fetch users' });
         } finally {
             setLoading(false);
         }
@@ -192,15 +196,22 @@ const UserList = () => {
             if (!data.block_modules) data.block_modules = [];
             setFormData(data);
         } catch (err) {
-            notification.error({ message: 'Error', description: 'Failed to fetch user details' });
+            api.error({ message: 'Error', description: 'Failed to fetch user details' });
         } finally {
             setLoading(false);
         }
     };
 
     const handleSave = async () => {
-        if (!formData.email) {
-            notification.warning({ message: 'Validation Error', description: 'Email is required.' });
+        const missingFields = [];
+        if (!formData.email) missingFields.push('Email');
+        if (!formData.first_name) missingFields.push('First Name');
+
+        if (missingFields.length > 0) {
+            api.warning({ 
+                message: 'Validation Error', 
+                description: `Missing field(s): ${missingFields.join(', ')}` 
+            });
             return;
         }
         setSaving(true);
@@ -208,10 +219,10 @@ const UserList = () => {
             const payload = { ...formData };
             if (editingRecord) {
                 await API.put(`/api/resource/User/${encodeURIComponent(editingRecord)}`, payload);
-                notification.success({ message: 'User updated successfully.' });
+                api.success({ message: 'User updated successfully.' });
             } else {
                 await API.post('/api/resource/User', payload);
-                notification.success({ message: 'User created successfully.' });
+                api.success({ message: 'User successfully created.' });
             }
             setView('list');
         } catch (err) {
@@ -222,7 +233,7 @@ const UserList = () => {
                     errorMessage = parsed.map(m => { try { return JSON.parse(m).message; } catch { return m; } }).join('\n');
                 } catch { /* */ }
             }
-            notification.error({ message: 'Save Failed', description: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage), duration: 6 });
+            api.error({ message: 'Save Failed', description: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage), duration: 6 });
         } finally {
             setSaving(false);
         }
@@ -231,10 +242,10 @@ const UserList = () => {
     const handleDelete = async () => {
         try {
             await API.delete(`/api/resource/User/${encodeURIComponent(editingRecord)}`);
-            notification.success({ message: 'User deleted.' });
+            api.success({ message: 'User deleted.' });
             setView('list');
         } catch (err) {
-            notification.error({ message: 'Delete Failed', description: err.message });
+            api.error({ message: 'Delete Failed', description: err.message });
         }
     };
 
@@ -309,7 +320,7 @@ const UserList = () => {
 
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
                     <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-80 shadow-sm focus:ring-1 focus:ring-blue-400" placeholder="Search by name or email..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                    <div className="ml-auto text-xs text-gray-400 font-medium">{filtered.length} of {users.length} results</div>
+                    <div className="ml-auto text-xs text-gray-400 font-medium">{!loading && `${Math.min(visibleCount, filtered.length)} of ${filtered.length} TOTAL USERS`}</div>
                 </div>
 
                 <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
@@ -328,7 +339,7 @@ const UserList = () => {
                             ) : filtered.length === 0 ? (
                                 <tr><td colSpan="4" className="text-center py-20 text-gray-500 italic">No Users found.</td></tr>
                             ) : (
-                                filtered.map((u) => (
+                                filtered.slice(0, visibleCount).map((u) => (
                                     <tr key={u.name} className="hover:bg-gray-50/50 transition-colors">
                                         <td className="px-5 py-4">
                                             <button className="text-blue-600 hover:text-blue-800 hover:underline font-bold text-sm" onClick={() => { setEditingRecord(u.name); setView('form'); }}>
@@ -347,6 +358,35 @@ const UserList = () => {
                             )}
                         </tbody>
                     </table>
+                    
+                    {!loading && filtered.length > 0 && (
+                        <div className="flex justify-between items-center p-4 bg-gray-50/30 border-t border-gray-100">
+                            <div className="flex items-center border border-gray-200 rounded-xl bg-white overflow-hidden shadow-xs">
+                                {[20, 100, 500, 2500].map((size) => (
+                                    <button
+                                        key={size}
+                                        className={`px-4 py-1.5 text-xs font-bold border-r border-gray-200 last:border-r-0 hover:bg-gray-50 transition cursor-pointer ${
+                                            pageSize === size ? 'bg-gray-100 text-gray-800' : 'text-gray-500'
+                                        }`}
+                                        onClick={() => {
+                                            setPageSize(size);
+                                            setVisibleCount(size);
+                                        }}
+                                    >
+                                        {size}
+                                    </button>
+                                ))}
+                            </div>
+                            {visibleCount < filtered.length && (
+                                <button
+                                    className="px-5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl shadow-xs hover:bg-gray-50 transition active:scale-95 cursor-pointer"
+                                    onClick={() => setVisibleCount(prev => prev + pageSize)}
+                                >
+                                    Load More
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -545,9 +585,23 @@ const UserList = () => {
                         </div>
                     </CollapsibleSection>
                     <CollapsibleSection title="Change Password">
-                        <div className="max-w-md">
+                        <div className="max-w-md relative">
                             <label className={labelStyle}>New Password</label>
-                            <input type="password" className={inputStyle} value={formData.new_password || ''} onChange={e => setFormData({ ...formData, new_password: e.target.value })} />
+                            <div className="relative">
+                                <input 
+                                    type={showPassword ? "text" : "password"} 
+                                    className={`${inputStyle} pr-10`} 
+                                    value={formData.new_password || ''} 
+                                    onChange={e => setFormData({ ...formData, new_password: e.target.value })} 
+                                />
+                                <button
+                                    type="button"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                >
+                                    {showPassword ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
+                                </button>
+                            </div>
                             <p className="text-[11px] text-gray-400 mt-1">Set a new password for this user.</p>
                         </div>
                     </CollapsibleSection>
@@ -590,6 +644,7 @@ const UserList = () => {
 
     return (
         <div className="p-6 max-w-6xl mx-auto pb-20">
+            {contextHolder}
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                     <span className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">

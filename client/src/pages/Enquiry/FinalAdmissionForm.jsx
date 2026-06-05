@@ -224,6 +224,8 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
     const [saving, setSaving] = useState(false);
     const [selectedRegistration, setSelectedRegistration] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [pageSize, setPageSize] = useState(20);
+    const [visibleCount, setVisibleCount] = useState(20);
     const [availableClasses, setAvailableClasses] = useState([]);
     const [academicYears, setAcademicYears] = useState([]);
 
@@ -231,6 +233,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
     const [filterDateFrom, setFilterDateFrom] = useState('');
     const [filterDateTo, setFilterDateTo] = useState('');
     const [filterProgram, setFilterProgram] = useState('All');
+    const [filterAcademicYear, setFilterAcademicYear] = useState('All');
     const [filterStatus, setFilterStatus] = useState('All');
     const [filterFeeStatus, setFilterFeeStatus] = useState('All');
 
@@ -366,7 +369,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                     let finalGuardianName = g.guardian;
                     let finalGuardianDisplayName = g.guardian_name || `Parent of ${formData.first_name || 'Student'}`;
 
-                    if (g.is_new) {
+                    if (g.is_new && !finalGuardianName) {
                         const guardianPayload = {
                             guardian_name: g.guardian_name || finalGuardianDisplayName,
                             email_address: gEmail,
@@ -387,11 +390,6 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                                 const createdGuardian = gRes.data.data;
                                 finalGuardianName = createdGuardian.name;
                                 finalGuardianDisplayName = createdGuardian.guardian_name;
-                                linkedGuardians.push({
-                                    guardian: finalGuardianName,
-                                    guardian_name: finalGuardianDisplayName,
-                                    relation: g.relation || 'Others'
-                                });
                                 console.log(`[ERPNext Guardian Sync] Created Guardian doc on attempt ${gAttempts}:`, finalGuardianName);
                             } catch (gErr) {
                                 const status = gErr.response?.status;
@@ -411,11 +409,6 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                                     const sq = await API.get(`/api/resource/Guardian?filters=${safeFilters}&limit_page_length=1`);
                                     if (sq.data.data?.length > 0) {
                                         finalGuardianName = sq.data.data[0].name;
-                                        linkedGuardians.push({
-                                            guardian: finalGuardianName,
-                                            guardian_name: guardianPayload.guardian_name,
-                                            relation: g.relation || 'Others'
-                                        });
                                         console.log('[ERPNext Guardian Sync] Fallback resolution: Found and linked existing Guardian doc:', finalGuardianName);
                                         break;
                                     }
@@ -425,10 +418,12 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                                 break;
                             }
                         }
-                    } else {
+                    }
+                    
+                    if (finalGuardianName) {
                         linkedGuardians.push({
-                            guardian: g.guardian,
-                            guardian_name: g.guardian_name,
+                            guardian: finalGuardianName,
+                            guardian_name: finalGuardianDisplayName || g.guardian_name,
                             relation: g.relation || 'Others'
                         });
                     }
@@ -658,11 +653,24 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                 return false;
             }
 
-            // 3. Status Filter
+            // 2.5 Academic Year Filter
+            if (filterAcademicYear !== 'All' && d.academic_year !== filterAcademicYear) {
+                return false;
+            }
+
+            // 3. Status Filter (Pending vs Confirmed vs Disabled)
+            const isDisabled = d.isDisabled === true;
+            if (filterStatus === 'All' && isDisabled) return false; // Hide disabled by default
+            
             if (filterStatus !== 'All') {
-                const isAdmitted = d.admissionStatus === 'Admitted';
-                if (filterStatus === 'Pending' && isAdmitted) return false;
-                if (filterStatus === 'Confirmed' && !isAdmitted) return false;
+                if (filterStatus === 'Disabled') {
+                    if (!isDisabled) return false;
+                } else {
+                    if (isDisabled) return false; // Hide disabled from Pending/Confirmed views
+                    const isAdmitted = d.admissionStatus === 'Admitted';
+                    if (filterStatus === 'Pending' && isAdmitted) return false;
+                    if (filterStatus === 'Confirmed' && !isAdmitted) return false;
+                }
             }
 
             // 4. Fee Status Filter
@@ -695,7 +703,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
 
             return true;
         });
-    }, [registrations, searchQuery, filterProgram, filterStatus, filterDateFrom, filterDateTo, filterFeeStatus]);
+    }, [registrations, searchQuery, filterProgram, filterAcademicYear, filterStatus, filterDateFrom, filterDateTo, filterFeeStatus]);
 
     if (view === 'form') {
         return (
@@ -767,7 +775,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
 
             {/* Filter Section */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
                     <div className="flex flex-col gap-2">
                         <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Start Date</label>
                         <input
@@ -785,6 +793,19 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                             onChange={(e) => setFilterDateTo(e.target.value)}
                             className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none w-full"
                         />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Academic Year</label>
+                        <select
+                            value={filterAcademicYear}
+                            onChange={(e) => setFilterAcademicYear(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                        >
+                            <option value="All">All Years</option>
+                            {academicYears.map((y) => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
                     </div>
                     <div className="flex flex-col gap-2">
                         <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Program (Class)</label>
@@ -806,9 +827,10 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                             onChange={(e) => setFilterStatus(e.target.value)}
                             className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
                         >
-                            <option value="All">All Statuses</option>
+                            <option value="All">All Active Statuses</option>
                             <option value="Pending">Admission Pending</option>
                             <option value="Confirmed">Confirmed Admission</option>
+                            <option value="Disabled">Disabled / Left</option>
                         </select>
                     </div>
                     <div className="flex flex-col gap-2">
@@ -829,6 +851,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                         onClick={() => {
                             setFilterDateFrom('');
                             setFilterDateTo('');
+                            setFilterAcademicYear('All');
                             setFilterProgram('All');
                             setFilterStatus('All');
                             setFilterFeeStatus('All');
@@ -853,7 +876,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                         />
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Showing Ready for Admission</span>
+                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{!loading && `${Math.min(visibleCount, filteredData.length)} of ${filteredData.length} TOTAL ADMISSIONS`}</span>
                     </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -874,7 +897,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                             ) : filteredData.length === 0 ? (
                                 <tr><td colSpan={6} className="px-4 py-16 text-center text-gray-400 font-medium italic">No matching records found</td></tr>
                             ) : (
-                                filteredData.map((row) => (
+                                filteredData.slice(0, visibleCount).map((row) => (
                                     <tr key={row.id} className="hover:bg-blue-50/40 transition-all group">
                                         <td className="px-4 py-3.5">
                                             <div className="font-bold text-gray-900">{row.first_name} {row.last_name}</div>
@@ -896,7 +919,13 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                                         </td>
                                         <td className="px-4 py-3.5 font-medium text-gray-500 text-xs">{row.date_of_birth || '-'}</td>
                                         <td className="px-4 py-3.5 text-center">
-                                            {row.admissionStatus === 'Admitted' ? (
+                                            {row.isDisabled ? (
+                                                <div className="flex items-center justify-center gap-1.5">
+                                                    <span className="px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">
+                                                        DISABLED
+                                                    </span>
+                                                </div>
+                                            ) : row.admissionStatus === 'Admitted' ? (
                                                 <div className="flex items-center justify-center gap-1.5">
                                                     <span className="px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-wider bg-green-100 text-green-700 border border-green-200/60 shadow-2xs">
                                                         Admitted
@@ -929,6 +958,35 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                         </tbody>
                     </table>
                 </div>
+
+                {!loading && filteredData.length > 0 && (
+                    <div className="flex justify-between items-center p-4 bg-gray-50/30 border-t border-gray-100">
+                        <div className="flex items-center border border-gray-200 rounded-xl bg-white overflow-hidden shadow-xs">
+                            {[20, 100, 500, 2500].map((size) => (
+                                <button
+                                    key={size}
+                                    className={`px-4 py-1.5 text-xs font-bold border-r border-gray-200 last:border-r-0 hover:bg-gray-50 transition cursor-pointer ${
+                                        pageSize === size ? 'bg-gray-100 text-gray-800' : 'text-gray-500'
+                                    }`}
+                                    onClick={() => {
+                                        setPageSize(size);
+                                        setVisibleCount(size);
+                                    }}
+                                >
+                                    {size}
+                                </button>
+                            ))}
+                        </div>
+                        {visibleCount < filteredData.length && (
+                            <button
+                                className="px-5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl shadow-xs hover:bg-gray-50 transition active:scale-95 cursor-pointer"
+                                onClick={() => setVisibleCount(prev => prev + pageSize)}
+                            >
+                                Load More
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

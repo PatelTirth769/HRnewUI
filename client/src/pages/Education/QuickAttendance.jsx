@@ -100,7 +100,30 @@ const QuickAttendance = () => {
                 return;
             }
 
-            const studentIds = groupStudents.map(s => s.student);
+            const rawStudentIds = groupStudents.map(s => s.student);
+
+            // Filter out disabled students
+            const stuRes = await API.get('/api/resource/Student', {
+                params: {
+                    filters: JSON.stringify([["name", "in", rawStudentIds]]),
+                    fields: JSON.stringify(["name", "enabled"]),
+                    limit_page_length: 'None'
+                }
+            });
+            const enabledMap = {};
+            (stuRes.data.data || []).forEach(s => enabledMap[s.name] = s.enabled);
+
+            const activeGroupStudents = groupStudents.filter(s => enabledMap[s.student] !== 0);
+
+            if (activeGroupStudents.length === 0) {
+                notification.info({ message: 'No Active Students', description: 'All students in this group are currently disabled/left.' });
+                setStudents([]);
+                setExistingMap({});
+                setFetchedFor({ group: selectedGroup, date });
+                return;
+            }
+
+            const studentIds = activeGroupStudents.map(s => s.student);
 
             // 2. Check for existing attendance records on the selected date
             const statusMap = {};
@@ -124,14 +147,14 @@ const QuickAttendance = () => {
                 console.error('Error checking existing attendance:', err);
             }
 
-            // 3. Build student list — pre-populate from existing records or default to Present
-            const builtStudents = groupStudents.map(s => ({
+            // 3. Map final list
+            const finalStudents = activeGroupStudents.map(s => ({
                 student: s.student,
                 student_name: s.student_name,
-                status: statusMap[s.student] === 'Absent' ? 'Absent' : 'Present'
+                status: statusMap[s.student] || 'Present', // Default Present
             }));
 
-            setStudents(builtStudents);
+            setStudents(finalStudents);
             setExistingMap(existMap);
             setFetchedFor({ group: selectedGroup, date });
 

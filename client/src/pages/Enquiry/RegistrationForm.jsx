@@ -4,6 +4,8 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { db } from '../../config/firebase';
 import API from '../../services/api';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
+import { DEFAULT_USER_PASSWORD } from '../../config/settings';
 import { FiPlus, FiArrowLeft, FiSave, FiUser, FiUsers, FiBriefcase, FiLink, FiEdit2, FiTrash2, FiSearch, FiDownload, FiRefreshCw, FiX, FiFileText, FiCreditCard, FiCheckCircle } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
@@ -323,6 +325,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
         // Student Detail
         academic_year: '2025-2026',
         program: '',
+        rte_student: '',
         roll_number: '',
         gr_number: '',
         registration_date: new Date().toISOString().split('T')[0],
@@ -422,6 +425,8 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const [saving, setSaving] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [pageSize, setPageSize] = useState(20);
+    const [visibleCount, setVisibleCount] = useState(20);
     const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('reg_tab') || '1');
     const [regFee, setRegFee] = useState(0);
     const [formData, setFormData] = useState(() => {
@@ -443,8 +448,54 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const [filterDateFrom, setFilterDateFrom] = useState('');
     const [filterDateTo, setFilterDateTo] = useState('');
     const [filterProgram, setFilterProgram] = useState('All');
+    const [filterAcademicYear, setFilterAcademicYear] = useState('All');
     const [filterStatus, setFilterStatus] = useState('All');
     const [filterFeeStatus, setFilterFeeStatus] = useState('All');
+
+    // --- Data Import States ---
+    const [importView, setImportView] = useState('list');
+    const [importList, setImportList] = useState(() => {
+        const stored = localStorage.getItem('registration_imports');
+        return stored ? JSON.parse(stored) : [];
+    });
+    const [activeImportRun, setActiveImportRun] = useState(null);
+    const [importType, setImportType] = useState('Insert New Records');
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [importProgress, setImportProgress] = useState(0);
+    const [importing, setImporting] = useState(false);
+    const [importLogs, setImportLogs] = useState([]);
+    const [previewRows, setPreviewRows] = useState([]);
+    const [showTemplateModal, setShowTemplateModal] = useState(false);
+    const [templateFormat, setTemplateFormat] = useState('Excel');
+    const [templateType, setTemplateType] = useState('Blank Template');
+    const [selectedFields, setSelectedFields] = useState({
+        // Academic
+        academic_year: true, program: true, roll_number: false, gr_number: false, registration_date: false,
+        // Basic Detail
+        first_name: true, middle_name: false, last_name: false, student_full_name: false, gender: true,
+        date_of_birth: false, place_of_birth: false, caste: false, sub_caste: false, category: false,
+        religion: false, mother_tongue: false, blood_group: false,
+        custom_aadhaar_uid: false, custom_pen_number: false, custom_apaar_id: false, custom_aadhaar_card_number: false,
+        // Address
+        address_line_1: false, address_line_2: false, city: false, state: false, pincode: false, country: false,
+        // Communication
+        student_mobile_number: true, student_email_id: true, emergency_mobile_number: false,
+        alt_mobile: false, alt_email: false,
+        // Additional Info
+        source: false, follow_up_date: false, status: false, remarks: false, campus_visit: false,
+        referred_by: false, single_parent: false,
+        // Guardian
+        guardian_relation: false, guardian_name: false, guardian_email: false, guardian_mobile: false,
+        guardian_alternate_number: false, guardian_date_of_birth: false, guardian_education: false,
+        guardian_occupation: false, guardian_designation: false, guardian_work_address: false,
+        // Office Use
+        prev_school_name: false, reason_for_leaving: false, prev_program: false, school_address: false,
+        exam_marks: false, last_school_affiliated: false, prev_school_lctc: false, lctc_issue_date: false,
+        nationality: false, student_aadhar_number: false, single_girl_child: false, specially_abled: false,
+        belonging_ews: false, pen_number: false, abha_number: false,
+        // Registration
+        registrationNo: false
+    });
 
     const navigate = useNavigate();
 
@@ -530,6 +581,22 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                 orderId: response.razorpay_order_id,
                                 paymentDate: new Date().toISOString(),
                             }));
+
+                            // Auto-update Firebase if it's an existing registration
+                            if (editingRecord?.id) {
+                                try {
+                                    await updateDoc(doc(db, REGISTRATIONS_PATH, editingRecord.id), {
+                                        isFeePaid: true,
+                                        receiptNo: verifyRes.data.receipt_no || response.razorpay_payment_id,
+                                        paymentMode: 'Online',
+                                        paymentId: response.razorpay_payment_id,
+                                        paymentDate: new Date().toISOString(),
+                                        feeAmount: payAmount,
+                                        updated_at: serverTimestamp()
+                                    });
+                                } catch (e) { console.error('Auto-update DB failed:', e); }
+                            }
+
                             api.success({ message: '✅ Payment Successful!', description: `Receipt: ${verifyRes.data.receipt_no}` });
                         }
                     } catch (vErr) {
@@ -588,6 +655,22 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     paymentId: res.data.payment_id,
                     paymentDate: new Date().toISOString(),
                 }));
+
+                // Auto-update Firebase if it's an existing registration
+                if (editingRecord?.id) {
+                    try {
+                        await updateDoc(doc(db, REGISTRATIONS_PATH, editingRecord.id), {
+                            isFeePaid: true,
+                            receiptNo: res.data.receipt_no,
+                            paymentId: res.data.payment_id,
+                            paymentMode: formData.paymentMode || 'Cash',
+                            paymentDate: new Date().toISOString(),
+                            feeAmount: payAmount,
+                            updated_at: serverTimestamp()
+                        });
+                    } catch (e) { console.error('Auto-update DB failed:', e); }
+                }
+
                 api.success({ message: '✅ Payment Recorded!', description: `Receipt: ${res.data.receipt_no}` });
             }
         } catch (err) {
@@ -642,7 +725,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
     useEffect(() => {
         fetchERPNextData();
         if (view === 'list') fetchData();
-        else {
+        else if (view === 'import') {
+            fetchImportList();
+        } else {
             fetchRegFee();
             if (!editingRecord) {
                 // Only initialize if we didn't just load a draft from sessionStorage
@@ -661,13 +746,31 @@ export default function RegistrationForm({ initialView = 'list' }) {
     }, [view, editingRecord]);
 
     const fetchRestrictions = async (programs) => {
+        const sortPrograms = (arr) => {
+            const getRank = (name) => {
+                const n = name.toUpperCase();
+                if (n.includes('NURSERY')) return 0;
+                if (n.includes('JR') || n.includes('JUNIOR')) return 1;
+                if (n.includes('SR') || n.includes('SENIOR')) return 2;
+                const match = n.match(/(?:STD|CLASS)\s*(\d+)/);
+                if (match) return parseInt(match[1]) + 2;
+                return 999;
+            };
+            return [...arr].sort((a, b) => {
+                const rA = getRank(a);
+                const rB = getRank(b);
+                if (rA !== rB) return rA - rB;
+                return a.localeCompare(b);
+            });
+        };
+
         try {
             const snap = await getDocs(collection(db, 'schooler_system/enquiry_management/program_restrictions'));
             const restricted = snap.docs.filter(d => d.data().isDisabled).map(d => d.id);
-            setAvailableClasses(programs.filter(c => !restricted.includes(c)));
+            setAvailableClasses(sortPrograms(programs.filter(c => !restricted.includes(c))));
         } catch (err) { 
             console.error('Restriction fetch failed', err);
-            setAvailableClasses(programs);
+            setAvailableClasses(sortPrograms(programs));
         }
     };
 
@@ -808,6 +911,23 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
         setSaving(true);
         try {
+            // Check if we are newly disabling this registration
+            if (formData.isDisabled && editingRecord && !editingRecord.isDisabled) {
+                try {
+                    const { collection, query, where, getDocs } = require('firebase/firestore');
+                    const admsQuery = query(collection(db, 'schooler_system/enquiry_management/final_admissions'), where('registrationId', '==', editingRecord.id));
+                    const admsSnap = await getDocs(admsQuery);
+                    if (!admsSnap.empty) {
+                        const adm = admsSnap.docs[0].data();
+                        if (adm.erp_student_id) {
+                            await API.put(`/api/resource/Student/${encodeURIComponent(adm.erp_student_id)}`, { enabled: 0 });
+                        }
+                    }
+                } catch (erpErr) {
+                    console.warn('Failed to auto-disable ERPNext student', erpErr);
+                }
+            }
+
             // 1. Sync with ERPNext if needed (creating Student and Guardian)
             let erpNextStudentName = null;
             try {
@@ -878,11 +998,24 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 return false;
             }
 
-            // 3. Status Filter (Converted vs Open)
+            // 2.5 Academic Year Filter
+            if (filterAcademicYear !== 'All' && d.academic_year !== filterAcademicYear) {
+                return false;
+            }
+
+            // 3. Status Filter (Converted vs Open vs Disabled)
+            const isDisabled = d.isDisabled === true;
+            if (filterStatus === 'All' && isDisabled) return false; // Hide disabled by default
+            
             if (filterStatus !== 'All') {
-                const isConverted = d.status === 'Converted';
-                if (filterStatus === 'Converted' && !isConverted) return false;
-                if (filterStatus === 'Open' && isConverted) return false;
+                if (filterStatus === 'Disabled') {
+                    if (!isDisabled) return false;
+                } else {
+                    if (isDisabled) return false; // Hide disabled from Open/Converted views
+                    const isConverted = d.status === 'Converted';
+                    if (filterStatus === 'Converted' && !isConverted) return false;
+                    if (filterStatus === 'Open' && isConverted) return false;
+                }
             }
 
             // 4. Fee Status Filter (Paid vs Unpaid)
@@ -915,7 +1048,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
             return true;
         });
-    }, [data, searchQuery, filterProgram, filterStatus, filterFeeStatus, filterDateFrom, filterDateTo]);
+    }, [data, searchQuery, filterProgram, filterAcademicYear, filterStatus, filterFeeStatus, filterDateFrom, filterDateTo]);
 
     const updateField = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -1115,6 +1248,658 @@ export default function RegistrationForm({ initialView = 'list' }) {
         }));
     };
 
+    // --- Data Import Logics ---
+    const CheckboxField = ({ name, label, isRed }) => (
+        <label className="flex items-center gap-3 cursor-pointer">
+            <input 
+                type="checkbox" 
+                checked={!!selectedFields[name]} 
+                onChange={(e) => setSelectedFields(prev => ({ ...prev, [name]: e.target.checked }))}
+                className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black accent-black"
+            />
+            <span className={isRed ? "text-red-600 font-medium" : "text-gray-700 font-medium"}>{label}</span>
+        </label>
+    );
+
+    const IMPORT_FIELD_MAP = {
+        // Academic
+        academic_year: { label: 'Academic Year', width: 15 },
+        program: { label: 'Program (Class)', width: 20 },
+        rte_student: { label: 'RTE Student', width: 15 },
+        roll_number: { label: 'Roll Number', width: 15 },
+        gr_number: { label: 'GR Number', width: 15 },
+        registration_date: { label: 'Registration Date', width: 15 },
+        // Basic Detail
+        first_name: { label: 'First Name', width: 20 },
+        middle_name: { label: 'Middle Name', width: 20 },
+        last_name: { label: 'Last Name', width: 20 },
+        student_full_name: { label: 'Student Full Name', width: 25 },
+        gender: { label: 'Gender', width: 12 },
+        date_of_birth: { label: 'Date of Birth', width: 15 },
+        place_of_birth: { label: 'Place of Birth', width: 20 },
+        caste: { label: 'Caste', width: 15 },
+        sub_caste: { label: 'Sub Caste', width: 15 },
+        category: { label: 'Category', width: 15 },
+        religion: { label: 'Religion', width: 15 },
+        mother_tongue: { label: 'Mother Tongue', width: 15 },
+        blood_group: { label: 'Blood Group', width: 12 },
+        custom_aadhaar_uid: { label: 'Aadhaar DISE Number (UID)', width: 22 },
+        custom_pen_number: { label: 'PEN Number (Custom)', width: 18 },
+        custom_apaar_id: { label: 'APAAR ID', width: 18 },
+        custom_aadhaar_card_number: { label: 'Aadhaar Card Number', width: 20 },
+        // Address
+        address_line_1: { label: 'Address Line 1 (Current)', width: 25 },
+        address_line_2: { label: 'Address Line 2 (Permanent)', width: 25 },
+        city: { label: 'City', width: 15 },
+        state: { label: 'State', width: 15 },
+        pincode: { label: 'Pincode', width: 12 },
+        country: { label: 'Country', width: 15 },
+        // Communication
+        student_mobile_number: { label: 'Student Mobile Number', width: 20 },
+        student_email_id: { label: 'Student Email Address', width: 25 },
+        emergency_mobile_number: { label: 'Emergency Mobile Number', width: 20 },
+        alt_mobile: { label: 'Alt Mobile Number', width: 18 },
+        alt_email: { label: 'Alt Email', width: 20 },
+        // Additional Info
+        source: { label: 'Source', width: 15 },
+        follow_up_date: { label: 'Follow-up Date', width: 15 },
+        status: { label: 'Status', width: 12 },
+        remarks: { label: 'Remarks', width: 25 },
+        campus_visit: { label: 'Campus Visit', width: 12 },
+        referred_by: { label: 'Referred By', width: 20 },
+        single_parent: { label: 'Single Parent', width: 12 },
+        // Guardian
+        guardian_relation: { label: 'Guardian Relation', width: 15 },
+        guardian_name: { label: 'Guardian Name', width: 20 },
+        guardian_email: { label: 'Guardian Email', width: 25 },
+        guardian_mobile: { label: 'Guardian Mobile', width: 18 },
+        guardian_alternate_number: { label: 'Guardian Alternate Number', width: 18 },
+        guardian_date_of_birth: { label: 'Guardian Date of Birth', width: 15 },
+        guardian_education: { label: 'Guardian Education', width: 20 },
+        guardian_occupation: { label: 'Guardian Occupation', width: 20 },
+        guardian_designation: { label: 'Guardian Designation', width: 20 },
+        guardian_work_address: { label: 'Guardian Work Address', width: 25 },
+        // Office Use
+        prev_school_name: { label: 'Previous School Name', width: 25 },
+        reason_for_leaving: { label: 'Reason For Leaving', width: 20 },
+        prev_program: { label: 'Previous Class', width: 15 },
+        school_address: { label: 'School Address', width: 25 },
+        exam_marks: { label: 'Exam Marks (%)', width: 15 },
+        last_school_affiliated: { label: 'Last School Affiliated', width: 18 },
+        prev_school_lctc: { label: 'Previous School LC/TC Number', width: 22 },
+        lctc_issue_date: { label: 'LC/TC Issue Date', width: 15 },
+        nationality: { label: 'Nationality', width: 15 },
+        student_aadhar_number: { label: 'Student Aadhar Number', width: 20 },
+        single_girl_child: { label: 'Single Girl Child', width: 15 },
+        specially_abled: { label: 'Specially Abled', width: 15 },
+        belonging_ews: { label: 'Belonging EWS', width: 15 },
+        pen_number: { label: 'Personal Education Number (PEN)', width: 22 },
+        abha_number: { label: 'ABHA Number', width: 18 },
+        // Registration
+        registrationNo: { label: 'Registration No', width: 20 }
+    };
+
+    const IMPORT_ORDERED_FIELDS = Object.keys(IMPORT_FIELD_MAP);
+
+    const handleDownloadTemplate = async () => {
+        const headers = [];
+        const cols = [];
+        const activeFields = IMPORT_ORDERED_FIELDS.filter(f => selectedFields[f]);
+
+        activeFields.forEach(f => {
+            headers.push(IMPORT_FIELD_MAP[f].label);
+            cols.push({ wch: IMPORT_FIELD_MAP[f].width });
+        });
+
+        const rows = [headers];
+
+        if (templateType === '5 Records' || templateType === 'All Records') {
+            api.info({ message: 'Fetching existing registration records...', duration: 2 });
+            try {
+                const colRef = collection(db, REGISTRATIONS_PATH);
+                const q2 = query(colRef, orderBy('created_at', 'desc'));
+                const snapshot = await getDocs(q2);
+                let records = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                if (templateType === '5 Records') records = records.slice(0, 5);
+
+                records.forEach(rec => {
+                    const rowData = activeFields.map(f => {
+                        if (f.startsWith('guardian_')) {
+                            const g = (rec.guardians || [])[0] || {};
+                            const gKey = f.replace('guardian_', '');
+                            return g[gKey] || g[gKey === 'name' ? 'guardian_name' : gKey] || '';
+                        }
+                        return rec[f] || '';
+                    });
+                    rows.push(rowData);
+                });
+            } catch (err) {
+                console.error('Error exporting registration records:', err);
+                api.error({ message: 'Export Failed', description: 'Failed to retrieve registration records.' });
+                return;
+            }
+        } else if (templateType === '1 Dummy Record') {
+            const dummyData = {
+                first_name: 'Dummy',
+                last_name: 'Student',
+                gender: 'Male',
+                student_mobile_number: '9999999999',
+                student_email_id: 'dummy.student@example.com',
+                academic_year: '2024-2025',
+                program: 'Class 1',
+                date_of_birth: '15-05-2015',
+                guardian_relation: 'Father',
+                guardian_name: 'Dummy Father',
+                guardian_mobile: '8888888888',
+                guardian_email: 'dummy.father@example.com',
+                blood_group: 'A+',
+                status: 'Open',
+                source: 'Walk-in'
+            };
+            rows.push(activeFields.map(f => dummyData[f] || `Sample ${IMPORT_FIELD_MAP[f]?.label || f}`));
+        } else {
+            rows.push(activeFields.map(() => ""));
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = cols;
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Registration");
+
+        const filename = `Registration_Import_Template.${templateFormat === 'CSV' ? 'csv' : 'xlsx'}`;
+        if (templateFormat === 'CSV') {
+            XLSX.writeFile(wb, filename, { bookType: 'csv' });
+        } else {
+            XLSX.writeFile(wb, filename);
+        }
+        api.success({ message: `Template ${filename} downloaded successfully.` });
+        setShowTemplateModal(false);
+    };
+
+    const handleImportFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setSelectedFile(file);
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const fileData = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(fileData, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                if (jsonData.length === 0) {
+                    api.error({ message: 'Error', description: 'The file is empty.' });
+                    return;
+                }
+
+                setPreviewRows(jsonData);
+                api.success({ message: 'File parsed successfully.', description: `Found ${jsonData.length} rows.` });
+            } catch (err) {
+                console.error(err);
+                api.error({ message: 'Parsing Failed', description: 'Failed to read spreadsheet file.' });
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    const fetchImportList = async () => {
+        try {
+            const colRef = collection(db, "schooler_system", "registration_imports", "logs");
+            const q2 = query(colRef, orderBy("timestamp", "desc"));
+            const snapshot = await getDocs(q2);
+
+            const list = [];
+            snapshot.forEach((docSnap) => {
+                const d = docSnap.data();
+                let formattedTime = 'N/A';
+                if (d.timestamp) {
+                    formattedTime = d.timestamp.toDate ? d.timestamp.toDate().toLocaleString() : new Date(d.timestamp).toLocaleString();
+                }
+                list.push({
+                    id: d.id || docSnap.id,
+                    firestoreId: docSnap.id,
+                    status: d.status || 'Success',
+                    importType: d.importType || 'Insert New Records',
+                    importFile: d.fileName || 'Uploaded File.xlsx',
+                    time: formattedTime,
+                    successCount: Number(d.successCount) || 0,
+                    failureCount: Number(d.failureCount) || 0,
+                    totalRecords: Number(d.totalRecords) || 0,
+                    logs: d.logs || []
+                });
+            });
+
+            setImportList(list);
+        } catch (err) {
+            console.error('Error fetching registration import logs:', err);
+            const stored = localStorage.getItem('registration_imports');
+            if (stored) setImportList(JSON.parse(stored));
+        }
+    };
+
+    const handleSelectImportRun = (row) => {
+        if (activeImportRun?.id === row.id) {
+            setActiveImportRun(null);
+            return;
+        }
+        setActiveImportRun(row);
+    };
+
+    const handleDeleteImport = async (id, firestoreId) => {
+        if (!window.confirm(`Are you sure you want to delete this import log?`)) return;
+        try {
+            api.info({ message: 'Deleting import log...', duration: 1.5 });
+            if (firestoreId) {
+                const { doc: fsDoc, deleteDoc: fsDelete } = require('firebase/firestore');
+                await fsDelete(fsDoc(db, "schooler_system", "registration_imports", "logs", firestoreId));
+            }
+            const stored = localStorage.getItem('registration_imports');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                const filtered = parsed.filter(item => item.id !== id);
+                localStorage.setItem('registration_imports', JSON.stringify(filtered));
+            }
+            setImportList(prev => prev.filter(item => item.id !== id));
+            if (activeImportRun?.id === id) setActiveImportRun(null);
+            api.success({ message: 'Import log deleted successfully.' });
+        } catch (err) {
+            console.error('Failed to delete import log:', err);
+            api.error({ message: 'Delete Failed' });
+        }
+    };
+
+    const handleStartImport = async () => {
+        if (previewRows.length === 0) {
+            api.error({ message: 'Error', description: 'No records to import.' });
+            return;
+        }
+
+        setImporting(true);
+        setImportProgress(0);
+        const logs = [];
+        let successCount = 0;
+        let failCount = 0;
+        const errorMessages = [];
+        const allocatedGuardianEmails = [];
+
+        try {
+            for (let i = 0; i < previewRows.length; i++) {
+                const row = previewRows[i];
+                const rowNum = i + 2;
+
+                const getField = (row, ...keys) => { for (const k of keys) { if (row[k] !== undefined && row[k] !== '') return row[k]; } return ''; };
+
+                const parseDate = (d) => {
+                    if (!d) return '';
+                    if (typeof d === 'number') {
+                        return new Date(Math.round((d - 25569) * 86400 * 1000)).toISOString().split('T')[0];
+                    }
+                    if (typeof d === 'string' && d.includes('-')) {
+                        const parts = d.split('-');
+                        if (parts[0].length === 2 && parts[2].length === 4) {
+                            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                        }
+                    }
+                    return d;
+                };
+
+                try {
+                    // Extract all fields
+                    const firstName = String(getField(row, 'First Name', 'first_name')).trim();
+                    const middleName = String(getField(row, 'Middle Name', 'middle_name')).trim();
+                    const lastName = String(getField(row, 'Last Name', 'last_name')).trim();
+                    const studentFullName = String(getField(row, 'Student Full Name', 'student_full_name')).trim() || [firstName, middleName, lastName].filter(Boolean).join(' ');
+                    const gender = String(getField(row, 'Gender', 'gender')).trim();
+                    const mobile = String(getField(row, 'Student Mobile Number', 'student_mobile_number')).trim();
+                    const email = String(getField(row, 'Student Email Address', 'student_email_id')).trim();
+                    const academicYear = String(getField(row, 'Academic Year', 'academic_year')).trim();
+                    const program = String(getField(row, 'Program (Class)', 'Program', 'program')).trim();
+                    const rteStudent = String(getField(row, 'RTE Student', 'rte_student')).trim();
+                    const rollNumber = String(getField(row, 'Roll Number', 'roll_number')).trim();
+                    const grNumber = String(getField(row, 'GR Number', 'gr_number')).trim();
+                    const rawRegDate = getField(row, 'Registration Date', 'registration_date');
+                    const rawDob = getField(row, 'Date of Birth', 'date_of_birth');
+                    const placeOfBirth = String(getField(row, 'Place of Birth', 'place_of_birth')).trim();
+                    const caste = String(getField(row, 'Caste', 'caste')).trim();
+                    const subCaste = String(getField(row, 'Sub Caste', 'sub_caste')).trim();
+                    const category = String(getField(row, 'Category', 'category')).trim();
+                    const religion = String(getField(row, 'Religion', 'religion')).trim();
+                    const motherTongue = String(getField(row, 'Mother Tongue', 'mother_tongue')).trim();
+                    const bloodGroup = String(getField(row, 'Blood Group', 'blood_group')).trim();
+                    const aadhaarUid = String(getField(row, 'Aadhaar DISE Number (UID)', 'custom_aadhaar_uid')).trim();
+                    const penNumCustom = String(getField(row, 'PEN Number (Custom)', 'custom_pen_number')).trim();
+                    const apaarId = String(getField(row, 'APAAR ID', 'custom_apaar_id')).trim();
+                    const aadhaarCard = String(getField(row, 'Aadhaar Card Number', 'custom_aadhaar_card_number')).trim();
+                    const addressLine1 = String(getField(row, 'Address Line 1 (Current)', 'address_line_1')).trim();
+                    const addressLine2 = String(getField(row, 'Address Line 2 (Permanent)', 'address_line_2')).trim();
+                    const city = String(getField(row, 'City', 'city')).trim();
+                    const state = String(getField(row, 'State', 'state')).trim();
+                    const pincode = String(getField(row, 'Pincode', 'pincode')).trim();
+                    const country = String(getField(row, 'Country', 'country')).trim() || 'India';
+                    const emergencyMobile = String(getField(row, 'Emergency Mobile Number', 'emergency_mobile_number')).trim();
+                    const altMobile = String(getField(row, 'Alt Mobile Number', 'alt_mobile')).trim();
+                    const altEmail = String(getField(row, 'Alt Email', 'alt_email')).trim();
+                    const source = String(getField(row, 'Source', 'source')).trim();
+                    const rawFollowUp = getField(row, 'Follow-up Date', 'follow_up_date');
+                    const statusField = String(getField(row, 'Status', 'status')).trim() || 'Open';
+                    const remarks = String(getField(row, 'Remarks', 'remarks')).trim();
+                    const campusVisit = String(getField(row, 'Campus Visit', 'campus_visit')).trim();
+                    const referredBy = String(getField(row, 'Referred By', 'referred_by')).trim();
+                    const singleParent = String(getField(row, 'Single Parent', 'single_parent')).trim();
+                    const registrationNo = String(getField(row, 'Registration No', 'registrationNo')).trim() || `REG-${Date.now().toString().slice(-6)}-${i}`;
+                    const nationality = String(getField(row, 'Nationality', 'nationality')).trim();
+                    const studentAadhar = String(getField(row, 'Student Aadhar Number', 'student_aadhar_number')).trim();
+                    const singleGirlChild = String(getField(row, 'Single Girl Child', 'single_girl_child')).trim();
+                    const speciallyAbled = String(getField(row, 'Specially Abled', 'specially_abled')).trim();
+                    const belongingEws = String(getField(row, 'Belonging EWS', 'belonging_ews')).trim();
+                    const penNumber = String(getField(row, 'Personal Education Number (PEN)', 'pen_number')).trim();
+                    const abhaNumber = String(getField(row, 'ABHA Number', 'abha_number')).trim();
+                    const prevSchoolName = String(getField(row, 'Previous School Name', 'prev_school_name')).trim();
+                    const reasonForLeaving = String(getField(row, 'Reason For Leaving', 'reason_for_leaving')).trim();
+                    const prevProgram = String(getField(row, 'Previous Class', 'prev_program')).trim();
+                    const schoolAddress = String(getField(row, 'School Address', 'school_address')).trim();
+                    const examMarks = String(getField(row, 'Exam Marks (%)', 'exam_marks')).trim();
+                    const lastSchoolAffiliated = String(getField(row, 'Last School Affiliated', 'last_school_affiliated')).trim();
+                    const prevSchoolLctc = String(getField(row, 'Previous School LC/TC Number', 'prev_school_lctc')).trim();
+                    const rawLctcDate = getField(row, 'LC/TC Issue Date', 'lctc_issue_date');
+                    // Guardian fields
+                    const guardianRelation = String(getField(row, 'Guardian Relation', 'guardian_relation')).trim();
+                    const guardianName = String(getField(row, 'Guardian Name', 'guardian_name')).trim();
+                    const guardianEmail = String(getField(row, 'Guardian Email', 'guardian_email')).trim();
+                    const guardianMobile = String(getField(row, 'Guardian Mobile', 'guardian_mobile')).trim();
+                    const guardianAltNum = String(getField(row, 'Guardian Alternate Number', 'guardian_alternate_number')).trim();
+                    const rawGuardianDob = getField(row, 'Guardian Date of Birth', 'guardian_date_of_birth');
+                    const guardianEducation = String(getField(row, 'Guardian Education', 'guardian_education')).trim();
+                    const guardianOccupation = String(getField(row, 'Guardian Occupation', 'guardian_occupation')).trim();
+                    const guardianDesignation = String(getField(row, 'Guardian Designation', 'guardian_designation')).trim();
+                    const guardianWorkAddr = String(getField(row, 'Guardian Work Address', 'guardian_work_address')).trim();
+
+                    // --- Validations ---
+                    if (!firstName) throw new Error("Missing required field 'First Name'");
+                    if (!gender) throw new Error("Missing required field 'Gender'");
+                    if (!mobile) throw new Error("Missing required field 'Student Mobile Number'");
+                    if (!email) throw new Error("Missing required field 'Student Email Address'");
+
+                    // Mobile number validation
+                    const cleanMobile = mobile.replace(/\D/g, '');
+                    if (cleanMobile.length !== 10) throw new Error(`Student Mobile Number must be exactly 10 digits. Got: '${mobile}'`);
+
+                    if (emergencyMobile) {
+                        const cleanEmMobile = emergencyMobile.replace(/\D/g, '');
+                        if (cleanEmMobile.length !== 10) throw new Error(`Emergency Mobile Number must be exactly 10 digits. Got: '${emergencyMobile}'`);
+                    }
+
+                    // Gender validation
+                    let resolvedGender = gender;
+                    const validGenders = ['Male', 'Female', 'Other'];
+                    const genderMatch = validGenders.find(g => g.toLowerCase() === gender.toLowerCase());
+                    if (!genderMatch) throw new Error(`Invalid Gender: '${gender}'. Allowed: Male, Female, Other`);
+                    resolvedGender = genderMatch;
+
+                    // Blood Group validation
+                    let resolvedBloodGroup = bloodGroup || undefined;
+                    if (bloodGroup) {
+                        const validBG = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+                        const bgMatch = validBG.find(bg => bg.toLowerCase() === bloodGroup.replace(/\s+/g, '').toLowerCase());
+                        if (!bgMatch) throw new Error(`Invalid Blood Group: '${bloodGroup}'. Allowed: A+, A-, B+, B-, O+, O-, AB+, AB-`);
+                        resolvedBloodGroup = bgMatch;
+                    }
+
+                    // Status validation
+                    let resolvedStatus = statusField || 'Open';
+                    if (statusField) {
+                        const validStatuses = ['Open', 'Closed', 'Converted'];
+                        const statusMatch = validStatuses.find(s => s.toLowerCase() === statusField.toLowerCase());
+                        if (!statusMatch) throw new Error(`Invalid Status: '${statusField}'. Allowed: Open, Closed, Converted`);
+                        resolvedStatus = statusMatch;
+                    }
+
+                    // Aadhaar validation
+                    if (aadhaarUid && aadhaarUid.replace(/\D/g, '').length !== 18) {
+                        throw new Error(`Aadhaar DISE Number (UID) must be exactly 18 digits. Got: '${aadhaarUid}'`);
+                    }
+                    if (penNumCustom && penNumCustom.replace(/\D/g, '').length !== 11) {
+                        throw new Error(`PEN Number (Custom) must be exactly 11 digits. Got: '${penNumCustom}'`);
+                    }
+                    if (aadhaarCard && aadhaarCard.replace(/\D/g, '').length !== 12) {
+                        throw new Error(`Aadhaar Card Number must be exactly 12 digits. Got: '${aadhaarCard}'`);
+                    }
+                    if (penNumber && penNumber.replace(/\D/g, '').length !== 11) {
+                        throw new Error(`Personal Education Number (PEN) must be exactly 11 digits. Got: '${penNumber}'`);
+                    }
+
+                    // Guardian validation
+                    const hasGuardianDetails = !!(guardianName || guardianMobile || guardianEmail || guardianOccupation || guardianEducation);
+                    if (hasGuardianDetails) {
+                        if (!guardianRelation) throw new Error("Guardian Relation is required when providing Guardian details.");
+                        if (!guardianName) throw new Error("Guardian Name is required when providing Guardian details.");
+                        if (!guardianMobile) throw new Error("Guardian Mobile is required when providing Guardian details.");
+
+                        const validRelations = ['Father', 'Mother', 'Others'];
+                        const relMatch = validRelations.find(r => r.toLowerCase() === guardianRelation.toLowerCase());
+                        if (!relMatch) throw new Error(`Invalid Guardian Relation: '${guardianRelation}'. Allowed: Father, Mother, Others`);
+
+                        if (guardianMobile.replace(/\D/g, '').length !== 10) {
+                            throw new Error(`Guardian Mobile must be exactly 10 digits. Got: '${guardianMobile}'`);
+                        }
+                    }
+
+                    // Parse dates
+                    const dob = parseDate(rawDob);
+                    const regDate = parseDate(rawRegDate) || new Date().toISOString().split('T')[0];
+                    const followUpDate = parseDate(rawFollowUp);
+                    const lctcDate = parseDate(rawLctcDate);
+                    const guardianDob = parseDate(rawGuardianDob);
+
+                    // --- Build Guardian ---
+                    let finalGuardians = [];
+                    if (hasGuardianDetails) {
+                        const relMatch = ['Father', 'Mother', 'Others'].find(r => r.toLowerCase() === guardianRelation.toLowerCase()) || 'Others';
+                        let gEmail = guardianEmail || '';
+                        if (!gEmail) {
+                            gEmail = generateUniqueGuardianEmail(guardianName, guardiansList, allocatedGuardianEmails);
+                        }
+                        allocatedGuardianEmails.push(gEmail);
+
+                        // Try to find Guardian in ERPNext
+                        let resolvedGuardianId = null;
+                        try {
+                            const found = guardiansList.find(g => g.guardian_name?.toLowerCase() === guardianName.toLowerCase());
+                            if (found) {
+                                resolvedGuardianId = found.name;
+                            }
+                        } catch (gSyncErr) {
+                            console.warn('[Guardian Lookup] Gracefully caught:', gSyncErr.message);
+                        }
+
+                        finalGuardians.push({
+                            is_new: true,
+                            guardian: resolvedGuardianId || '',
+                            guardian_name: guardianName,
+                            relation: relMatch,
+                            email_address: gEmail,
+                            mobile_number: guardianMobile,
+                            alternate_number: guardianAltNum,
+                            date_of_birth: guardianDob,
+                            education: guardianEducation,
+                            occupation: guardianOccupation,
+                            designation: guardianDesignation,
+                            work_address: guardianWorkAddr
+                        });
+                    }
+
+                    // --- Save to Firebase ---
+                    const regPayload = {
+                        ...initFormData,
+                        academic_year: academicYear || initFormData.academic_year,
+                        program: program || '',
+                        rte_student: rteStudent || '',
+                        roll_number: rollNumber,
+                        gr_number: grNumber,
+                        registration_date: regDate,
+                        first_name: firstName,
+                        middle_name: middleName,
+                        last_name: lastName,
+                        student_full_name: studentFullName,
+                        gender: resolvedGender,
+                        date_of_birth: dob,
+                        place_of_birth: placeOfBirth,
+                        caste: caste,
+                        sub_caste: subCaste,
+                        category: category,
+                        religion: religion,
+                        mother_tongue: motherTongue,
+                        blood_group: resolvedBloodGroup || '',
+                        custom_aadhaar_uid: aadhaarUid,
+                        custom_pen_number: penNumCustom,
+                        custom_apaar_id: apaarId,
+                        custom_aadhaar_card_number: aadhaarCard,
+                        address_line_1: addressLine1,
+                        address_line_2: addressLine2,
+                        city: city,
+                        state: state,
+                        pincode: pincode,
+                        country: country,
+                        student_mobile_number: cleanMobile,
+                        student_email_id: email,
+                        emergency_mobile_number: emergencyMobile,
+                        alt_mobile: altMobile,
+                        alt_email: altEmail,
+                        source: source,
+                        follow_up_date: followUpDate,
+                        status: resolvedStatus,
+                        remarks: remarks,
+                        campus_visit: campusVisit,
+                        referred_by: referredBy,
+                        single_parent: singleParent,
+                        registrationNo: registrationNo,
+                        nationality: nationality,
+                        student_aadhar_number: studentAadhar,
+                        single_girl_child: singleGirlChild,
+                        specially_abled: speciallyAbled,
+                        belonging_ews: belongingEws,
+                        pen_number: penNumber,
+                        abha_number: abhaNumber,
+                        prev_school_name: prevSchoolName,
+                        reason_for_leaving: reasonForLeaving,
+                        prev_program: prevProgram,
+                        school_address: schoolAddress,
+                        exam_marks: examMarks,
+                        last_school_affiliated: lastSchoolAffiliated,
+                        prev_school_lctc: prevSchoolLctc,
+                        lctc_issue_date: lctcDate,
+                        guardians: finalGuardians,
+                        created_at: serverTimestamp(),
+                        updated_at: serverTimestamp()
+                    };
+
+                    // Remove document array defaults for imported records (no files uploaded)
+                    // Keep default document checklist
+
+                    if (importType === 'Update Existing Records') {
+                        // Find existing record by registrationNo
+                        if (!registrationNo) throw new Error("Missing 'Registration No' for update");
+                        const existingQuery = query(collection(db, REGISTRATIONS_PATH));
+                        const existingSnap = await getDocs(existingQuery);
+                        const existingDoc = existingSnap.docs.find(d => d.data().registrationNo === registrationNo);
+                        if (!existingDoc) throw new Error(`Registration '${registrationNo}' not found for update.`);
+                        
+                        // Only update non-empty fields
+                        const updatePayload = {};
+                        Object.keys(regPayload).forEach(k => {
+                            if (regPayload[k] !== '' && regPayload[k] !== undefined && regPayload[k] !== null && k !== 'documents' && k !== 'siblings') {
+                                updatePayload[k] = regPayload[k];
+                            }
+                        });
+                        updatePayload.updated_at = serverTimestamp();
+                        
+                        await updateDoc(doc(db, REGISTRATIONS_PATH, existingDoc.id), updatePayload);
+                        successCount++;
+                        logs.push({ type: 'success', msg: `Row ${rowNum}: Successfully updated Registration '${registrationNo}'` });
+                    } else {
+                        // Insert New Record
+                        const colRef = collection(db, REGISTRATIONS_PATH);
+                        await addDoc(colRef, regPayload);
+                        successCount++;
+                        logs.push({ type: 'success', msg: `Row ${rowNum}: Successfully created Registration '${registrationNo}' for ${firstName} ${lastName}` });
+                    }
+                } catch (err) {
+                    failCount++;
+                    let errMsg = err.message || 'Unknown error';
+                    try {
+                        if (err.response?.data?._server_messages) {
+                            const parsed = JSON.parse(err.response.data._server_messages);
+                            const firstMsg = typeof parsed === 'string' ? JSON.parse(parsed) : parsed[0];
+                            errMsg = typeof firstMsg === 'string' ? JSON.parse(firstMsg).message : (firstMsg?.message || JSON.stringify(firstMsg));
+                        }
+                    } catch (_) { /* use original errMsg */ }
+                    logs.push({ type: 'error', msg: `Row ${rowNum}: Failed - ${errMsg}` });
+                    errorMessages.push(`Row ${rowNum}: ${errMsg}`);
+                }
+
+                setImportProgress(Math.round(((i + 1) / previewRows.length) * 100));
+                setImportLogs([...logs]);
+            }
+
+            const finalStatus = failCount === 0
+                ? "Success"
+                : failCount === previewRows.length
+                    ? "Failed"
+                    : "Partial Success";
+
+            const newRun = {
+                id: `REG-IMP-${Date.now().toString().slice(-8)}`,
+                status: finalStatus,
+                importType: importType,
+                importFile: selectedFile?.name || 'Uploaded File.xlsx',
+                time: new Date().toLocaleString(),
+                successCount: successCount,
+                failureCount: failCount,
+                totalRecords: previewRows.length,
+                logs: logs
+            };
+            const updatedList = [newRun, ...(Array.isArray(importList) ? importList : []).filter(item => item && item.id !== newRun.id)];
+            localStorage.setItem('registration_imports', JSON.stringify(updatedList));
+
+            // Save log to Firebase
+            try {
+                await addDoc(collection(db, "schooler_system", "registration_imports", "logs"), {
+                    id: newRun.id,
+                    fileName: newRun.importFile,
+                    importType: newRun.importType,
+                    timestamp: serverTimestamp(),
+                    successCount: newRun.successCount,
+                    failureCount: newRun.failureCount,
+                    totalRecords: newRun.totalRecords,
+                    status: newRun.status,
+                    logs: newRun.logs.map(l => ({ type: l.type, msg: l.msg })),
+                    module: 'Registration'
+                });
+            } catch (fsErr) {
+                console.error('Failed to save import log to Firestore:', fsErr);
+            }
+
+            if (successCount > 0 && failCount === 0) {
+                api.success({ message: 'Import Successful', description: `Registration import completed. ${successCount} row(s) processed successfully.`, duration: 6 });
+            } else if (successCount > 0 && failCount > 0) {
+                api.warning({ message: 'Import Partial Success', description: `${successCount} succeeded, ${failCount} failed.`, duration: 8 });
+            } else {
+                const uniqueErrors = [...new Set(errorMessages)];
+                api.error({ message: 'Import Failed', description: `All ${failCount} row(s) failed.\n${uniqueErrors.slice(0, 3).join('\n')}`, duration: 10 });
+            }
+        } catch (outerErr) {
+            console.error('Critical import failure:', outerErr);
+            api.error({ message: 'Import Error', description: outerErr.message, duration: 10 });
+        } finally {
+            setImporting(false);
+            setImportView('list');
+            fetchImportList();
+        }
+    };
+
     const tabItems = [
         {
             key: '1',
@@ -1125,6 +1910,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <SelectField label="Academic Year" required value={formData.academic_year} options={academicYears} onChange={(v) => updateField('academic_year', v)} />
                         <SelectField label="Program (Class)" required value={formData.program} options={availableClasses} onChange={(v) => updateField('program', v)} />
+                        <SelectField label="RTE Student" value={formData.rte_student} options={['Yes', 'No']} onChange={(v) => updateField('rte_student', v)} />
                         <InputField label="Roll Number" value={formData.roll_number} onChange={(v) => updateField('roll_number', v)} placeholder="Enter Roll Number" />
                         <InputField label="GR Number" value={formData.gr_number} onChange={(v) => updateField('gr_number', v)} placeholder="Enter GR Number" />
 
@@ -1325,16 +2111,14 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     </div>
 
                     <SectionHeader title="Additional Detail" color="blue" />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <InputField label="Nationality" value={formData.nationality} onChange={(v) => updateField('nationality', v)} placeholder="Enter Nationality" />
-                        <InputField label="Aadhaar DISE number (UID)" type="tel" maxLength={18} value={formData.studentAadhar} onChange={(v) => updateField('studentAadhar', v)} placeholder="Enter 18-digit Aadhaar DISE number (UID)" />
                         <SelectField label="Belonging EWS" value={formData.belongingEws} options={['Yes', 'No']} onChange={(v) => updateField('belongingEws', v)} />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
                         <SelectField label="Single Girl Child?" value={formData.single_girl_child} options={['Yes', 'No']} onChange={(v) => updateField('single_girl_child', v)} placeholder="Single Girl Child?" />
                         <SelectField label="Specially Abled (Divyangjan)?" value={formData.specially_abled} options={['Yes', 'No']} onChange={(v) => updateField('specially_abled', v)} placeholder="Specially Abled (Divyangjan)?" />
                         <SelectField label="Belonging to the EWS?" value={formData.belonging_ews} options={['Yes', 'No']} onChange={(v) => updateField('belonging_ews', v)} placeholder="Belonging to the EWS?" />
-                        <InputField label="Personal Education Number(PEN)" type="tel" maxLength={11} value={formData.pen_number} onChange={(v) => updateField('pen_number', v)} placeholder="Enter 11-digit PEN Number" />
                         <InputField label="ABHA Number" value={formData.abha_number} onChange={(v) => updateField('abha_number', v)} placeholder="Enter ABHA Number" />
                     </div>
                 </div>
@@ -1638,6 +2422,374 @@ export default function RegistrationForm({ initialView = 'list' }) {
         </Modal>
     );
 
+    // --- IMPORT VIEW ---
+    if (view === 'import') {
+        const REQUIRED_FIELDS = ['first_name', 'gender', 'student_mobile_number', 'student_email_id'];
+        return (
+            <div className="p-6 max-w-[1400px] mx-auto pb-24 text-gray-800 font-inter animate-fade-in">
+                {contextHolder}
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-5">
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => setView('list')} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors cursor-pointer">
+                            <FiArrowLeft className="w-5 h-5" />
+                        </button>
+                        <div>
+                            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Import Registration Data</h1>
+                            <div className="flex items-center gap-2 text-[12px] text-gray-500 mt-1 font-medium">
+                                <span>Home</span> / <span>Enquiry Module</span> / <span>Registration</span> / <span className="text-blue-600 font-bold">Import Data</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <button onClick={() => { setImportView('list'); setActiveImportRun(null); fetchImportList(); }} className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-all cursor-pointer ${importView === 'list' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                            Import History
+                        </button>
+                        <button onClick={() => { setImportView('form'); setSelectedFile(null); setPreviewRows([]); setImportLogs([]); setImportProgress(0); }} className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-all cursor-pointer ${importView === 'form' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                            <FiPlus className="w-4 h-4 inline mr-1" /> New Import
+                        </button>
+                    </div>
+                </div>
+
+                {/* IMPORT FORM VIEW */}
+                {importView === 'form' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Main Import Panel */}
+                        <div className="lg:col-span-2 space-y-6">
+                            {/* Step 1 - Template */}
+                            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><FiDownload className="text-blue-600" /> Step 1: Download Template</h3>
+                                <p className="text-sm text-gray-500 mb-4">Select the fields you want to include and download a pre-formatted template file.</p>
+                                <button onClick={() => setShowTemplateModal(true)} className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all shadow-sm flex items-center gap-2 cursor-pointer">
+                                    <FiDownload className="w-4 h-4" /> Download Import Template
+                                </button>
+                            </div>
+
+                            {/* Step 2 - Upload */}
+                            <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><FiFileText className="text-blue-600" /> Step 2: Upload Data File</h3>
+                                <div className="flex items-center gap-4 mb-4">
+                                    <select value={importType} onChange={e => setImportType(e.target.value)} className="border border-gray-300 rounded-lg px-4 py-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
+                                        <option value="Insert New Records">Insert New Records</option>
+                                        <option value="Update Existing Records">Update Existing Records</option>
+                                    </select>
+                                </div>
+                                <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-blue-300 transition-colors">
+                                    <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFileChange} className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer" />
+                                    <p className="text-xs text-gray-400 mt-3">Supported: .xlsx, .xls, .csv files</p>
+                                </div>
+                                {selectedFile && <div className="mt-3 text-sm text-gray-600">📎 Selected: <span className="font-bold">{selectedFile.name}</span></div>}
+                            </div>
+
+                            {/* Preview Table */}
+                            {previewRows.length > 0 && !importing && (
+                                <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+                                    <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                                        <h3 className="font-bold text-gray-800">Data Preview ({previewRows.length} rows)</h3>
+                                        <button onClick={handleStartImport} className="px-6 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-all shadow-sm flex items-center gap-2 cursor-pointer">
+                                            🚀 Start Import
+                                        </button>
+                                    </div>
+                                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                                        <table className="w-full text-xs text-left">
+                                            <thead className="bg-gray-50 sticky top-0">
+                                                <tr>
+                                                    <th className="px-3 py-2 font-bold text-gray-500">#</th>
+                                                    {Object.keys(previewRows[0]).map((key, idx) => (
+                                                        <th key={idx} className="px-3 py-2 font-bold text-gray-500 whitespace-nowrap">{key}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {previewRows.slice(0, 10).map((row, i) => (
+                                                    <tr key={i} className="hover:bg-gray-50/50">
+                                                        <td className="px-3 py-2 font-bold text-gray-400">{i + 1}</td>
+                                                        {Object.values(row).map((val, j) => (
+                                                            <td key={j} className="px-3 py-2 text-gray-700 whitespace-nowrap max-w-[150px] truncate">{String(val)}</td>
+                                                        ))}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {previewRows.length > 10 && <div className="p-3 text-center text-xs text-gray-400 border-t border-gray-50">Showing first 10 of {previewRows.length} rows</div>}
+                                </div>
+                            )}
+
+                            {/* Import Progress */}
+                            {importing && (
+                                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+                                    <h3 className="font-bold text-gray-800 mb-4">Importing... {importProgress}%</h3>
+                                    <div className="w-full bg-gray-100 rounded-full h-4 mb-4 overflow-hidden">
+                                        <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-4 rounded-full transition-all duration-300 flex items-center justify-center" style={{ width: `${importProgress}%` }}>
+                                            <span className="text-[9px] text-white font-bold">{importProgress}%</span>
+                                        </div>
+                                    </div>
+                                    <div className="max-h-[300px] overflow-y-auto space-y-1.5">
+                                        {importLogs.map((log, idx) => (
+                                            <div key={idx} className={`text-xs px-3 py-2 rounded-lg border ${log.type === 'success' ? 'bg-green-50/30 border-green-100/50 text-green-800' : 'bg-red-50/30 border-red-100/50 text-red-800'}`}>
+                                                {log.type === 'success' ? <FiCheckCircle className="w-3.5 h-3.5 inline mr-1.5 text-green-600" /> : <FiX className="w-3.5 h-3.5 inline mr-1.5 text-red-600" />}
+                                                {log.msg}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Sidebar - Notes & Instructions */}
+                        <div className="space-y-6">
+                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100 p-5">
+                                <h4 className="text-sm font-black text-blue-900 mb-3 flex items-center gap-2">📋 Import Instructions</h4>
+                                <div className="space-y-3 text-xs text-blue-800">
+                                    <div className="bg-white/60 rounded-lg p-3 border border-blue-100/50">
+                                        <p className="font-bold text-red-600 mb-1">⚠️ Required Fields</p>
+                                        <ul className="list-disc pl-4 space-y-0.5 text-red-700">
+                                            <li>First Name</li>
+                                            <li>Gender</li>
+                                            <li>Student Mobile Number (10 digits)</li>
+                                            <li>Student Email Address</li>
+                                        </ul>
+                                    </div>
+                                    <div className="bg-white/60 rounded-lg p-3 border border-blue-100/50">
+                                        <p className="font-bold mb-1">📅 Date Format</p>
+                                        <p>YYYY-MM-DD or DD-MM-YYYY (auto-detected). Excel date serial numbers are also supported.</p>
+                                    </div>
+                                    <div className="bg-white/60 rounded-lg p-3 border border-blue-100/50">
+                                        <p className="font-bold mb-1">✅ Allowed Values</p>
+                                        <ul className="list-disc pl-4 space-y-0.5">
+                                            <li><b>Gender:</b> Male, Female, Other</li>
+                                            <li><b>Blood Group:</b> A+, A-, B+, B-, O+, O-, AB+, AB-</li>
+                                            <li><b>Guardian Relation:</b> Father, Mother, Others</li>
+                                            <li><b>RTE Student:</b> Yes, No</li>
+                                            <li><b>Status:</b> Open, Closed, Converted</li>
+                                            <li><b>Source:</b> Direct, Reference, Social Media</li>
+                                        </ul>
+                                    </div>
+                                    <div className="bg-white/60 rounded-lg p-3 border border-blue-100/50">
+                                        <p className="font-bold mb-1">👨‍👩‍👧 Guardian Import</p>
+                                        <p>If providing guardian details, ensure <b>Guardian Name</b>, <b>Guardian Mobile</b>, and <b>Guardian Relation</b> are all present. Guardian will be auto-created in ERPNext.</p>
+                                    </div>
+                                    <div className="bg-white/60 rounded-lg p-3 border border-blue-100/50">
+                                        <p className="font-bold mb-1">📱 Mobile Numbers</p>
+                                        <p>All mobile numbers must be exactly <b>10 digits</b>. Non-numeric characters will cause errors.</p>
+                                    </div>
+                                    <div className="bg-white/60 rounded-lg p-3 border border-blue-100/50">
+                                        <p className="font-bold mb-1">🔢 ID Number Lengths</p>
+                                        <ul className="list-disc pl-4 space-y-0.5">
+                                            <li>Aadhaar DISE UID: 18 digits</li>
+                                            <li>PEN Number: 11 digits</li>
+                                            <li>Aadhaar Card: 12 digits</li>
+                                        </ul>
+                                    </div>
+                                    <div className="bg-white/60 rounded-lg p-3 border border-blue-100/50">
+                                        <p className="font-bold mb-1">🏷️ Registration No</p>
+                                        <p>If not provided, a unique Registration Number will be auto-generated as <b>REG-XXXXXX</b>.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* IMPORT LIST VIEW */}
+                {importView === 'list' && (
+                    <div className="space-y-6">
+                        {/* Metrics */}
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                            <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs flex items-center justify-between">
+                                <div><span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Runs</span><h3 className="text-2xl font-bold text-gray-800 mt-1">{importList.length}</h3></div>
+                                <div className="p-3 bg-blue-50 text-blue-600 rounded-lg"><FiFileText className="w-6 h-6" /></div>
+                            </div>
+                            <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs flex items-center justify-between">
+                                <div><span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Success Rows</span><h3 className="text-2xl font-bold text-emerald-600 mt-1">{importList.reduce((a, c) => a + (c.successCount || 0), 0)}</h3></div>
+                                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg"><FiCheckCircle className="w-6 h-6" /></div>
+                            </div>
+                            <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs flex items-center justify-between">
+                                <div><span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Failed Rows</span><h3 className="text-2xl font-bold text-rose-600 mt-1">{importList.reduce((a, c) => a + (c.failureCount || 0), 0)}</h3></div>
+                                <div className="p-3 bg-rose-50 text-rose-600 rounded-lg"><FiX className="w-6 h-6" /></div>
+                            </div>
+                            <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs flex items-center justify-between">
+                                <div><span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Success Rate</span><h3 className="text-2xl font-bold text-violet-600 mt-1">{(() => { const t = importList.reduce((a, c) => a + (c.successCount || 0) + (c.failureCount || 0), 0); return t > 0 ? ((importList.reduce((a, c) => a + (c.successCount || 0), 0) / t) * 100).toFixed(1) : '0'; })()}%</h3></div>
+                                <div className="p-3 bg-violet-50 text-violet-600 rounded-lg"><FiFileText className="w-6 h-6" /></div>
+                            </div>
+                        </div>
+
+                        {/* Import History Table */}
+                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                                <h3 className="font-bold text-gray-800">Import History</h3>
+                                <button onClick={fetchImportList} className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition shadow-sm flex items-center gap-2 cursor-pointer">
+                                    <FiRefreshCw className="w-4 h-4" /> Refresh
+                                </button>
+                            </div>
+                            {importList.length === 0 ? (
+                                <div className="text-center py-20 text-gray-500">
+                                    <FiFileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                                    <h3 className="text-lg font-semibold text-gray-700">No Import Logs</h3>
+                                    <p className="text-sm text-gray-400 mt-1">Create a new import to get started.</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm">
+                                        <thead><tr className="bg-gray-50 border-b border-gray-100">
+                                            <th className="px-6 py-4 font-semibold text-gray-600">Import ID / File</th>
+                                            <th className="px-6 py-4 font-semibold text-gray-600">Date</th>
+                                            <th className="px-6 py-4 font-semibold text-gray-600">Type</th>
+                                            <th className="px-6 py-4 font-semibold text-gray-600">Results</th>
+                                            <th className="px-6 py-4 font-semibold text-gray-600">Status</th>
+                                            <th className="px-6 py-4 font-semibold text-gray-600 text-right">Actions</th>
+                                        </tr></thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {importList.map((run) => {
+                                                let badge = "bg-emerald-50 text-emerald-700 border-emerald-100";
+                                                if (run.status === 'Partial Success') badge = "bg-amber-50 text-amber-700 border-amber-100";
+                                                else if (run.status === 'Failed') badge = "bg-rose-50 text-rose-700 border-rose-100";
+                                                return (
+                                                    <tr key={run.id} className="hover:bg-gray-50/50 transition cursor-pointer" onClick={() => handleSelectImportRun(run)}>
+                                                        <td className="px-6 py-4"><div className="font-semibold text-gray-800 truncate max-w-xs">{run.importFile}</div><div className="text-xs text-gray-400 mt-0.5">{run.id}</div></td>
+                                                        <td className="px-6 py-4 text-gray-600">{run.time}</td>
+                                                        <td className="px-6 py-4"><span className="text-gray-600 text-xs px-2.5 py-1 bg-gray-100 rounded-md font-medium">{run.importType}</span></td>
+                                                        <td className="px-6 py-4"><div className="flex items-center gap-1.5 text-xs"><span className="font-bold text-emerald-600">{run.successCount}</span><span className="text-gray-400">/</span><span className="font-bold text-rose-600">{run.failureCount}</span><span className="text-gray-400">of</span><span className="font-bold text-gray-700">{run.totalRecords}</span></div></td>
+                                                        <td className="px-6 py-4"><span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${badge}`}>{run.status}</span></td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteImport(run.id, run.firestoreId); }} className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition cursor-pointer"><FiTrash2 className="w-4 h-4" /></button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Selected Run Details - Drawer */}
+                        {activeImportRun && (
+                            <div className="fixed inset-0 z-50 flex justify-end">
+                                <div onClick={() => setActiveImportRun(null)} className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity duration-300" />
+                                <div className="relative w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col z-10 animate-slide-left border-l border-gray-100">
+                                    <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                                        <div>
+                                            <h2 className="text-lg font-bold text-gray-800 truncate max-w-md">{activeImportRun.importFile}</h2>
+                                            <div className="text-xs text-gray-500 mt-1 flex items-center gap-1.5"><span>ID: {activeImportRun.id}</span><span>•</span><span>{activeImportRun.time}</span></div>
+                                        </div>
+                                        <button onClick={() => setActiveImportRun(null)} className="p-2 rounded-full hover:bg-gray-200 transition text-gray-500 cursor-pointer">✕</button>
+                                    </div>
+                                    <div className="p-6 border-b border-gray-100 grid grid-cols-3 gap-4 bg-white">
+                                        <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100/50 text-center">
+                                            <span className="text-xs font-medium text-emerald-800">Success</span>
+                                            <p className="text-2xl font-bold text-emerald-700 mt-1">{activeImportRun.successCount}</p>
+                                        </div>
+                                        <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-100/50 text-center">
+                                            <span className="text-xs font-medium text-rose-800">Failed</span>
+                                            <p className="text-2xl font-bold text-rose-700 mt-1">{activeImportRun.failureCount}</p>
+                                        </div>
+                                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-center">
+                                            <span className="text-xs font-medium text-gray-600">Total</span>
+                                            <p className="text-2xl font-bold text-gray-800 mt-1">{activeImportRun.totalRecords}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-6 space-y-3 bg-gray-50/50">
+                                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Detailed Processing Logs</h3>
+                                        {activeImportRun.logs && activeImportRun.logs.length > 0 ? (
+                                            activeImportRun.logs.map((item, idx) => (
+                                                <div key={idx} className={`p-3 rounded-lg border flex items-start gap-3 transition shadow-xs ${item.type === 'success' ? 'bg-emerald-50/20 border-emerald-100/50 text-emerald-950' : 'bg-rose-50/20 border-rose-100/50 text-rose-950'}`}>
+                                                    <div className="mt-0.5">{item.type === 'success' ? <FiCheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" /> : <FiX className="w-4 h-4 text-rose-600 flex-shrink-0" />}</div>
+                                                    <div className="text-sm font-medium leading-relaxed break-all">{item.msg}</div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-20 text-gray-400"><p className="text-sm">No individual row logs found for this run.</p></div>
+                                        )}
+                                    </div>
+                                    <div className="p-4 border-t border-gray-100 flex justify-end bg-white">
+                                        <button onClick={() => setActiveImportRun(null)} className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition cursor-pointer shadow-sm">Close Inspector</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Template Download Modal */}
+                <Modal
+                    title={<span className="font-bold text-gray-800 text-lg">📥 Download Registration Import Template</span>}
+                    open={showTemplateModal}
+                    onCancel={() => setShowTemplateModal(false)}
+                    footer={null}
+                    width={850}
+                    centered
+                    destroyOnClose
+                >
+                    <div className="space-y-5 pt-2">
+                        {/* Format & Type */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2 block">File Format</label>
+                                <select value={templateFormat} onChange={e => setTemplateFormat(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
+                                    <option value="Excel">Excel (.xlsx)</option>
+                                    <option value="CSV">CSV (.csv)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2 block">Export Type</label>
+                                <select value={templateType} onChange={e => setTemplateType(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
+                                    <option value="Blank Template">Blank Template</option>
+                                    <option value="1 Dummy Record">With 1 Dummy Record</option>
+                                    <option value="5 Records">With 5 Records</option>
+                                    <option value="All Records">With All Records</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        {/* Quick Select Buttons */}
+                        <div className="flex gap-2 flex-wrap">
+                            <button onClick={() => { const all = {}; IMPORT_ORDERED_FIELDS.forEach(f => { all[f] = true; }); setSelectedFields(all); }} className="px-3 py-1.5 bg-gray-900 text-white text-xs font-bold rounded-md cursor-pointer hover:bg-gray-800 transition">Select All</button>
+                            <button onClick={() => { const req = {}; IMPORT_ORDERED_FIELDS.forEach(f => { req[f] = REQUIRED_FIELDS.includes(f); }); setSelectedFields(req); }} className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-md cursor-pointer hover:bg-red-700 transition">Select Mandatory Only</button>
+                            <button onClick={() => { const none = {}; IMPORT_ORDERED_FIELDS.forEach(f => { none[f] = false; }); setSelectedFields(none); }} className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-bold rounded-md cursor-pointer hover:bg-gray-300 transition">Unselect All</button>
+                        </div>
+
+                        {/* Field Selector */}
+                        <div className="max-h-[400px] overflow-y-auto border border-gray-100 rounded-xl p-4 bg-gray-50/50 space-y-4">
+                            {/* Academic */}
+                            <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">📚 Academic Detail</h4>
+                            <div className="grid grid-cols-3 gap-2">{['academic_year','program','rte_student','roll_number','gr_number','registration_date'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
+                            {/* Basic */}
+                            <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">👤 Basic Detail</h4>
+                            <div className="grid grid-cols-3 gap-2">{['first_name','middle_name','last_name','student_full_name','gender','date_of_birth','place_of_birth','caste','sub_caste','category','religion','mother_tongue','blood_group','custom_aadhaar_uid','custom_pen_number','custom_apaar_id','custom_aadhaar_card_number'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
+                            {/* Address */}
+                            <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">🏠 Address</h4>
+                            <div className="grid grid-cols-3 gap-2">{['address_line_1','address_line_2','city','state','pincode','country'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
+                            {/* Communication */}
+                            <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">📞 Communication</h4>
+                            <div className="grid grid-cols-3 gap-2">{['student_mobile_number','student_email_id','emergency_mobile_number','alt_mobile','alt_email'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
+                            {/* Additional */}
+                            <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">📝 Additional Info</h4>
+                            <div className="grid grid-cols-3 gap-2">{['source','follow_up_date','status','remarks','campus_visit','referred_by','single_parent'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
+                            {/* Guardian */}
+                            <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">👨‍👩‍👧 Guardian Detail</h4>
+                            <div className="grid grid-cols-3 gap-2">{['guardian_relation','guardian_name','guardian_email','guardian_mobile','guardian_alternate_number','guardian_date_of_birth','guardian_education','guardian_occupation','guardian_designation','guardian_work_address'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
+                            {/* Office Use */}
+                            <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">🏢 Office Use / Previous School</h4>
+                            <div className="grid grid-cols-3 gap-2">{['prev_school_name','reason_for_leaving','prev_program','school_address','exam_marks','last_school_affiliated','prev_school_lctc','lctc_issue_date','nationality','student_aadhar_number','single_girl_child','specially_abled','belonging_ews','pen_number','abha_number'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
+                            {/* Registration */}
+                            <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">🏷️ Registration</h4>
+                            <div className="grid grid-cols-3 gap-2">{['registrationNo'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
+                        </div>
+
+                        {/* Download Button */}
+                        <div className="flex justify-end pt-2">
+                            <button onClick={handleDownloadTemplate} className="px-8 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all shadow-md flex items-center gap-2 cursor-pointer">
+                                <FiDownload className="w-4 h-4" /> Download Template ({IMPORT_ORDERED_FIELDS.filter(f => selectedFields[f]).length} fields)
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            </div>
+        );
+    }
+
     if (view === 'form') {
         return (
             <div className="p-6 max-w-[1200px] mx-auto pb-24 text-gray-800 font-inter">
@@ -1655,10 +2807,21 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         </h1>
                     </div>
                     <div className="flex gap-3">
-                        <button onClick={handleSave} disabled={saving} className="px-6 py-1.5 bg-blue-600 text-white rounded-md text-sm font-semibold flex items-center gap-2 hover:bg-blue-700 transition-all shadow-sm disabled:opacity-50">
-                            {saving ? <Spin size="small" /> : <FiSave className="w-4 h-4" />} {saving ? 'Saving...' : 'Save Registration'}
-                        </button>
-                    </div>
+                            <label className="flex items-center gap-2 cursor-pointer mr-4">
+                                <input 
+                                    type="checkbox" 
+                                    className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-gray-300"
+                                    checked={formData.isDisabled || false}
+                                    onChange={(e) => updateField('isDisabled', e.target.checked)}
+                                />
+                                <span className={`text-sm font-bold ${formData.isDisabled ? 'text-red-600' : 'text-gray-500'}`}>
+                                    {formData.isDisabled ? 'ACCOUNT DISABLED (LEFT)' : 'Disable Account (Left Student)'}
+                                </span>
+                            </label>
+                            <button onClick={handleSave} disabled={saving} className="px-6 py-1.5 bg-blue-600 text-white rounded-md text-sm font-semibold flex items-center gap-2 hover:bg-blue-700 transition-all shadow-sm disabled:opacity-50">
+                                {saving ? <Spin size="small" /> : <FiSave className="w-4 h-4" />} {saving ? 'Saving...' : 'Save Registration'}
+                            </button>
+                        </div>
                 </div>
                 <div className="bg-white p-6 shadow-xl rounded-b-xl border-x border-b border-gray-100">
                     <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} className="custom-enquiry-tabs" />
@@ -1685,6 +2848,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95">
                         <FiDownload className="w-4 h-4" /> Export
                     </button>
+                    <button onClick={() => { setView('import'); setImportView('form'); }} className="px-4 py-2 bg-white border border-blue-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-blue-50 text-blue-700 transition-all shadow-sm active:scale-95">
+                        <FiFileText className="w-4 h-4" /> Import Data
+                    </button>
                     <button onClick={() => { 
                         sessionStorage.removeItem('reg_form_data');
                         setFormData({ ...initFormData, registrationNo: `REG-${Date.now().toString().slice(-6)}` });
@@ -1699,7 +2865,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
             {/* Filter Section */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
                     <div className="flex flex-col gap-2">
                         <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Start Date</label>
                         <input
@@ -1717,6 +2883,19 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             onChange={(e) => setFilterDateTo(e.target.value)}
                             className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none w-full"
                         />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Academic Year</label>
+                        <select
+                            value={filterAcademicYear}
+                            onChange={(e) => setFilterAcademicYear(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                        >
+                            <option value="All">All Years</option>
+                            {academicYears.map((y) => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
                     </div>
                     <div className="flex flex-col gap-2">
                         <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Program</label>
@@ -1738,9 +2917,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             onChange={(e) => setFilterStatus(e.target.value)}
                             className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
                         >
-                            <option value="All">All Statuses</option>
+                            <option value="All">All Active Statuses</option>
                             <option value="Open">Open</option>
                             <option value="Converted">Converted</option>
+                            <option value="Disabled">Disabled / Left</option>
                         </select>
                     </div>
                     <div className="flex flex-col gap-2">
@@ -1761,6 +2941,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         onClick={() => {
                             setFilterDateFrom('');
                             setFilterDateTo('');
+                            setFilterAcademicYear('All');
                             setFilterProgram('All');
                             setFilterStatus('All');
                             setFilterFeeStatus('All');
@@ -1774,23 +2955,25 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="p-5 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
-                    <div className="relative max-w-sm w-full">
-                        <FiSearch className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                            type="text"
-                            placeholder="Search registrations by name, No. or mobile..."
-                            className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:border-blue-400 focus:outline-none transition-all placeholder:text-gray-400"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
+                    <div className="flex items-center gap-3 w-full max-w-md">
+                        <div className="relative flex-1">
+                            <FiSearch className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input 
+                                type="text" 
+                                className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:border-blue-400 focus:outline-none transition-all placeholder:text-gray-400" 
+                                placeholder="Search registrations..." 
+                                value={searchQuery} 
+                                onChange={(e) => setSearchQuery(e.target.value)} 
+                            />
+                        </div>
                     </div>
                     <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                        {filteredData.length} TOTAL REGISTRATIONS
+                        {!loading && `${Math.min(visibleCount, filteredData.length)} of ${filteredData.length} TOTAL REGISTRATIONS`}
                     </div>
                 </div>
 
                 <div className="overflow-x-auto">
-<table className="w-full text-left text-[12px]">
+                    <table className="w-full text-left text-[12px]">
                         <thead>
                             <tr className="bg-gray-50/50">
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Registration Code</th>
@@ -1821,7 +3004,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                     <td colSpan={10} className="px-6 py-12 text-center text-gray-400 font-medium font-inter italic">No matching records found</td>
                                 </tr>
                             ) : (
-                                filteredData.map((row) => (
+                                filteredData.slice(0, visibleCount).map((row) => (
                                     <tr key={row.id} className="hover:bg-blue-50/30 transition-all cursor-pointer group" onClick={() => { setEditingRecord(row); setView('form'); }}>
                                         <td className="px-6 py-4 font-bold text-blue-600 tracking-tight">{row.registrationNo}</td>
                                         <td className="px-6 py-4 font-bold text-gray-900 tracking-tight">{row.first_name} {row.last_name}</td>
@@ -1831,14 +3014,25 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                         <td className="px-6 py-4 text-gray-600 font-medium">{row.registration_date || '-'}</td>
                                         <td className="px-6 py-4 text-gray-600 font-medium">{row.date_of_birth || '-'}</td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${row.isFeePaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                                                {row.isFeePaid ? '✅ PAID' : '⏳ UNPAID'}
-                                            </span>
+                                            <div className="flex flex-col gap-1 items-start">
+                                                <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${row.isFeePaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                                    {row.isFeePaid ? '✅ PAID' : '⏳ UNPAID'}
+                                                </span>
+                                                <span className="text-[10px] font-bold text-gray-500">
+                                                    ₹ {row.feeAmount || 0}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${row.status === 'Converted' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                {row.status || 'Open'}
-                                            </span>
+                                            {row.isDisabled ? (
+                                                <span className="px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">
+                                                    DISABLED
+                                                </span>
+                                            ) : (
+                                                <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${row.status === 'Converted' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                    {row.status || 'Open'}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-1">
@@ -1872,6 +3066,35 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         </tbody>
                     </table>
                 </div>
+
+                {!loading && filteredData.length > 0 && (
+                    <div className="flex justify-between items-center p-4 bg-gray-50/30 border-t border-gray-100">
+                        <div className="flex items-center border border-gray-200 rounded-xl bg-white overflow-hidden shadow-xs">
+                            {[20, 100, 500, 2500].map((size) => (
+                                <button
+                                    key={size}
+                                    className={`px-4 py-1.5 text-xs font-bold border-r border-gray-200 last:border-r-0 hover:bg-gray-50 transition cursor-pointer ${
+                                        pageSize === size ? 'bg-gray-100 text-gray-800' : 'text-gray-500'
+                                    }`}
+                                    onClick={() => {
+                                        setPageSize(size);
+                                        setVisibleCount(size);
+                                    }}
+                                >
+                                    {size}
+                                </button>
+                            ))}
+                        </div>
+                        {visibleCount < filteredData.length && (
+                            <button
+                                className="px-5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl shadow-xs hover:bg-gray-50 transition active:scale-95 cursor-pointer"
+                                onClick={() => setVisibleCount(prev => prev + pageSize)}
+                            >
+                                Load More
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
             <style dangerouslySetInnerHTML={{ __html: `
                 .custom-enquiry-tabs .ant-tabs-nav::before { border-bottom: 1px solid #e5e7eb; }

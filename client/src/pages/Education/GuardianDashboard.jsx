@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Row, Col, Statistic, Table, Tag, List, Avatar, Skeleton, Empty, Button, Tabs, notification, Modal, Descriptions, Checkbox, Typography, Divider } from 'antd';
+import { Card, Row, Col, Statistic, Table, Tag, List, Avatar, Skeleton, Empty, Button, Tabs, notification, Modal, Descriptions, Checkbox, Typography, Divider, Calendar, Badge } from 'antd';
 import { 
     UserOutlined, 
     CalendarOutlined, 
@@ -17,12 +17,18 @@ import {
     LoadingOutlined,
     InfoCircleOutlined,
     CreditCardOutlined,
-    DownloadOutlined
+    DownloadOutlined,
+    TableOutlined,
+    LinkOutlined
 } from '@ant-design/icons';
 import API from '../../services/api';
 import axios from 'axios';
 import html2pdf from 'html2pdf.js';
 import FeeReceiptTemplate from './FeeReceiptTemplate';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { generateAdmissionReceipt } from '../Enquiry/AdmissionFeeReceipt';
+import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 
@@ -32,6 +38,7 @@ const GuardianDashboard = () => {
     const [wards, setWards] = useState([]);
     const [activeWard, setActiveWard] = useState(null);
     const [wardProfile, setWardProfile] = useState(null);
+    const [selectedDayFilter, setSelectedDayFilter] = useState('');
     const [wardDetails, setWardDetails] = useState({
         attendance: 0,
         fees: 0,
@@ -40,8 +47,12 @@ const GuardianDashboard = () => {
         feeRecords: [],
         attendanceList: [],
         assessmentList: [],
+        assessmentList: [],
         studentGroups: [],
-        classTeacher: ''
+        classTeacher: '',
+        homework: [],
+        classwork: [],
+        fullSchedule: []
     });
 
     // Payment Modal State
@@ -63,14 +74,18 @@ const GuardianDashboard = () => {
     }, []);
 
     // Fetch paid terms from Firebase when ward changes
-    const fetchPaidTerms = async (studentId) => {
+    const fetchPaidTerms = async (studentId, profile) => {
         try {
-            const historyRes = await axios.get(`/local-api/payment/history/${encodeURIComponent(studentId)}`);
-            if (historyRes.data.success && historyRes.data.data) {
-                const paidMap = {};
-                const verifiedHistory = [];
-                historyRes.data.data.forEach(payment => {
-                    // Only count verified/successful payments
+            const [historyRes, admHistoryRes] = await Promise.allSettled([
+                axios.get(`/local-api/payment/history/${encodeURIComponent(studentId)}`),
+                axios.get('/local-api/admission-payment/history-all')
+            ]);
+            
+            const paidMap = {};
+            const verifiedHistory = [];
+
+            if (historyRes.status === 'fulfilled' && historyRes.value.data?.success && historyRes.value.data?.data) {
+                historyRes.value.data.data.forEach(payment => {
                     if (payment.status === 'verified' && payment.fees_category) {
                         verifiedHistory.push(payment);
                         paidMap[payment.fees_category] = {
@@ -82,13 +97,43 @@ const GuardianDashboard = () => {
                         };
                     }
                 });
-                setPaidTerms(paidMap);
-                setPaymentHistory(verifiedHistory);
-                console.log('[Guardian] Paid terms loaded:', Object.keys(paidMap));
             }
+
+            if (admHistoryRes.status === 'fulfilled' && admHistoryRes.value.data?.success && admHistoryRes.value.data?.data) {
+                const cleanStudentName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim().toLowerCase();
+                const cleanEmail = (profile?.student_email_id || userEmail).trim().toLowerCase();
+
+                admHistoryRes.value.data.data.forEach(admPay => {
+                    if (admPay.status === 'verified') {
+                        const payStudentName = (admPay.student_name || '').trim().toLowerCase();
+                        const payParentEmail = (admPay.parent_email || '').trim().toLowerCase();
+                        
+                        if (
+                            (payParentEmail && payParentEmail === cleanEmail) ||
+                            (payStudentName && cleanStudentName && payStudentName.includes(cleanStudentName)) ||
+                            (admPay.admission_no && admPay.admission_no === studentId)
+                        ) {
+                            const categoryLabel = admPay.fee_name || admPay.fee_type || 'Admission Fee';
+                            const mappedRecord = {
+                                ...admPay,
+                                fees_category: categoryLabel,
+                                payment_id: admPay.receipt_no || admPay.payment_id || admPay.order_id,
+                                amount: admPay.amount,
+                                verified_at: admPay.verified_at || admPay.receipt_date || admPay.created_at
+                            };
+                            if (!verifiedHistory.some(h => h.payment_id === mappedRecord.payment_id)) {
+                                verifiedHistory.push(mappedRecord);
+                            }
+                        }
+                    }
+                });
+            }
+
+            setPaidTerms(paidMap);
+            setPaymentHistory(verifiedHistory);
+            console.log('[Guardian] Complete Paid terms loaded:', Object.keys(paidMap));
         } catch (err) {
             console.warn('[Guardian] Could not fetch payment history:', err.message);
-            // Non-critical: if Firebase history is unavailable, just show all as unpaid
         }
     };
 
@@ -127,7 +172,7 @@ const GuardianDashboard = () => {
             setWardProfile(wardProf);
 
             // Fetch paid terms from Firebase in parallel with ERP data
-            fetchPaidTerms(studentId);
+            fetchPaidTerms(studentId, wardProf);
 
             // Parallel Data Fetch with Individual Error Handling & 417 recovery
             const [attRes, feeRes, assessRes, enrRes] = await Promise.allSettled([
@@ -247,6 +292,60 @@ const GuardianDashboard = () => {
                 }
             }
 
+            let fullSchedule = [];
+            if (studentGroups.length > 0) {
+                try {
+                    const fullSchRes = await API.get('/api/resource/Course Schedule', {
+                        params: {
+                            filters: JSON.stringify([["student_group", "in", studentGroups]]),
+                            fields: JSON.stringify(["name", "course", "from_time", "to_time", "room", "instructor", "schedule_date", "title", "custom_day"]),
+                            order_by: 'schedule_date asc, from_time asc',
+                            limit_page_length: 100
+                        }
+                    });
+                    fullSchedule = fullSchRes.data?.data || [];
+                } catch (e) {
+                    console.warn('[GuardianDashboard] Failed to fetch Full Schedule:', e.message);
+                }
+            }
+
+            // Fetch Homework and Classwork from Firestore
+            let homework = [];
+            let classwork = [];
+            try {
+                const HOMEWORK_PATH = 'schooler_system/homework_management/assignments';
+                const hQuery = query(collection(db, HOMEWORK_PATH), orderBy('dueDate', 'asc'));
+                const hSnapshot = await getDocs(hQuery);
+                const allHomework = hSnapshot.docs.map(docSnapshot => ({
+                    id: docSnapshot.id,
+                    ...docSnapshot.data()
+                }));
+
+                const CLASSWORK_PATH = 'schooler_system/classwork_management/assignments';
+                const cQuery = query(collection(db, CLASSWORK_PATH), orderBy('classworkDate', 'desc'));
+                const cSnapshot = await getDocs(cQuery);
+                const allClasswork = cSnapshot.docs.map(docSnapshot => ({
+                    id: docSnapshot.id,
+                    ...docSnapshot.data()
+                }));
+
+                const studentProgram = wardProf?.program;
+                
+                homework = allHomework.filter(item => {
+                    const matchesProgram = !item.program || item.program === studentProgram;
+                    const matchesGroup = !item.studentGroup || studentGroups.includes(item.studentGroup);
+                    return matchesProgram && matchesGroup;
+                });
+
+                classwork = allClasswork.filter(item => {
+                    const matchesProgram = !item.program || item.program === studentProgram;
+                    const matchesGroup = !item.studentGroup || studentGroups.includes(item.studentGroup);
+                    return matchesProgram && matchesGroup;
+                });
+            } catch (err) {
+                console.error('Error fetching work for guardian dashboard:', err);
+            }
+
             setWardDetails({
                 attendance: attendancePct,
                 attendanceList: attendanceList,
@@ -258,7 +357,10 @@ const GuardianDashboard = () => {
                 feeStructure: linkedFeeStructure,
                 feeStructureDetails,
                 studentGroups,
-                classTeacher: classTeacherName
+                classTeacher: classTeacherName,
+                homework,
+                classwork,
+                fullSchedule
             });
         } catch (e) {
             console.error("Error fetching ward details", e);
@@ -446,6 +548,29 @@ const GuardianDashboard = () => {
     };
 
     const handleDownloadReceipt = (record) => {
+        // Intercept admission or registration fee payments to render identical PDF layout as Enquiry module
+        const isAdmissionStream = record.fee_type || record.fee_name || record.receipt_no?.includes('ADM-');
+        if (isAdmissionStream) {
+            const activeGuardian = guardianData?.guardian_name || '';
+            generateAdmissionReceipt({
+                receipt_no: record.receipt_no || record.payment_id || record.order_id || 'N/A',
+                student_name: record.student_name || wardProfile?.student_name || `${wardProfile?.first_name || ''} ${wardProfile?.last_name || ''}`.trim(),
+                registration_no: record.registration_no || '',
+                admission_no: record.admission_no || wardProfile?.name || '',
+                program: record.program || wardProfile?.program || '',
+                academic_year: record.academic_year || '2026-2027',
+                fee_type: record.fee_type || 'Admission',
+                fee_name: record.fee_name || record.fees_category || 'Admission Fee',
+                amount: record.amount,
+                payment_mode: record.payment_mode || 'ONLINE',
+                payment_id: record.payment_id || record.order_id || '',
+                receipt_date: record.verified_at || record.receipt_date || record.created_at || new Date().toISOString(),
+                parent_name: record.parent_name || activeGuardian || '',
+                parent_mobile: record.parent_mobile || wardProfile?.mobile_number || ''
+            });
+            return;
+        }
+
         // Construct receipt data
         const dateObj = new Date(record.verified_at || record.created_at);
         const formattedDate = dateObj.toLocaleDateString('en-GB') + ' ' + dateObj.toLocaleTimeString('en-US');
@@ -706,24 +831,250 @@ const GuardianDashboard = () => {
 
             {/* Main Content */}
             <Tabs defaultActiveKey="1" className="guardian-tabs">
-                <Tabs.TabPane tab={<span><CalendarOutlined /> Recent Attendance</span>} key="1">
-                    <Card className="rounded-2xl border-gray-100">
+                <Tabs.TabPane tab={<span><BookOutlined /> Work</span>} key="1">
+                    <Card 
+                        bordered={false} 
+                        style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                        bodyStyle={{ padding: '12px 24px 24px 24px' }}
+                    >
+                        <Tabs defaultActiveKey="homework" type="line" size="middle">
+                            <Tabs.TabPane tab={<span>Homework ({wardDetails.homework?.length || 0})</span>} key="homework">
+                                <List
+                                    dataSource={wardDetails.homework}
+                                    locale={{ emptyText: <Empty description="No homework assignments found for this student." /> }}
+                                    renderItem={item => {
+                                        const isOverdue = dayjs(item.dueDate).isBefore(dayjs(), 'day') && item.status !== 'Completed';
+                                        return (
+                                            <List.Item
+                                                style={{ padding: '20px 0', borderBottom: '1px solid #f0f0f0' }}
+                                                extra={
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                                                        <Tag color={
+                                                            item.status === 'Completed' ? 'green' :
+                                                            item.status === 'Closed' ? 'default' :
+                                                            isOverdue ? 'red' : 'blue'
+                                                        } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
+                                                            {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
+                                                        </Tag>
+                                                        {item.estimatedMinutes && (
+                                                            <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <ClockCircleOutlined /> {item.estimatedMinutes} mins
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                }
+                                            >
+                                                <List.Item.Meta
+                                                    title={
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                            <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>
+                                                                {item.title}
+                                                            </span>
+                                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                                <Tag color="blue" style={{ fontSize: '11px', fontWeight: 500 }}>
+                                                                    Subject (Course): {item.subject || 'N/A'}
+                                                                </Tag>
+                                                                <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                                                                    Assigned By: <b style={{ color: '#374151' }}>{item.assignedBy || 'Instructor'}</b>
+                                                                </span>
+                                                                <span style={{ fontSize: '12px', color: isOverdue ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+                                                                    Due: {dayjs(item.dueDate).format('DD MMM YYYY')}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    description={
+                                                        <div style={{ marginTop: '10px' }}>
+                                                            <p style={{ color: '#4b5563', fontSize: '13px', whiteSpace: 'pre-line', margin: 0 }}>
+                                                                {item.description || 'No detailed instructions provided.'}
+                                                            </p>
+                                                            {item.attachmentUrl && (
+                                                                <Button
+                                                                    type="link"
+                                                                    icon={<LinkOutlined />}
+                                                                    href={item.attachmentUrl}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
+                                                                >
+                                                                    Reference Link / Attachment
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    }
+                                                />
+                                            </List.Item>
+                                        );
+                                    }}
+                                />
+                            </Tabs.TabPane>
+                            
+                            <Tabs.TabPane tab={<span>Classwork ({wardDetails.classwork?.length || 0})</span>} key="classwork">
+                                <List
+                                    dataSource={wardDetails.classwork}
+                                    locale={{ emptyText: <Empty description="No classwork assignments found for this student." /> }}
+                                    renderItem={item => {
+                                        const isOverdue = dayjs(item.classworkDate).isBefore(dayjs(), 'day') && item.status !== 'Completed';
+                                        return (
+                                            <List.Item
+                                                style={{ padding: '20px 0', borderBottom: '1px solid #f0f0f0' }}
+                                                extra={
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                                                        <Tag color={
+                                                            item.status === 'Completed' ? 'green' :
+                                                            item.status === 'Closed' ? 'default' :
+                                                            isOverdue ? 'red' : 'blue'
+                                                        } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
+                                                            {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
+                                                        </Tag>
+                                                        {item.estimatedMinutes && (
+                                                            <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <ClockCircleOutlined /> {item.estimatedMinutes} mins
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                }
+                                            >
+                                                <List.Item.Meta
+                                                    title={
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                            <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>
+                                                                {item.title}
+                                                            </span>
+                                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                                <Tag color="purple" style={{ fontSize: '11px', fontWeight: 500 }}>
+                                                                    Subject (Course): {item.subject || 'N/A'}
+                                                                </Tag>
+                                                                <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                                                                    Assigned By: <b style={{ color: '#374151' }}>{item.assignedBy || 'Instructor'}</b>
+                                                                </span>
+                                                                <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>
+                                                                    Class Date: {dayjs(item.classworkDate).format('DD MMM YYYY')}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    description={
+                                                        <div style={{ marginTop: '10px' }}>
+                                                            <p style={{ color: '#4b5563', fontSize: '13px', whiteSpace: 'pre-line', margin: 0 }}>
+                                                                {item.description || 'No detailed instructions provided.'}
+                                                            </p>
+                                                            {item.attachmentUrl && (
+                                                                <Button
+                                                                    type="link"
+                                                                    icon={<LinkOutlined />}
+                                                                    href={item.attachmentUrl}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
+                                                                >
+                                                                    Reference Link / Attachment
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    }
+                                                />
+                                            </List.Item>
+                                        );
+                                    }}
+                                />
+                            </Tabs.TabPane>
+                        </Tabs>
+                    </Card>
+                </Tabs.TabPane>
+
+                <Tabs.TabPane tab={<span><TableOutlined /> Time Table</span>} key="2">
+                    <Card 
+                        bordered={false} 
+                        style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                        title={
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                                <span style={{ fontSize: '16px', fontWeight: 700 }}>Weekly Time Table</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '14px', color: '#595959', fontWeight: 500 }}>Filter by Day:</span>
+                                    <select 
+                                        style={{ 
+                                            padding: '6px 12px', 
+                                            borderRadius: '8px', 
+                                            border: '1px solid #d9d9d9', 
+                                            fontSize: '14px', 
+                                            fontWeight: 500,
+                                            outline: 'none',
+                                            cursor: 'pointer',
+                                            minWidth: '140px',
+                                            background: '#fff'
+                                        }}
+                                        value={selectedDayFilter}
+                                        onChange={(e) => setSelectedDayFilter(e.target.value)}
+                                    >
+                                        <option value="">All Days</option>
+                                        <option value="Monday">Monday</option>
+                                        <option value="Tuesday">Tuesday</option>
+                                        <option value="Wednesday">Wednesday</option>
+                                        <option value="Thursday">Thursday</option>
+                                        <option value="Friday">Friday</option>
+                                        <option value="Saturday">Saturday</option>
+                                        <option value="Sunday">Sunday</option>
+                                    </select>
+                                </div>
+                            </div>
+                        }
+                    >
                         <Table 
-                            dataSource={wardDetails.attendanceList}
-                            pagination={false}
+                            dataSource={(wardDetails.fullSchedule || []).filter(item => !selectedDayFilter || item.custom_day === selectedDayFilter)}
+                            rowKey="name"
+                            pagination={{ pageSize: 10 }}
                             columns={[
-                                { title: 'Date', dataIndex: 'date', key: 'date' },
+                                { title: 'ID', dataIndex: 'name', key: 'id', width: 120, ellipsis: true },
                                 { 
-                                    title: 'Status', 
-                                    dataIndex: 'status', 
-                                    key: 'status',
-                                    render: (s) => <Tag color={s === 'Present' ? 'green' : 'red'}>{s}</Tag>
-                                }
+                                    title: 'Title', 
+                                    key: 'title_display',
+                                    render: (rec) => rec.title || rec.course 
+                                },
+                                { title: 'Instructor', dataIndex: 'instructor', key: 'instructor' },
+                                { 
+                                    title: 'Day', 
+                                    dataIndex: 'custom_day', 
+                                    key: 'day',
+                                    render: (text) => text ? <Tag color="blue" style={{ fontWeight: 'bold' }}>{text}</Tag> : '-'
+                                },
+                                { 
+                                    title: 'Date', 
+                                    dataIndex: 'schedule_date', 
+                                    key: 'date',
+                                    sorter: (a, b) => new Date(a.schedule_date) - new Date(b.schedule_date)
+                                },
+                                { title: 'From Time', dataIndex: 'from_time', key: 'from' },
+                                { title: 'To Time', dataIndex: 'to_time', key: 'to' },
+                                { title: 'Room', dataIndex: 'room', key: 'room' }
                             ]}
                         />
                     </Card>
                 </Tabs.TabPane>
-                <Tabs.TabPane tab={<span><WalletOutlined /> Fee Details</span>} key="2">
+
+                <Tabs.TabPane tab={<span><CalendarOutlined /> Attendance</span>} key="3">
+                    <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                        <Calendar 
+                            cellRender={(current, info) => {
+                                if (info.type !== 'date' || !wardDetails.attendanceList) return info.originNode;
+                                
+                                const dateStr = current.format('YYYY-MM-DD');
+                                const atts = wardDetails.attendanceList.filter(a => a.date === dateStr);
+                                
+                                return (
+                                    <div className="events" style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '2px' }}>
+                                        {atts.map((att, index) => {
+                                            const type = att.status === 'Present' ? 'success' : att.status === 'Absent' ? 'error' : 'warning';
+                                            return <Badge key={index} status={type} text={<span style={{ fontSize: '10px' }}>{att.status}</span>} />;
+                                        })}
+                                    </div>
+                                );
+                            }}
+                        />
+                    </Card>
+                </Tabs.TabPane>
+
+                <Tabs.TabPane tab={<span><WalletOutlined /> Fee Details</span>} key="4">
                     <Card className="rounded-2xl border-gray-100">
                         {wardDetails.feeRecords && wardDetails.feeRecords.length > 0 ? (
                             <Table 
@@ -888,19 +1239,7 @@ const GuardianDashboard = () => {
                         )}
                     </Card>
                 </Tabs.TabPane>
-                <Tabs.TabPane tab={<span><BookOutlined /> Academic Progress</span>} key="3">
-                    <Card className="rounded-2xl border-gray-100">
-                        <Table 
-                            dataSource={wardDetails.assessments}
-                            pagination={false}
-                            columns={[
-                                { title: 'Exam', dataIndex: 'assessment_plan', key: 'plan' },
-                                { title: 'Score', key: 'score', render: (rec) => `${rec.total_score} / ${rec.maximum_score}` }
-                            ]}
-                        />
-                    </Card>
-                </Tabs.TabPane>
-                <Tabs.TabPane tab={<span><WalletOutlined /> Fees Receipt Transaction</span>} key="4">
+                <Tabs.TabPane tab={<span><WalletOutlined /> Fees Receipt Transaction</span>} key="5">
                     <Card className="rounded-2xl border-gray-100 shadow-sm">
                         <Table 
                             dataSource={paymentHistory}
@@ -944,6 +1283,18 @@ const GuardianDashboard = () => {
                                         />
                                     )
                                 }
+                            ]}
+                        />
+                    </Card>
+                </Tabs.TabPane>
+                <Tabs.TabPane tab={<span><BookOutlined /> Academic Progress</span>} key="6">
+                    <Card className="rounded-2xl border-gray-100">
+                        <Table 
+                            dataSource={wardDetails.assessments}
+                            pagination={false}
+                            columns={[
+                                { title: 'Exam', dataIndex: 'assessment_plan', key: 'plan' },
+                                { title: 'Score', key: 'score', render: (rec) => `${rec.total_score} / ${rec.maximum_score}` }
                             ]}
                         />
                     </Card>

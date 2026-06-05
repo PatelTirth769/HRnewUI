@@ -53,27 +53,43 @@ const StudentAttendanceTool = () => {
 
         setFetchingStudents(true);
         try {
-            let res;
+            let groupStudents = [];
             if (basedOn === 'Student Group') {
-                res = await API.get(`/api/resource/Student Group/${filters.student_group}`);
-                const studentList = res.data.data.students?.map(s => ({
-                    student: s.student,
-                    student_name: s.student_name,
-                    status: 'Present'
-                })) || [];
-                setStudents(studentList);
+                const res = await API.get(`/api/resource/Student Group/${filters.student_group}`);
+                groupStudents = res.data.data.students || [];
             } else {
-                res = await API.get(`/api/resource/Course Schedule/${filters.course_schedule}`);
+                const res = await API.get(`/api/resource/Course Schedule/${filters.course_schedule}`);
                 const studentGroup = res.data.data.student_group;
                 if (studentGroup) {
                     const sgRes = await API.get(`/api/resource/Student Group/${studentGroup}`);
-                    const studentList = sgRes.data.data.students?.map(s => ({
-                        student: s.student,
-                        student_name: s.student_name,
-                        status: 'Present'
-                    })) || [];
-                    setStudents(studentList);
+                    groupStudents = sgRes.data.data.students || [];
                 }
+            }
+
+            if (groupStudents.length > 0) {
+                const rawStudentIds = groupStudents.map(s => s.student);
+                const stuRes = await API.get('/api/resource/Student', {
+                    params: {
+                        filters: JSON.stringify([["name", "in", rawStudentIds]]),
+                        fields: JSON.stringify(["name", "enabled"]),
+                        limit_page_length: 'None'
+                    }
+                });
+                const enabledMap = {};
+                (stuRes.data.data || []).forEach(s => enabledMap[s.name] = s.enabled);
+
+                const activeGroupStudents = groupStudents.filter(s => enabledMap[s.student] !== 0);
+                const studentList = activeGroupStudents.map(s => ({
+                    student: s.student,
+                    student_name: s.student_name,
+                    status: 'Present'
+                }));
+                setStudents(studentList);
+                if (studentList.length === 0) {
+                    notification.info({ message: 'No Active Students', description: 'All students in this group are disabled/left.' });
+                }
+            } else {
+                setStudents([]);
             }
         } catch (err) {
             console.error('Error fetching students:', err);

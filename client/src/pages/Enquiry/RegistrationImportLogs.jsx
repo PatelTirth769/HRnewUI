@@ -3,7 +3,6 @@ import { notification } from 'antd';
 import { 
   FiFileText, 
   FiCheckCircle, 
-  FiAlertTriangle, 
   FiXCircle, 
   FiClock, 
   FiSearch, 
@@ -16,7 +15,7 @@ import {
 import { db } from '../../config/firebase';
 import { collection, query, orderBy, getDocs, doc, deleteDoc } from 'firebase/firestore';
 
-export default function ImportLogs() {
+export default function RegistrationImportLogs() {
   const [api, contextHolder] = notification.useNotification();
   const [logsList, setLogsList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -24,86 +23,47 @@ export default function ImportLogs() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedRun, setSelectedRun] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [moduleFilter, setModuleFilter] = useState('All');
 
+  // Fetch logs from Firestore
   const fetchLogs = async () => {
     setLoading(true);
     try {
+      const colRef = collection(db, "schooler_system", "registration_imports", "logs");
+      const q = query(colRef, orderBy("timestamp", "desc"));
+      const querySnapshot = await getDocs(q);
+      
       const fetchedLogs = [];
-
-      // Fetch student logs
-      if (moduleFilter === 'All' || moduleFilter === 'Student') {
-        const studentRef = collection(db, "schooler_system", "student_imports", "logs");
-        const sq = query(studentRef, orderBy("timestamp", "desc"));
-        const studentSnap = await getDocs(sq);
-        studentSnap.forEach((docSnap) => {
-          const data = docSnap.data();
-          let formattedTime = 'N/A';
-          if (data.timestamp) {
-            formattedTime = data.timestamp.toDate ? data.timestamp.toDate().toLocaleString() : new Date(data.timestamp).toLocaleString();
-          } else if (data.time) {
-            formattedTime = new Date(data.time).toLocaleString();
-          }
-          fetchedLogs.push({
-            id: docSnap.id,
-            runId: data.id || docSnap.id,
-            fileName: data.fileName || 'Unknown File',
-            importType: data.importType || 'Insert New Records',
-            timeString: formattedTime,
-            timestamp: data.timestamp ? (data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp)) : new Date(),
-            successCount: Number(data.successCount) || 0,
-            failureCount: Number(data.failureCount) || 0,
-            totalRecords: Number(data.totalRecords) || 0,
-            status: data.status || 'Success',
-            logs: data.logs || [],
-            module: data.module || 'Student'
-          });
-        });
-      }
-
-      // Fetch registration logs
-      if (moduleFilter === 'All' || moduleFilter === 'Registration') {
-        try {
-          const regRef = collection(db, "schooler_system", "registration_imports", "logs");
-          const rq = query(regRef, orderBy("timestamp", "desc"));
-          const regSnap = await getDocs(rq);
-          regSnap.forEach((docSnap) => {
-            const data = docSnap.data();
-            let formattedTime = 'N/A';
-            if (data.timestamp) {
-              formattedTime = data.timestamp.toDate ? data.timestamp.toDate().toLocaleString() : new Date(data.timestamp).toLocaleString();
-            } else if (data.time) {
-              formattedTime = new Date(data.time).toLocaleString();
-            }
-            fetchedLogs.push({
-              id: docSnap.id,
-              runId: data.id || docSnap.id,
-              fileName: data.fileName || 'Unknown File',
-              importType: data.importType || 'Insert New Records',
-              timeString: formattedTime,
-              timestamp: data.timestamp ? (data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp)) : new Date(),
-              successCount: Number(data.successCount) || 0,
-              failureCount: Number(data.failureCount) || 0,
-              totalRecords: Number(data.totalRecords) || 0,
-              status: data.status || 'Success',
-              logs: data.logs || [],
-              module: data.module || 'Registration'
-            });
-          });
-        } catch (regErr) {
-          console.warn('Registration import logs collection may not exist yet:', regErr.message);
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        let formattedTime = 'N/A';
+        if (data.timestamp) {
+          formattedTime = data.timestamp.toDate ? data.timestamp.toDate().toLocaleString() : new Date(data.timestamp).toLocaleString();
+        } else if (data.time) {
+          formattedTime = new Date(data.time).toLocaleString();
         }
-      }
-
-      // Sort all logs by timestamp descending
-      fetchedLogs.sort((a, b) => b.timestamp - a.timestamp);
+        
+        fetchedLogs.push({
+          id: docSnap.id,
+          runId: data.id || docSnap.id,
+          fileName: data.fileName || 'Unknown File',
+          importType: data.importType || 'Insert New Records',
+          timeString: formattedTime,
+          timestamp: data.timestamp ? (data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp)) : new Date(),
+          successCount: Number(data.successCount) || 0,
+          failureCount: Number(data.failureCount) || 0,
+          totalRecords: Number(data.totalRecords) || 0,
+          status: data.status || 'Success',
+          logs: data.logs || [],
+          module: data.module || 'Registration'
+        });
+      });
       
       setLogsList(fetchedLogs);
     } catch (err) {
-      console.error('Failed to load Firestore import logs:', err);
+      console.error('Failed to load Firestore registration import logs:', err);
       api.error({
         message: 'Load Failed',
-        description: 'Could not fetch import logs from Firestore. Please try again.',
+        description: 'Could not fetch registration import logs from Firestore. Please try again.',
         duration: 4
       });
     } finally {
@@ -113,7 +73,7 @@ export default function ImportLogs() {
 
   useEffect(() => {
     fetchLogs();
-  }, [moduleFilter]);
+  }, []);
 
   // Compute metrics
   const totalImports = logsList.length;
@@ -136,7 +96,7 @@ export default function ImportLogs() {
     setIsDrawerOpen(true);
   };
 
-  const handleDeleteLog = async (id, module, e) => {
+  const handleDeleteLog = async (id, e) => {
     e.stopPropagation();
     if (!window.confirm("Are you sure you want to delete this import log?")) {
       return;
@@ -144,8 +104,7 @@ export default function ImportLogs() {
     
     try {
       api.info({ message: 'Deleting log...', duration: 1.5 });
-      const logModule = module === 'Registration' ? 'registration_imports' : 'student_imports';
-      await deleteDoc(doc(db, "schooler_system", logModule, "logs", id));
+      await deleteDoc(doc(db, "schooler_system", "registration_imports", "logs", id));
       api.success({ message: 'Deleted Successfully', description: 'The import log has been removed.' });
       setLogsList(prev => prev.filter(log => log.id !== id));
       if (selectedRun?.id === id) {
@@ -165,9 +124,9 @@ export default function ImportLogs() {
       {/* Header Area */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Import Logs</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Registration Import Logs</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Track and inspect all import sessions (Student & Registration) executed on this website.
+            Track and inspect registration import sessions executed on this website.
           </p>
         </div>
         <div>
@@ -184,7 +143,6 @@ export default function ImportLogs() {
 
       {/* Metrics Dashboard */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1 */}
         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs hover:shadow-md transition-shadow duration-300 flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Import Runs</span>
@@ -194,8 +152,6 @@ export default function ImportLogs() {
             <FiFileText className="w-6 h-6" />
           </div>
         </div>
-
-        {/* Metric 2 */}
         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs hover:shadow-md transition-shadow duration-300 flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Successful Rows</span>
@@ -205,8 +161,6 @@ export default function ImportLogs() {
             <FiCheckCircle className="w-6 h-6" />
           </div>
         </div>
-
-        {/* Metric 3 */}
         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs hover:shadow-md transition-shadow duration-300 flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Failed Rows</span>
@@ -216,8 +170,6 @@ export default function ImportLogs() {
             <FiXCircle className="w-6 h-6" />
           </div>
         </div>
-
-        {/* Metric 4 */}
         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs hover:shadow-md transition-shadow duration-300 flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Success Rate</span>
@@ -258,17 +210,6 @@ export default function ImportLogs() {
             </button>
           ))}
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <select
-            value={moduleFilter}
-            onChange={(e) => setModuleFilter(e.target.value)}
-            className="px-3.5 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value="All">All Modules</option>
-            <option value="Student">Student</option>
-            <option value="Registration">Registration</option>
-          </select>
-        </div>
       </div>
 
       {/* Logs Table Card */}
@@ -276,14 +217,14 @@ export default function ImportLogs() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-3"></div>
-            <p className="text-sm">Fetching import logs from Firestore...</p>
+            <p className="text-sm">Fetching registration import logs from Firestore...</p>
           </div>
         ) : filteredLogs.length === 0 ? (
           <div className="text-center py-20 text-gray-500">
             <FiInfo className="w-12 h-12 mx-auto text-gray-300 mb-3" />
             <h3 className="text-lg font-semibold text-gray-700">No Import Logs Found</h3>
             <p className="text-sm text-gray-400 mt-1 max-w-md mx-auto">
-              We couldn't find any student import logs matching your criteria. Try performing an import from the Student screen.
+              We couldn't find any registration import logs matching your criteria. Try performing an import from the Registration screen.
             </p>
           </div>
         ) : (
@@ -317,10 +258,7 @@ export default function ImportLogs() {
                           </div>
                           <div>
                             <div className="font-semibold text-gray-800 truncate max-w-xs">{log.fileName}</div>
-                            <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
-                            {log.runId}
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${log.module === 'Registration' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'}`}>{log.module}</span>
-                          </div>
+                            <div className="text-xs text-gray-400 mt-0.5">{log.runId}</div>
                           </div>
                         </div>
                       </td>
@@ -359,7 +297,7 @@ export default function ImportLogs() {
                             <FiChevronRight className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={(e) => handleDeleteLog(log.id, log.module, e)}
+                            onClick={(e) => handleDeleteLog(log.id, e)}
                             className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition cursor-pointer flex items-center justify-center"
                             title="Delete Log"
                           >
