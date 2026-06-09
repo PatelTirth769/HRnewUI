@@ -425,6 +425,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const [saving, setSaving] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [isExportModalVisible, setIsExportModalVisible] = useState(false);
+    const [exportFormat, setExportFormat] = useState('csv');
+    const [availableExportFields, setAvailableExportFields] = useState([]);
+    const [selectedExportFields, setSelectedExportFields] = useState([]);
     const [pageSize, setPageSize] = useState(20);
     const [visibleCount, setVisibleCount] = useState(20);
     const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('reg_tab') || '1');
@@ -482,7 +486,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
         student_mobile_number: true, student_email_id: true, emergency_mobile_number: false,
         alt_mobile: false, alt_email: false,
         // Additional Info
-        source: false, follow_up_date: false, status: false, remarks: false, campus_visit: false,
+        source: false, follow_up_date: false, status: false, fees_status: false, remarks: false, campus_visit: false,
         referred_by: false, single_parent: false,
         // Guardian
         guardian_relation: false, guardian_name: false, guardian_email: false, guardian_mobile: false,
@@ -702,12 +706,12 @@ export default function RegistrationForm({ initialView = 'list' }) {
             const [progRes, yearRes, guardianRes, casteRes] = await Promise.all([
                 API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
-                API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Student Category?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
             ]);
+            
             const programs = progRes.data.data?.map(p => p.name) || [];
             const years = yearRes.data.data?.map(y => y.name) || [];
-            const guards = guardianRes.data.data || [];
             const castes = casteRes.data.data?.map(c => c.name) || [];
             
             if (castes.length > 0) {
@@ -715,7 +719,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             }
             
             setAcademicYears(years);
-            setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '' })));
+            setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '', mobile_number: g.mobile_number || '' })));
             await fetchRestrictions(programs);
         } catch (err) {
             console.error('Error fetching ERPNext data:', err);
@@ -749,7 +753,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
         const sortPrograms = (arr) => {
             const getRank = (name) => {
                 const n = name.toUpperCase();
-                if (n.includes('NURSERY')) return 0;
+                if (n.includes('NURSERY') || n.includes('NURSARY') || n.includes('NUR')) return 0;
                 if (n.includes('JR') || n.includes('JUNIOR')) return 1;
                 if (n.includes('SR') || n.includes('SENIOR')) return 2;
                 const match = n.match(/(?:STD|CLASS)\s*(\d+)/);
@@ -797,7 +801,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             const colRef = collection(db, REGISTRATIONS_PATH);
             const q = query(colRef, orderBy('created_at', 'desc'));
             const snapshot = await getDocs(q);
-            const regs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const regs = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
             setData(regs);
         } catch (err) {
             console.error('Fetch Registration failed:', err);
@@ -994,8 +998,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
             if (!matchesSearch) return false;
 
             // 2. Program Filter
-            if (filterProgram !== 'All' && d.program !== filterProgram) {
-                return false;
+            if (filterProgram !== 'All') {
+                const docProgram = (d.program || '').toString().trim().toLowerCase();
+                const selProgram = filterProgram.toString().trim().toLowerCase();
+                if (docProgram !== selProgram) return false;
             }
 
             // 2.5 Academic Year Filter
@@ -1018,11 +1024,13 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 }
             }
 
-            // 4. Fee Status Filter (Paid vs Unpaid)
+            // 4. Fee Status Filter
             if (filterFeeStatus !== 'All') {
-                const isPaid = !!d.isFeePaid;
+                const isOldStudent = d.paymentMode === 'Old Student' || (d.fees_status && d.fees_status.toLowerCase() === 'old student');
+                const isPaid = !!d.isFeePaid && !isOldStudent;
+                if (filterFeeStatus === 'Old Student' && !isOldStudent) return false;
                 if (filterFeeStatus === 'Paid' && !isPaid) return false;
-                if (filterFeeStatus === 'Unpaid' && isPaid) return false;
+                if (filterFeeStatus === 'Unpaid' && !!d.isFeePaid) return false;
             }
 
             // 5. Date Range Filter
@@ -1082,7 +1090,11 @@ export default function RegistrationForm({ initialView = 'list' }) {
             g[idx] = { ...g[idx], [key]: val };
             if (key === 'guardian') {
                 const found = guardiansList.find(gl => gl.name === val);
-                if (found) g[idx].guardian_name = found.guardian_name;
+                if (found) {
+                    g[idx].guardian_name = found.guardian_name;
+                    g[idx].email_address = found.email_address;
+                    g[idx].mobile_number = found.mobile_number;
+                }
             }
             if (key === 'guardian_name' && g[idx].is_new) {
                 const otherNewEmails = g
@@ -1304,6 +1316,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
         source: { label: 'Source', width: 15 },
         follow_up_date: { label: 'Follow-up Date', width: 15 },
         status: { label: 'Status', width: 12 },
+        fees_status: { label: 'Fees Status', width: 18 },
         remarks: { label: 'Remarks', width: 25 },
         campus_visit: { label: 'Campus Visit', width: 12 },
         referred_by: { label: 'Referred By', width: 20 },
@@ -1359,7 +1372,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 const colRef = collection(db, REGISTRATIONS_PATH);
                 const q2 = query(colRef, orderBy('created_at', 'desc'));
                 const snapshot = await getDocs(q2);
-                let records = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                let records = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
                 if (templateType === '5 Records') records = records.slice(0, 5);
 
                 records.forEach(rec => {
@@ -1585,6 +1598,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     const source = String(getField(row, 'Source', 'source')).trim();
                     const rawFollowUp = getField(row, 'Follow-up Date', 'follow_up_date');
                     const statusField = String(getField(row, 'Status', 'status')).trim() || 'Open';
+                    const feesStatusField = String(getField(row, 'Fees Status', 'fees_status')).trim();
                     const remarks = String(getField(row, 'Remarks', 'remarks')).trim();
                     const campusVisit = String(getField(row, 'Campus Visit', 'campus_visit')).trim();
                     const referredBy = String(getField(row, 'Referred By', 'referred_by')).trim();
@@ -1731,6 +1745,20 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         });
                     }
 
+                    let isFeePaid = false;
+                    let feePaymentMode = 'Cash';
+                    let feeReceiptNo = '';
+                    
+                    if (feesStatusField.toLowerCase() === 'old student') {
+                        isFeePaid = true;
+                        feePaymentMode = 'Old Student';
+                        feeReceiptNo = `OLD-${Date.now().toString().slice(-6)}-${i}`;
+                    } else if (feesStatusField.toLowerCase() === 'paid') {
+                        isFeePaid = true;
+                        feePaymentMode = 'Online';
+                        feeReceiptNo = `RCPT-${Date.now().toString().slice(-6)}-${i}`;
+                    }
+
                     // --- Save to Firebase ---
                     const regPayload = {
                         ...initFormData,
@@ -1771,6 +1799,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         source: source,
                         follow_up_date: followUpDate,
                         status: resolvedStatus,
+                        fees_status: feesStatusField,
+                        isFeePaid: isFeePaid,
+                        paymentMode: feePaymentMode,
+                        receiptNo: feeReceiptNo,
                         remarks: remarks,
                         campus_visit: campusVisit,
                         referred_by: referredBy,
@@ -1983,9 +2015,6 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         <SelectField label="Source" value={formData.source} options={['Direct', 'Reference', 'Social Media']} onChange={(v) => updateField('source', v)} />
                         <InputField label="Follow-up Date" type="date" value={formData.follow_up_date} onChange={(v) => updateField('follow_up_date', v)} />
                         <SelectField label="Status" required value={formData.status} options={['Open', 'Closed', 'Converted']} onChange={(v) => updateField('status', v)} />
-                        <div className="md:col-span-2">
-                            <InputField label="Remarks" value={formData.remarks} onChange={(v) => updateField('remarks', v)} placeholder="Enter Remarks" />
-                        </div>
                     </div>
                 </div>
             )
@@ -2371,6 +2400,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             </div>
                         </>
                     )}
+
+                    <div className="mt-6 pt-4 border-t border-gray-100">
+                        <InputField label="Remarks" value={formData.remarks} onChange={(v) => updateField('remarks', v)} placeholder="Enter Remarks" type="textarea" />
+                    </div>
                 </div>
             )
         }
@@ -2586,6 +2619,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                         <p className="font-bold mb-1">🏷️ Registration No</p>
                                         <p>If not provided, a unique Registration Number will be auto-generated as <b>REG-XXXXXX</b>.</p>
                                     </div>
+                                    <div className="rounded-lg p-3 border border-green-200 bg-green-50/50">
+                                        <p className="font-bold text-green-700 mb-1">💰 Fees Status (Old Students)</p>
+                                        <p className="text-green-800">For academic year <b>2025-26</b> old students, set <b>Fees Status</b> to <code className="bg-green-100 px-1.5 py-0.5 rounded border border-green-200">old student</code> to automatically bypass admission fees.</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2766,7 +2803,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             <div className="grid grid-cols-3 gap-2">{['student_mobile_number','student_email_id','emergency_mobile_number','alt_mobile','alt_email'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
                             {/* Additional */}
                             <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">📝 Additional Info</h4>
-                            <div className="grid grid-cols-3 gap-2">{['source','follow_up_date','status','remarks','campus_visit','referred_by','single_parent'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
+                            <div className="grid grid-cols-3 gap-2">{['source','follow_up_date','status','fees_status','remarks','campus_visit','referred_by','single_parent'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
                             {/* Guardian */}
                             <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">👨‍👩‍👧 Guardian Detail</h4>
                             <div className="grid grid-cols-3 gap-2">{['guardian_relation','guardian_name','guardian_email','guardian_mobile','guardian_alternate_number','guardian_date_of_birth','guardian_education','guardian_occupation','guardian_designation','guardian_work_address'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
@@ -2831,6 +2868,60 @@ export default function RegistrationForm({ initialView = 'list' }) {
         );
     }
 
+    const handleOpenExportModal = (format) => {
+        if (!filteredData || filteredData.length === 0) {
+            notification.warning({ message: 'No data to export' });
+            return;
+        }
+        
+        const keys = new Set();
+        filteredData.forEach(row => {
+            Object.keys(row).forEach(key => keys.add(key));
+        });
+        
+        const fields = Array.from(keys).sort();
+        setAvailableExportFields(fields);
+        setSelectedExportFields(fields);
+        setExportFormat(format);
+        setIsExportModalVisible(true);
+    };
+
+    const confirmExport = () => {
+        if (selectedExportFields.length === 0) {
+            notification.warning({ message: 'Please select at least one field to export' });
+            return;
+        }
+
+        const exportArray = filteredData.map(record => {
+            const cleanRecord = {};
+            selectedExportFields.forEach(field => {
+                if (record[field] !== undefined) {
+                    let val = record[field];
+                    if (val && val.toDate) {
+                        val = val.toDate().toLocaleString();
+                    } else if (typeof val === 'object' && val !== null) {
+                        val = JSON.stringify(val);
+                    }
+                    cleanRecord[field] = val;
+                }
+            });
+            return cleanRecord;
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(exportArray);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Registrations");
+
+        if (exportFormat === 'csv') {
+            XLSX.writeFile(workbook, `Registrations_${new Date().toISOString().split('T')[0]}.csv`);
+        } else {
+            XLSX.writeFile(workbook, `Registrations_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+        
+        notification.success({ message: `Exported as ${exportFormat.toUpperCase()} successfully` });
+        setIsExportModalVisible(false);
+    };
+
     return (
         <div className="p-6 max-w-[1400px] mx-auto pb-24 text-gray-800 font-inter">
             {contextHolder}
@@ -2845,9 +2936,14 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     <button onClick={fetchData} className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95">
                         <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
                     </button>
-                    <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95">
-                        <FiDownload className="w-4 h-4" /> Export
-                    </button>
+                    <div className="flex gap-2">
+                        <button onClick={() => handleOpenExportModal('csv')} className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95 text-blue-700">
+                            <FiDownload className="w-4 h-4" /> CSV
+                        </button>
+                        <button onClick={() => handleOpenExportModal('xlsx')} className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95 text-green-700">
+                            <FiDownload className="w-4 h-4" /> Excel
+                        </button>
+                    </div>
                     <button onClick={() => { setView('import'); setImportView('form'); }} className="px-4 py-2 bg-white border border-blue-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-blue-50 text-blue-700 transition-all shadow-sm active:scale-95">
                         <FiFileText className="w-4 h-4" /> Import Data
                     </button>
@@ -2933,6 +3029,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             <option value="All">All Payments</option>
                             <option value="Paid">✅ PAID</option>
                             <option value="Unpaid">⏳ UNPAID</option>
+                            <option value="Old Student">🎓 OLD STUDENT</option>
                         </select>
                     </div>
                 </div>
@@ -3004,8 +3101,8 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                     <td colSpan={10} className="px-6 py-12 text-center text-gray-400 font-medium font-inter italic">No matching records found</td>
                                 </tr>
                             ) : (
-                                filteredData.slice(0, visibleCount).map((row) => (
-                                    <tr key={row.id} className="hover:bg-blue-50/30 transition-all cursor-pointer group" onClick={() => { setEditingRecord(row); setView('form'); }}>
+                                filteredData.slice(0, visibleCount).map((row, index) => (
+                                    <tr key={`${row.id}_${index}`} className="hover:bg-blue-50/30 transition-all cursor-pointer group" onClick={() => { setEditingRecord(row); setView('form'); }}>
                                         <td className="px-6 py-4 font-bold text-blue-600 tracking-tight">{row.registrationNo}</td>
                                         <td className="px-6 py-4 font-bold text-gray-900 tracking-tight">{row.first_name} {row.last_name}</td>
                                         <td className="px-6 py-4 text-gray-600 font-medium">{row.program || '-'}</td>
@@ -3015,9 +3112,15 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                         <td className="px-6 py-4 text-gray-600 font-medium">{row.date_of_birth || '-'}</td>
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col gap-1 items-start">
-                                                <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${row.isFeePaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                                                    {row.isFeePaid ? '✅ PAID' : '⏳ UNPAID'}
-                                                </span>
+                                                {row.paymentMode === 'Old Student' || (row.fees_status && row.fees_status.toLowerCase() === 'old student') ? (
+                                                    <span className="px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-700 border border-purple-200">
+                                                        🎓 OLD STUDENT
+                                                    </span>
+                                                ) : (
+                                                    <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${row.isFeePaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                                        {row.isFeePaid ? '✅ PAID' : '⏳ UNPAID'}
+                                                    </span>
+                                                )}
                                                 <span className="text-[10px] font-bold text-gray-500">
                                                     ₹ {row.feeAmount || 0}
                                                 </span>
@@ -3102,6 +3205,66 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 .custom-enquiry-tabs .ant-tabs-tab-active { color: #2563eb !important; }
                 .custom-enquiry-tabs .ant-tabs-ink-bar { height: 3px !important; background: #2563eb !important; }
             `}} />
+            {isExportModalVisible && (
+                <Modal
+                    title={<div className="text-lg font-black text-gray-900 tracking-tight">Select Fields to Export</div>}
+                    open={isExportModalVisible}
+                    onCancel={() => setIsExportModalVisible(false)}
+                    footer={null}
+                    width={800}
+                    className="custom-export-modal"
+                >
+                    <div className="py-4">
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="text-sm font-medium text-gray-600">{selectedExportFields.length} of {availableExportFields.length} fields selected</span>
+                            <div className="flex gap-2">
+                                <button onClick={() => setSelectedExportFields(availableExportFields)} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">Select All</button>
+                                <span className="text-gray-300">|</span>
+                                <button onClick={() => setSelectedExportFields([])} className="text-xs font-bold text-red-600 hover:text-red-800 transition-colors">Deselect All</button>
+                            </div>
+                        </div>
+                        <div className="max-h-[50vh] overflow-y-auto border border-gray-200 rounded-xl p-4 bg-gray-50">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {availableExportFields.map(field => (
+                                    <label key={field} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1.5 rounded transition-colors group">
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                                            checked={selectedExportFields.includes(field)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedExportFields([...selectedExportFields, field]);
+                                                } else {
+                                                    setSelectedExportFields(selectedExportFields.filter(f => f !== field));
+                                                }
+                                            }}
+                                        />
+                                        <span className="text-sm font-medium text-gray-700 truncate group-hover:text-gray-900" title={field}>
+                                            {field}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                onClick={() => setIsExportModalVisible(false)}
+                                className="px-5 py-2.5 rounded-lg text-sm font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-all active:scale-95 shadow-sm"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmExport}
+                                disabled={selectedExportFields.length === 0}
+                                className="px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-blue-600 border border-blue-600 hover:bg-blue-700 transition-all active:scale-95 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                <FiDownload className="w-4 h-4" />
+                                Export as {exportFormat.toUpperCase()}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
             {renderPreviewModal}
         </div>
     );

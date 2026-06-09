@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Form, Input, Button, Typography, notification, Spin } from 'antd';
+import { Form, Input, Button, Typography, notification, Spin, Modal } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
 
 import api from '../../utility/api';
@@ -26,6 +26,9 @@ const LoginPage = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [discoveredAccounts, setDiscoveredAccounts] = useState([]);
   const [selectedAccountIndex, setSelectedAccountIndex] = useState(0);
+  const [isGuardianSelectionVisible, setIsGuardianSelectionVisible] = useState(false);
+  const [guardianStudents, setGuardianStudents] = useState([]);
+  const [selectedGuardianStudent, setSelectedGuardianStudent] = useState(null);
   const emailInputValue = Form.useWatch('email', form);
 
   // Discover role as user types or on blur (local role hint, purely visual)
@@ -73,6 +76,14 @@ const LoginPage = () => {
   useEffect(() => {
     apiAuthenticate();
   }, []);
+
+  const handleGuardianSelectionConfirm = () => {
+    if (selectedGuardianStudent) {
+        localStorage.setItem('guardian_active_ward', selectedGuardianStudent);
+    }
+    setIsGuardianSelectionVisible(false);
+    navigate('/guardian-dashboard');
+  };
 
   const onFinish = async (values) => {
     setLoading(true);
@@ -147,6 +158,27 @@ const LoginPage = () => {
         } else if (mongoRole === 'Instructor') {
           navigate('/instructor-dashboard');
         } else if (mongoRole === 'Guardian') {
+          // Fetch Guardian profile to check for multiple students
+          try {
+            const guardRes = await API.get(`/api/resource/Guardian?or_filters=[["email_address","=","${resolvedUserId}"],["mobile_number","=","${resolvedUserId}"]]&fields=["name"]`);
+            if (guardRes.data?.data?.length > 0) {
+                const guardianId = guardRes.data.data[0].name;
+                const fullGuard = await API.get(`/api/resource/Guardian/${encodeURIComponent(guardianId)}`);
+                const students = fullGuard.data?.data?.students || [];
+                
+                if (students.length > 1) {
+                    setGuardianStudents(students);
+                    setSelectedGuardianStudent(students[0].student); // Select first by default
+                    setIsGuardianSelectionVisible(true);
+                    setLoading(false);
+                    return; // Pause the login flow here!
+                } else if (students.length === 1) {
+                    localStorage.setItem('guardian_active_ward', students[0].student);
+                }
+            }
+          } catch (err) {
+            console.error('Error fetching Guardian for login selection', err);
+          }
           navigate('/guardian-dashboard');
         } else {
           navigate('/employee-self-service');
@@ -299,6 +331,41 @@ const LoginPage = () => {
           </div>
         </div>
       </div>
+
+      <Modal
+        title="Select Student Profile"
+        open={isGuardianSelectionVisible}
+        onCancel={() => setIsGuardianSelectionVisible(false)} // Or enforce selection without cancel
+        footer={null}
+        closable={false}
+        maskClosable={false}
+        width={400}
+      >
+        <div style={{ marginBottom: '16px', color: '#475569' }}>
+          You are linked to multiple students. Please select which student's record you want to view:
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {guardianStudents.map((ward, index) => (
+            <label key={index} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', background: selectedGuardianStudent === ward.student ? '#ecfdf5' : '#fff', borderColor: selectedGuardianStudent === ward.student ? '#10b981' : '#e2e8f0', transition: 'all 0.2s' }}>
+              <input 
+                type="radio" 
+                name="guardianStudentSelection"
+                checked={selectedGuardianStudent === ward.student}
+                onChange={() => setSelectedGuardianStudent(ward.student)}
+                style={{ accentColor: '#10b981', width: '18px', height: '18px', margin: 0 }}
+              />
+              <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                {ward.student_name || ward.student}
+              </span>
+            </label>
+          ))}
+        </div>
+        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
+          <Button type="primary" onClick={handleGuardianSelectionConfirm} style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 'bold', padding: '0 24px' }}>
+            Continue
+          </Button>
+        </div>
+      </Modal>
 
       {/* ─── COMPLIANCE FOOTER ─── */}
       <footer className="login-footer" style={{

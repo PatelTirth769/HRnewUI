@@ -153,7 +153,12 @@ const GuardianDashboard = () => {
                 setWards(students);
 
                 if (students.length > 0) {
-                    fetchWardDetails(students[0].student);
+                    const savedWard = localStorage.getItem('guardian_active_ward');
+                    if (savedWard && students.some(s => s.student === savedWard)) {
+                        fetchWardDetails(savedWard);
+                    } else {
+                        fetchWardDetails(students[0].student);
+                    }
                 }
             }
         } catch (err) {
@@ -346,6 +351,85 @@ const GuardianDashboard = () => {
                 console.error('Error fetching work for guardian dashboard:', err);
             }
 
+            // Fetch Discounts and Apply
+            let studentDiscountsMap = {};
+            let feeDiscountsMap = {};
+            try {
+                if (studentId) {
+                    const sdSnaps = await getDocs(collection(db, 'schooler', 'data', 'student_discounts'));
+                    sdSnaps.forEach(doc => {
+                        const data = doc.data();
+                        if (data.student_id === studentId) {
+                            if (!studentDiscountsMap[data.student_id]) studentDiscountsMap[data.student_id] = [];
+                            studentDiscountsMap[data.student_id].push(data);
+                        }
+                    });
+
+                    const fdSnaps = await getDocs(collection(db, 'schooler', 'data', 'fees_discounts'));
+                    fdSnaps.forEach(doc => { feeDiscountsMap[doc.id] = doc.data(); });
+                }
+            } catch (err) {
+                console.warn('Error fetching discounts:', err.message);
+            }
+
+            // Apply Discounts to feeRecords
+            feeList.forEach(fee => {
+                let originalTotal = parseFloat(fee.total_amount) || parseFloat(fee.outstanding_amount) || 0;
+                let discountAmount = 0;
+                if (feeStructureDetails) {
+                    const termComp = feeStructureDetails.components?.find(c => c.fees_category === fee.academic_term || c.name === fee.academic_term);
+                    if (termComp) {
+                        const originalTermAmount = parseFloat(termComp.amount) || 0;
+                        if (fee.total_amount < originalTermAmount) {
+                            discountAmount = originalTermAmount - fee.total_amount;
+                            originalTotal = originalTermAmount;
+                        } else if (studentDiscountsMap[studentId]) {
+                            const activeDiscount = studentDiscountsMap[studentId][0];
+                            if (activeDiscount && feeDiscountsMap[activeDiscount.discount_id]) {
+                                if (!activeDiscount.terms || activeDiscount.terms.length === 0 || activeDiscount.terms.includes(fee.academic_term)) {
+                                    const fd = feeDiscountsMap[activeDiscount.discount_id];
+                                    if (fd.percentage > 0) {
+                                        discountAmount = (originalTermAmount * fd.percentage) / 100;
+                                        fee.total_amount = originalTermAmount - discountAmount;
+                                        if (fee.outstanding_amount > 0) fee.outstanding_amount = fee.total_amount;
+                                        originalTotal = originalTermAmount;
+                                        fee.discount_name = fd.name;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                fee.original_fee = originalTotal;
+                fee.discount_amount = discountAmount;
+            });
+
+            // Apply Discounts to feeStructureDetails (Simulated fees)
+            let globalDiscountName = '';
+            if (feeStructureDetails && feeStructureDetails.components) {
+                feeStructureDetails.components.forEach(comp => {
+                    let originalTotal = parseFloat(comp.amount) || 0;
+                    let discountAmount = 0;
+                    if (studentDiscountsMap[studentId]) {
+                        const activeDiscount = studentDiscountsMap[studentId][0];
+                        if (activeDiscount && feeDiscountsMap[activeDiscount.discount_id]) {
+                            const compTerm = comp.fees_category || comp.name;
+                            if (!activeDiscount.terms || activeDiscount.terms.length === 0 || activeDiscount.terms.includes(compTerm)) {
+                                const fd = feeDiscountsMap[activeDiscount.discount_id];
+                                if (fd.percentage > 0) {
+                                    discountAmount = (originalTotal * fd.percentage) / 100;
+                                    comp.amount = originalTotal - discountAmount;
+                                    comp.discount_name = fd.name;
+                                    globalDiscountName = fd.name;
+                                }
+                            }
+                        }
+                    }
+                    comp.original_fee = originalTotal;
+                    comp.discount_amount = discountAmount;
+                });
+            }
+
             setWardDetails({
                 attendance: attendancePct,
                 attendanceList: attendanceList,
@@ -439,7 +523,11 @@ const GuardianDashboard = () => {
                                 amount: payload.amount,
                                 fees_category: feesCategory,
                                 fee_structure: payload.fee_structure,
-                                systemCode: 'schooler'
+                                systemCode: 'schooler',
+                                original_fee: selectedFee.original_fee || 0,
+                                discount_amount: selectedFee.discount_amount || 0,
+                                discount_name: selectedFee.discount_name || '',
+                                discount_percentage: selectedFee.discount_percentage || 0
                             });
 
                             if (verifyRes.data.success) {
@@ -586,7 +674,11 @@ const GuardianDashboard = () => {
             amount: record.amount,
             feeName: record.fees_category,
             paymentMode: record.payment_mode ? `${record.payment_mode} PAYMENT` : 'ONLINE PAYMENT',
-            transactionNo: record.payment_id || 'N/A'
+            transactionNo: record.payment_id || 'N/A',
+            original_fee: record.original_fee || 0,
+            discount_amount: record.discount_amount || 0,
+            discount_name: record.discount_name || '',
+            discount_percentage: record.discount_percentage || 0
         };
 
         setSelectedReceipt(receiptData);
@@ -645,8 +737,34 @@ const GuardianDashboard = () => {
     }
 
     const totalPaidAmount = Object.values(paidTerms).reduce((sum, term) => sum + (term.amount || 0), 0);
-    const totalAcademicFees = wardDetails.feeStructureDetails?.total_amount || 0;
+    const originalAcademicFees = wardDetails.feeStructureDetails?.total_amount || 0;
+    const totalAcademicFees = wardDetails.feeStructureDetails?.components?.reduce((sum, c) => sum + (c.amount || 0), 0) || originalAcademicFees;
     const remainingPendingFees = Math.max(0, totalAcademicFees - totalPaidAmount);
+    const originalRemainingPendingFees = Math.max(0, originalAcademicFees - totalPaidAmount);
+    
+    let totalDiscount = 0;
+    let activeDiscountName = '';
+    
+    if (wardDetails.feeStructureDetails) {
+        totalDiscount = originalRemainingPendingFees - remainingPendingFees;
+        if (wardDetails.feeStructureDetails.components) {
+           const compWithDiscount = wardDetails.feeStructureDetails.components.find(c => c.discount_amount > 0);
+           if (compWithDiscount && compWithDiscount.discount_name) activeDiscountName = compWithDiscount.discount_name;
+        }
+    } 
+    
+    if (wardDetails.feeRecords && wardDetails.feeRecords.length > 0) {
+        const originalPending = wardDetails.feeRecords.reduce((sum, f) => sum + (f.original_fee || f.outstanding_amount || 0), 0);
+        if (!wardDetails.feeStructureDetails) {
+            totalDiscount = originalPending - wardDetails.fees;
+        }
+        if (!activeDiscountName) {
+            const recWithDiscount = wardDetails.feeRecords.find(f => f.discount_amount > 0);
+            if (recWithDiscount && recWithDiscount.discount_name) {
+                activeDiscountName = recWithDiscount.discount_name;
+            }
+        }
+    }
 
     return (
         <div className="p-6 lg:p-10 max-w-[1600px] mx-auto animate-in fade-in duration-700">
@@ -734,14 +852,24 @@ const GuardianDashboard = () => {
                 </Col>
                 <Col xs={24} sm={12} md={6}>
                     <Card variant="borderless" style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-                        <Statistic 
-                            title="PENDING FEES" 
-                            value={wardDetails.feeStructureDetails ? remainingPendingFees : wardDetails.fees} 
-                            valueStyle={{ color: '#ff4d4f', fontWeight: 800 }} 
-                            prefix={<WalletOutlined />} 
-                            precision={2}
-                            formatter={(value) => `₹${value.toLocaleString()}`}
-                        />
+                        <div className="flex flex-col">
+                            <Statistic 
+                                title="PENDING FEES" 
+                                value={wardDetails.feeStructureDetails ? remainingPendingFees : wardDetails.fees} 
+                                valueStyle={{ color: '#ff4d4f', fontWeight: 800 }} 
+                                prefix={<WalletOutlined />} 
+                                precision={2}
+                                formatter={(value) => `₹${value.toLocaleString()}`}
+                            />
+                            {totalDiscount > 0 && (
+                                <div style={{ marginTop: 8, fontSize: 11, color: '#888' }}>
+                                    <span style={{ textDecoration: 'line-through' }}>₹{(wardDetails.feeStructureDetails ? originalRemainingPendingFees : (wardDetails.fees + totalDiscount)).toLocaleString()}</span>
+                                    <span style={{ marginLeft: 6, color: '#a855f7', fontWeight: 'bold', background: '#f3e8ff', padding: '2px 6px', borderRadius: 4 }}>
+                                        -₹{totalDiscount.toLocaleString()} Off {activeDiscountName ? `(${activeDiscountName})` : ''}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </Card>
                 </Col>
             </Row>
@@ -1024,6 +1152,7 @@ const GuardianDashboard = () => {
                             dataSource={(wardDetails.fullSchedule || []).filter(item => !selectedDayFilter || item.custom_day === selectedDayFilter)}
                             rowKey="name"
                             pagination={{ pageSize: 10 }}
+                            scroll={{ x: 'max-content' }}
                             columns={[
                                 { title: 'ID', dataIndex: 'name', key: 'id', width: 120, ellipsis: true },
                                 { 
@@ -1080,6 +1209,7 @@ const GuardianDashboard = () => {
                             <Table 
                                 dataSource={wardDetails.feeRecords}
                                 pagination={false}
+                                scroll={{ x: 'max-content' }}
                                 columns={[
                                     { title: 'Fee ID', dataIndex: 'name', key: 'id', render: (id) => <span className="font-bold text-indigo-600">{id}</span> },
                                     { title: 'Due Date', dataIndex: 'due_date', key: 'due' },
@@ -1088,10 +1218,18 @@ const GuardianDashboard = () => {
                                         title: 'Outstanding', 
                                         dataIndex: 'outstanding_amount', 
                                         key: 'out', 
-                                        render: (val) => (
-                                            <span className={`font-bold ${val > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                                                ₹{val.toLocaleString()}
-                                            </span>
+                                        render: (val, record) => (
+                                            <div className="flex flex-col">
+                                                {record.discount_amount > 0 && (
+                                                    <span className="text-[10px] line-through text-gray-400">₹{record.original_fee?.toLocaleString()}</span>
+                                                )}
+                                                <span className={`font-bold ${val > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                                    ₹{val.toLocaleString()}
+                                                </span>
+                                                {record.discount_amount > 0 && (
+                                                    <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-1 rounded-sm w-fit mt-0.5">-₹{record.discount_amount.toLocaleString()} Off {record.discount_name ? `(${record.discount_name})` : ''}</span>
+                                                )}
+                                            </div>
                                         ) 
                                     },
                                     {
@@ -1138,6 +1276,7 @@ const GuardianDashboard = () => {
                                     dataSource={wardDetails.feeStructureDetails.components}
                                     pagination={false}
                                     size="small"
+                                    scroll={{ x: 'max-content' }}
                                     rowKey={(record) => record.fees_category || record.idx}
                                     columns={[
                                         { 
@@ -1178,7 +1317,15 @@ const GuardianDashboard = () => {
                                                 
                                                 return (
                                                     <div className="flex items-center justify-end gap-3">
-                                                        <span className={`text-sm font-bold ${isPaid ? 'text-green-600' : 'text-indigo-600'}`}>₹{v.toLocaleString()}</span>
+                                                        <div className="flex flex-col items-end">
+                                                            {record.discount_amount > 0 && (
+                                                                <span className="text-[10px] line-through text-gray-400">₹{record.original_fee?.toLocaleString()}</span>
+                                                            )}
+                                                            <span className={`text-sm font-bold ${isPaid ? 'text-green-600' : 'text-indigo-600'}`}>₹{v.toLocaleString()}</span>
+                                                            {record.discount_amount > 0 && (
+                                                                <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-1 rounded-sm w-fit mt-0.5">-₹{record.discount_amount.toLocaleString()} Off {record.discount_name ? `(${record.discount_name})` : ''}</span>
+                                                            )}
+                                                        </div>
                                                         {isPaid ? (
                                                             <>
                                                                 <Tag color="green" className="text-[10px] font-bold rounded-md uppercase m-0 border-none px-2 py-0">
@@ -1220,8 +1367,13 @@ const GuardianDashboard = () => {
                                     </div>
                                     <div className="flex flex-col items-end">
                                         <div className="text-xl font-black text-gray-500 line-through decoration-gray-400">
-                                            ₹{totalAcademicFees.toLocaleString()}
+                                            ₹{originalAcademicFees.toLocaleString()}
                                         </div>
+                                        {totalDiscount > 0 && (
+                                            <div className="text-sm text-purple-600 font-bold mt-1 flex items-center gap-1 bg-purple-50 px-2 py-0.5 rounded">
+                                                - ₹{totalDiscount.toLocaleString()} Total Discount
+                                            </div>
+                                        )}
                                         {totalPaidAmount > 0 && (
                                             <div className="text-sm text-green-600 font-bold mt-1 flex items-center gap-1">
                                                 <CheckCircleOutlined /> - ₹{totalPaidAmount.toLocaleString()} Paid
@@ -1245,6 +1397,7 @@ const GuardianDashboard = () => {
                             dataSource={paymentHistory}
                             rowKey="order_id"
                             pagination={{ pageSize: 10 }}
+                            scroll={{ x: 'max-content' }}
                             columns={[
                                 { 
                                     title: 'Academic Year', 
@@ -1292,6 +1445,7 @@ const GuardianDashboard = () => {
                         <Table 
                             dataSource={wardDetails.assessments}
                             pagination={false}
+                            scroll={{ x: 'max-content' }}
                             columns={[
                                 { title: 'Exam', dataIndex: 'assessment_plan', key: 'plan' },
                                 { title: 'Score', key: 'score', render: (rec) => `${rec.total_score} / ${rec.maximum_score}` }

@@ -285,13 +285,31 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
     }, [view]);
 
     const fetchRestrictions = async (programs) => {
+        const sortPrograms = (arr) => {
+            const getRank = (name) => {
+                const n = name.toUpperCase();
+                if (n.includes('NURSERY') || n.includes('NURSARY') || n.includes('NUR')) return 0;
+                if (n.includes('JR') || n.includes('JUNIOR')) return 1;
+                if (n.includes('SR') || n.includes('SENIOR')) return 2;
+                const match = n.match(/(?:STD|CLASS)\s*(\d+)/);
+                if (match) return parseInt(match[1]) + 2;
+                return 999;
+            };
+            return [...arr].sort((a, b) => {
+                const rA = getRank(a);
+                const rB = getRank(b);
+                if (rA !== rB) return rA - rB;
+                return a.localeCompare(b);
+            });
+        };
+
         try {
             const snap = await getDocs(collection(db, 'schooler_system/enquiry_management/program_restrictions'));
             const restricted = snap.docs.filter(d => d.data().isDisabled).map(d => d.id);
-            setAvailableClasses(programs.filter(c => !restricted.includes(c)));
+            setAvailableClasses(sortPrograms(programs.filter(c => !restricted.includes(c))));
         } catch (err) { 
             console.error('Restriction fetch failed', err);
-            setAvailableClasses(programs);
+            setAvailableClasses(sortPrograms(programs));
         }
     };
 

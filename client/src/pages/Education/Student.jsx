@@ -214,12 +214,12 @@ const Student = () => {
             const [countryRes, custGroupRes, guardianRes, programRes] = await Promise.all([
                 API.get('/api/resource/Country?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Customer Group?fields=["name"]&limit_page_length=None&order_by=name asc'),
-                API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address"]&limit_page_length=None&order_by=name asc'),
+                API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Program?fields=["name"]&limit_page_length=None&order_by=name asc'),
             ]);
             setCountries((countryRes.data.data || []).map(c => c.name));
             setCustomerGroups((custGroupRes.data.data || []).map(c => c.name));
-            setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '' })));
+            setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '', mobile_number: g.mobile_number || '' })));
             setPrograms((programRes.data.data || []).map(p => p.name));
         } catch (err) {
             console.error('Error fetching dropdown data:', err);
@@ -679,10 +679,14 @@ const Student = () => {
         setForm(prev => {
             const g = [...prev.guardians];
             g[idx] = { ...g[idx], [key]: val };
-            // Auto-fill guardian_name when guardian is selected
+            // Auto-fill guardian details when an existing guardian is selected
             if (key === 'guardian') {
                 const found = guardiansList.find(gl => gl.name === val);
-                if (found) g[idx].guardian_name = found.guardian_name;
+                if (found) {
+                    g[idx].guardian_name = found.guardian_name;
+                    g[idx].email_address = found.email_address;
+                    g[idx].mobile_number = found.mobile_number;
+                }
             }
             // Auto-fill email_address when guardian_name is changed (for new guardians)
             if (key === 'guardian_name' && g[idx].is_new) {

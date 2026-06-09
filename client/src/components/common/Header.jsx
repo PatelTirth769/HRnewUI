@@ -106,6 +106,9 @@ const Header = ({ onModuleClick }) => {
                     <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('certificates'); }}>
                       Certificates
                     </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('storedDocuments'); }}>
+                      Stored Documents
+                    </div>
                   </div>
                 </div>
               </>

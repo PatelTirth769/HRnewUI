@@ -572,6 +572,7 @@ export const moduleNavigation = {
                     { label: 'Fee Category', path: '/education/fee-category' },
                     { label: 'Fee Schedule', path: '/education/fee-schedule' },
                     { label: 'Fees', path: '/education/fees', studentAccess: true, guardianAccess: true },
+                    { label: 'Fees Discount', path: '/education/fees-discount' },
                     { label: 'Sales Invoice', path: '/accounting/sales-invoice', studentAccess: true, guardianAccess: true },
                     { label: 'Student Fee Collection', path: '/education/student-fee-collection' },
                     { label: 'Fees report', path: '/education/fees-report' },

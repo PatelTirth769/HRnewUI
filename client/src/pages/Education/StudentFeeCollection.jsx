@@ -11,6 +11,8 @@ import API from '../../services/api';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import html2pdf from 'html2pdf.js';
+import { db } from '../../config/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 import FeeReceiptTemplate from './FeeReceiptTemplate';
 
 const { Option } = Select;
@@ -177,6 +179,36 @@ const StudentFeeCollection = () => {
                 firebasePayments[key].push(p);
             });
 
+            let studentDiscountsMap = {};
+            let feeDiscountsMap = {};
+            try {
+                // Fetch from 'schooler' as that's where FeesDiscountScreen seems to be saving them
+                const sysCode = 'schooler';
+                const sdSnaps = await getDocs(collection(db, sysCode, 'data', 'student_discounts'));
+                sdSnaps.forEach(doc => {
+                    const data = doc.data();
+                    if (!studentDiscountsMap[data.student_id]) studentDiscountsMap[data.student_id] = [];
+                    studentDiscountsMap[data.student_id].push(data);
+                });
+
+                const fdSnaps = await getDocs(collection(db, sysCode, 'data', 'fees_discounts'));
+                fdSnaps.forEach(doc => { feeDiscountsMap[doc.id] = doc.data(); });
+                
+                // Also fetch from 'schooler_system' just in case
+                const sdSnaps2 = await getDocs(collection(db, 'schooler_system', 'data', 'student_discounts'));
+                sdSnaps2.forEach(doc => {
+                    const data = doc.data();
+                    if (!studentDiscountsMap[data.student_id]) studentDiscountsMap[data.student_id] = [];
+                    studentDiscountsMap[data.student_id].push(data);
+                });
+
+                const fdSnaps2 = await getDocs(collection(db, 'schooler_system', 'data', 'fees_discounts'));
+                fdSnaps2.forEach(doc => { feeDiscountsMap[doc.id] = doc.data(); });
+                
+                console.log('[Discount Debug] Loaded studentDiscountsMap:', studentDiscountsMap);
+                console.log('[Discount Debug] Loaded feeDiscountsMap:', feeDiscountsMap);
+            } catch(e) { console.warn('Could not fetch discounts', e.message); }
+
             // 5. Build the merged records
             const groupedRecords = {};
 
@@ -187,9 +219,53 @@ const StudentFeeCollection = () => {
                 const program = fee.program || studentInfoMap[studentId]?.program || '-';
                 const termName = fee.academic_term || fee.name;
                 const key = `${studentId}_${termName}`;
-                const totalFee = parseFloat(fee.grand_total) || 0;
-                const outstanding = parseFloat(fee.outstanding_amount) || 0;
+                let totalFee = parseFloat(fee.grand_total) || 0;
+                let outstanding = parseFloat(fee.outstanding_amount) || 0;
                 const paidAmount = totalFee - outstanding;
+
+                const feeStructureName = fee.fee_structure || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program) || '-';
+
+                let originalTotal = totalFee;
+                let discountAmount = 0;
+                let discountName = '';
+                let discountPercentage = 0;
+                if (structureDetails[feeStructureName]) {
+                    const fsData = structureDetails[feeStructureName];
+                    const components = fsData.components || [];
+                    const termComp = components.find(c => c.fees_category === termName || c.name === termName);
+                    if (termComp) {
+                        const originalTermAmount = parseFloat(termComp.amount) || 0;
+                        if (totalFee < originalTermAmount) {
+                            discountAmount = originalTermAmount - totalFee;
+                            originalTotal = originalTermAmount;
+                        }
+                    }
+                }
+
+                if (discountAmount === 0 && studentDiscountsMap[studentId]) {
+                    const activeDiscount = studentDiscountsMap[studentId][0]; // just grab the first assigned discount
+                    if (activeDiscount) {
+                        let fd = feeDiscountsMap[activeDiscount.discount_id];
+                        if (!fd) fd = Object.values(feeDiscountsMap).find(d => d.name === activeDiscount.discount_id || d.name === activeDiscount.discount_name);
+                        
+                        if (fd) {
+                            // Robust terms check
+                            const terms = Array.isArray(activeDiscount.terms) ? activeDiscount.terms : (activeDiscount.terms ? [activeDiscount.terms] : []);
+                            if (terms.length === 0 || terms.includes('All Terms') || terms.includes(termName)) {
+                                const pct = parseFloat(fd.percentage) || 0;
+                                if (pct > 0) {
+                                    discountPercentage = pct;
+                                    discountAmount = (originalTotal * pct) / 100;
+                                    totalFee = originalTotal - discountAmount;
+                                    discountName = fd.name;
+                                    if (outstanding > 0) {
+                                        outstanding = totalFee - paidAmount;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 const fbPayments = firebasePayments[key] || [];
                 const verifiedPayment = fbPayments.find(p => p.status === 'verified');
@@ -206,8 +282,6 @@ const StudentFeeCollection = () => {
                     status = 'PARTIAL';
                 }
 
-                const feeStructureName = fee.fee_structure || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program) || '-';
-
                 if (!groupedRecords[key] || status === 'PAID') {
                     groupedRecords[key] = {
                         key: key,
@@ -219,6 +293,10 @@ const StudentFeeCollection = () => {
                         academic_term: termName,
                         academic_year: fee.academic_year || '-',
                         total_fee: totalFee,
+                        original_fee: originalTotal,
+                        discount_amount: discountAmount,
+                        discount_name: discountName,
+                        discount_percentage: discountPercentage,
                         paid_amount: paidAmount > 0 ? paidAmount : (verifiedPayment ? parseFloat(verifiedPayment.amount) || 0 : 0),
                         outstanding: outstanding,
                         status: status,
@@ -256,6 +334,10 @@ const StudentFeeCollection = () => {
                     academic_term: termName,
                     academic_year: '-',
                     total_fee: paidAmt,
+                    original_fee: p.original_fee || paidAmt,
+                    discount_amount: p.discount_amount || 0,
+                    discount_name: p.discount_name || '',
+                    discount_percentage: p.discount_percentage || 0,
                     paid_amount: currentStatus === 'PAID' ? paidAmt : 0,
                     outstanding: currentStatus === 'PAID' ? 0 : paidAmt,
                     status: currentStatus,
@@ -289,7 +371,31 @@ const StudentFeeCollection = () => {
 
                         if (groupedRecords[key]) return;
 
-                        const termAmount = parseFloat(comp.amount) || 0;
+                        let termAmount = parseFloat(comp.amount) || 0;
+                        let originalTotal = termAmount;
+                        let discountAmount = 0;
+                        let discountName = '';
+                        let discountPercentage = 0;
+                        if (studentDiscountsMap[studentId]) {
+                            const activeDiscount = studentDiscountsMap[studentId][0]; 
+                            if (activeDiscount) {
+                                let fd = feeDiscountsMap[activeDiscount.discount_id];
+                                if (!fd) fd = Object.values(feeDiscountsMap).find(d => d.name === activeDiscount.discount_id || d.name === activeDiscount.discount_name);
+                                
+                                if (fd) {
+                                    const terms = Array.isArray(activeDiscount.terms) ? activeDiscount.terms : (activeDiscount.terms ? [activeDiscount.terms] : []);
+                                    if (terms.length === 0 || terms.includes('All Terms') || terms.includes(termName)) {
+                                        const pct = parseFloat(fd.percentage) || 0;
+                                        if (pct > 0) {
+                                            discountPercentage = pct;
+                                            discountAmount = (originalTotal * pct) / 100;
+                                            termAmount = originalTotal - discountAmount;
+                                            discountName = fd.name;
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         const fbPayments = firebasePayments[key] || [];
                         const verifiedPayment = fbPayments.find(p => p.status === 'verified');
@@ -316,6 +422,10 @@ const StudentFeeCollection = () => {
                             academic_term: termName,
                             academic_year: '-',
                             total_fee: termAmount,
+                            original_fee: originalTotal,
+                            discount_amount: discountAmount,
+                            discount_name: discountName,
+                            discount_percentage: discountPercentage,
                             paid_amount: paidAmount,
                             outstanding: status === 'PAID' ? 0 : termAmount,
                             status: status,
@@ -389,9 +499,14 @@ const StudentFeeCollection = () => {
     }, [allData, filters]);
 
     const stats = useMemo(() => ({
-        totalProjected: filteredData.reduce((s, r) => s + r.total_fee, 0),
+        totalProjected: filteredData.reduce((s, r) => s + (r.original_fee || r.total_fee || 0), 0),
         totalCollected: filteredData.reduce((s, r) => s + r.paid_amount, 0),
-        totalOutstanding: filteredData.reduce((s, r) => s + r.outstanding, 0),
+        totalOutstanding: filteredData.reduce((s, r) => {
+            // If unpaid, outstanding is the original fee
+            // If paid, outstanding is 0 (the discount accounts for the difference)
+            if (r.status === 'PAID') return s;
+            return s + (r.original_fee || r.outstanding || r.total_fee || 0);
+        }, 0),
         paidCount: filteredData.filter(r => r.status === 'PAID').length,
         unpaidCount: filteredData.filter(r => r.status !== 'PAID').length,
         totalRecords: filteredData.length,
@@ -416,7 +531,11 @@ const StudentFeeCollection = () => {
             amount: record.paid_amount || record.amount || 0,
             feeName: record.academic_term || 'TUITION FEES',
             paymentMode: (record.payment_mode || 'CASH') + ' PAYMENT',
-            transactionNo: record.receipt_no || record.payment_id || 'N/A'
+            transactionNo: record.receipt_no || record.payment_id || 'N/A',
+            original_fee: record.original_fee || record.total_fee || 0,
+            discount_amount: record.discount_amount || 0,
+            discount_name: record.discount_name || '',
+            discount_percentage: record.discount_percentage || 0
         };
 
         setSelectedReceipt(receiptData);
@@ -469,7 +588,11 @@ const StudentFeeCollection = () => {
                 payment_mode: paymentMode,
                 manual_receipt_no: manualReceiptRef,
                 fee_id: selectedRow.fee_id,
-                systemCode: 'schooler'
+                systemCode: 'schooler',
+                original_fee: selectedRow.original_fee || 0,
+                discount_amount: selectedRow.discount_amount || 0,
+                discount_name: selectedRow.discount_name || '',
+                discount_percentage: selectedRow.discount_percentage || 0
             });
 
             if (res.data.success) {
@@ -490,7 +613,11 @@ const StudentFeeCollection = () => {
                     payment_id: res.data.payment_id,
                     paid_amount: paymentAmount,
                     payment_mode: paymentMode,
-                    paid_date: new Date().toISOString()
+                    paid_date: new Date().toISOString(),
+                    original_fee: selectedRow.original_fee,
+                    discount_amount: selectedRow.discount_amount,
+                    discount_name: selectedRow.discount_name,
+                    discount_percentage: selectedRow.discount_percentage
                 };
                 handleDownloadReceipt(mockRecord);
 
@@ -535,7 +662,23 @@ const StudentFeeCollection = () => {
         },
         {
             title: 'TOTAL FEE', dataIndex: 'total_fee', key: 'total_fee', align: 'right',
-            render: v => <span style={{ fontWeight: 600, color: '#64748b', fontSize: 13 }}>₹{v.toLocaleString()}</span>,
+            render: (v, r) => (
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    {r.discount_amount > 0 && (
+                        <div style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 11, marginBottom: '-2px' }}>
+                            ₹{r.original_fee?.toLocaleString()}
+                        </div>
+                    )}
+                    <span style={{ fontWeight: 600, color: '#64748b', fontSize: 13 }}>
+                        ₹{v?.toLocaleString()}
+                    </span>
+                    {r.discount_amount > 0 && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#7e22ce', backgroundColor: '#faf5ff', padding: '0 4px', borderRadius: 2, marginTop: 2 }}>
+                            -₹{r.discount_amount.toLocaleString()} Off {r.discount_name ? `(${r.discount_name})` : ''}
+                        </span>
+                    )}
+                </div>
+            ),
             sorter: (a, b) => a.total_fee - b.total_fee,
         },
         {
@@ -545,8 +688,15 @@ const StudentFeeCollection = () => {
         },
         {
             title: 'DUE', dataIndex: 'outstanding', key: 'outstanding', align: 'right',
-            render: v => <span style={{ fontWeight: 700, color: v > 0 ? '#dc2626' : '#94a3b8', fontSize: 13 }}>₹{v.toLocaleString()}</span>,
-            sorter: (a, b) => a.outstanding - b.outstanding,
+            render: (v, r) => {
+                const actualDue = r.status === 'PAID' ? 0 : r.outstanding;
+                return <span style={{ fontWeight: 700, color: actualDue > 0 ? '#dc2626' : '#94a3b8', fontSize: 13 }}>₹{actualDue.toLocaleString()}</span>;
+            },
+            sorter: (a, b) => {
+                const dueA = a.status === 'PAID' ? 0 : a.outstanding;
+                const dueB = b.status === 'PAID' ? 0 : b.outstanding;
+                return dueA - dueB;
+            },
         },
         {
             title: 'PAID DATE', key: 'paid_date', ellipsis: true,
@@ -808,7 +958,7 @@ const StudentFeeCollection = () => {
                             </div>
 
                             {/* Detail Fields grid */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '24px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '16px' }}>
                                 <div>
                                     <label style={modalLabelStyle}>Fee Structure</label>
                                     <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>{selectedRow.fee_structure || 'Standard'}</span>
@@ -822,10 +972,23 @@ const StudentFeeCollection = () => {
                                     <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>{selectedRow.fee_id !== '-' ? selectedRow.fee_id : 'Pre-billed Structure'}</span>
                                 </div>
                                 <div>
-                                    <label style={modalLabelStyle}>Outstanding Balance</label>
+                                    <label style={modalLabelStyle}>Amount to Pay</label>
                                     <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#dc2626' }}>₹{selectedRow.outstanding.toLocaleString()}</span>
                                 </div>
                             </div>
+
+                            {selectedRow.discount_amount > 0 && (
+                                <div style={{ background: '#f3e8ff', padding: '12px 16px', borderRadius: '12px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#7e22ce', marginBottom: 4 }}>DISCOUNT APPLIED</div>
+                                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#a855f7' }}>{selectedRow.discount_name} (-{selectedRow.discount_percentage}%)</div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: '11px', color: '#9ca3af', textDecoration: 'line-through' }}>Original: ₹{selectedRow.original_fee.toLocaleString()}</div>
+                                        <div style={{ fontSize: '15px', fontWeight: 800, color: '#7e22ce' }}>-₹{selectedRow.discount_amount.toLocaleString()} Off</div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Form Input fields */}
                             <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>

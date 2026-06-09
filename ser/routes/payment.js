@@ -122,6 +122,10 @@ router.post('/verify-payment', async (req, res) => {
             student_name,
             guardian_email,
             amount,
+            original_fee,
+            discount_amount,
+            discount_name,
+            discount_percentage,
             fees_category,
             fee_structure,
             systemCode
@@ -217,7 +221,11 @@ router.post('/verify-payment', async (req, res) => {
                     erp_fees_id: targetFeeId || 'N/A',
                     erp_sync: targetFeeId ? 'success' : 'manual_required',
                     verified_at: new Date().toISOString(),
-                    school_name: 'SSV CAMPUS - CBSE'
+                    school_name: 'SSV CAMPUS - CBSE',
+                    original_fee: parseFloat(original_fee) || 0,
+                    discount_amount: parseFloat(discount_amount) || 0,
+                    discount_name: discount_name || '',
+                    discount_percentage: parseFloat(discount_percentage) || 0
                 };
 
                 await col.doc(razorpay_order_id).update(receiptRecord);
@@ -248,7 +256,11 @@ router.post('/verify-payment', async (req, res) => {
                     erp_sync: 'manual_required',
                     message: 'No matching outstanding Fees record found in ERPNext',
                     verified_at: new Date().toISOString(),
-                    school_name: 'SSV CAMPUS - CBSE'
+                    school_name: 'SSV CAMPUS - CBSE',
+                    original_fee: parseFloat(original_fee) || 0,
+                    discount_amount: parseFloat(discount_amount) || 0,
+                    discount_name: discount_name || '',
+                    discount_percentage: parseFloat(discount_percentage) || 0
                 };
 
                 await col.doc(razorpay_order_id).update(receiptRecord);
@@ -281,7 +293,11 @@ router.post('/verify-payment', async (req, res) => {
                 erp_sync: 'failed',
                 erp_error: erpErr.message,
                 verified_at: new Date().toISOString(),
-                school_name: 'SSV CAMPUS - CBSE'
+                school_name: 'SSV CAMPUS - CBSE',
+                original_fee: parseFloat(original_fee) || 0,
+                discount_amount: parseFloat(discount_amount) || 0,
+                discount_name: discount_name || '',
+                discount_percentage: parseFloat(discount_percentage) || 0
             };
 
             await col.doc(razorpay_order_id).update(receiptRecord);
@@ -398,7 +414,11 @@ router.post('/record-offline-payment', async (req, res) => {
             payment_mode,
             manual_receipt_no,
             fee_id,
-            systemCode
+            systemCode,
+            original_fee,
+            discount_amount,
+            discount_name,
+            discount_percentage
         } = req.body;
 
         if (!student_id || !amount || !fees_category || !systemCode) {
@@ -488,10 +508,13 @@ router.post('/record-offline-payment', async (req, res) => {
             erp_payment_entry_id: erpPaymentEntryId,
             erp_fees_id: targetFeeId || 'N/A',
             erp_sync: erpSyncStatus,
-            erp_error: erpError,
             verified_at: new Date().toISOString(),
             school_name: 'SSV CAMPUS - CBSE',
             created_at: new Date().toISOString(),
+            original_fee: parseFloat(original_fee) || 0,
+            discount_amount: parseFloat(discount_amount) || 0,
+            discount_name: discount_name || '',
+            discount_percentage: parseFloat(discount_percentage) || 0
         };
 
         // Write to fee_payments
@@ -518,5 +541,219 @@ router.post('/record-offline-payment', async (req, res) => {
     }
 });
 
+/**
+ * POST /assign-discount
+ * Assigns a discount to a student for a specific term and attempts to update ERPNext Fee record.
+ */
+router.post('/assign-discount', async (req, res) => {
+    try {
+        const { systemCode, discount_id, student_id, academic_year, terms = [] } = req.body;
+        if (!discount_id || !student_id || !academic_year) {
+            return res.status(400).json({ success: false, message: 'Missing required fields' });
+        }
+
+        const sysCode = systemCode || 'schooler_system';
+
+        // 1. Fetch the discount details from Firebase to know the percentage
+        const discountDoc = await db.collection(sysCode).doc('data').collection('fees_discounts').doc(discount_id).get();
+        if (!discountDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Discount category not found' });
+        }
+        const discountData = discountDoc.data();
+        const discountPercentage = parseFloat(discountData.percentage) || 0;
+
+        // 2. Save the assignment to Firebase
+        const assignmentsCol = db.collection(sysCode).doc('data').collection('student_discounts');
+        const existingSnapshot = await assignmentsCol.where('student_id', '==', student_id).where('academic_year', '==', academic_year).get();
+        if (!existingSnapshot.empty) {
+            // Delete old assignment for same term
+            const oldDoc = existingSnapshot.docs[0];
+            await oldDoc.ref.delete();
+        }
+        
+        await assignmentsCol.add({
+            student_id,
+            discount_id,
+            academic_year,
+            terms,
+            systemCode: sysCode,
+            assigned_at: new Date().toISOString()
+        });
+
+        // 3. Sync to ERPNext (Modify the Fee record if it exists)
+        const targetBase = await getSystemUrl(systemCode);
+        const erpApiKey = process.env.ERP_ADMIN_API_KEY;
+        const erpApiSecret = process.env.ERP_ADMIN_API_SECRET;
+
+        let erpUpdated = false;
+        let erpMessage = '';
+
+        if (targetBase && discountPercentage > 0) {
+            try {
+                // Find fee for the student and year
+                const feeFilter = JSON.stringify([
+                    ["student", "=", student_id],
+                    ["academic_year", "=", academic_year],
+                    ["docstatus", "<", 2] 
+                ]);
+                
+                const authHeaders = req.headers.cookie ? { 'Cookie': req.headers.cookie } : { 'Authorization': `token ${erpApiKey}:${erpApiSecret}` };
+
+                const feeRes = await axios.get(`${targetBase}/api/resource/Fees?filters=${feeFilter}&limit_page_length=20`, {
+                    headers: authHeaders
+                });
+
+                if (feeRes.data.data && feeRes.data.data.length > 0) {
+                    for (const feeInfo of feeRes.data.data) {
+                        const feeName = feeInfo.name;
+                        
+                        // Fetch full fee doc
+                        const feeDetailsRes = await axios.get(`${targetBase}/api/resource/Fees/${encodeURIComponent(feeName)}`, {
+                            headers: { 'Authorization': `token ${erpApiKey}:${erpApiSecret}` }
+                        });
+                        
+                        const feeDoc = feeDetailsRes.data.data;
+
+                        // Check term condition
+                        if (terms.length > 0 && !terms.includes(feeDoc.academic_term)) {
+                            continue; // Skip fees that don't match selected terms
+                        }
+                        
+                        // Calculate subtotal excluding any existing 'Discount' components
+                        let subtotal = 0;
+                        const newComponents = [];
+
+                        for (const comp of feeDoc.components || []) {
+                            if (comp.fees_category !== 'Discount') {
+                                subtotal += parseFloat(comp.amount) || 0;
+                                newComponents.push(comp);
+                            }
+                        }
+
+                        const discountAmount = -Math.abs((subtotal * discountPercentage) / 100);
+                        
+                        // Add the discount component
+                        newComponents.push({
+                            fees_category: 'Discount',
+                            amount: discountAmount,
+                            description: discountData.name
+                        });
+
+                        // Update Fee Doc in ERPNext
+                        await axios.put(`${targetBase}/api/resource/Fees/${encodeURIComponent(feeName)}`, {
+                            components: newComponents
+                        }, {
+                            headers: authHeaders
+                        });
+                    }
+
+                    erpUpdated = true;
+                    erpMessage = 'ERPNext fees successfully updated with discount component.';
+                } else {
+                    erpMessage = 'No fee found in ERPNext for this year. Discount will apply when generated.';
+                }
+            } catch (erpErr) {
+                const fs = require('fs');
+                const errMsg = JSON.stringify(erpErr.response?.data || erpErr.message, null, 2);
+                fs.appendFileSync('payment_error.log', '\n[' + new Date().toISOString() + '] ERPNext Fee Update Error: ' + errMsg);
+                console.error('ERPNext Fee Update Error:', erpErr.response?.data || erpErr.message);
+                erpMessage = 'Failed to update ERPNext Fee: ' + (erpErr.response?.data?._server_messages || erpErr.message);
+            }
+        }
+
+        res.json({ success: true, message: 'Discount assigned', erpUpdated, erpMessage });
+
+    } catch (err) {
+        console.error('Assign Discount Error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 module.exports = router;
 
+/**
+ * POST /remove-discount
+ * Removes a discount assignment and strips the discount component from ERPNext Fee records.
+ */
+router.post('/remove-discount', async (req, res) => {
+    try {
+        const { systemCode, assignment_id } = req.body;
+        if (!assignment_id) {
+            return res.status(400).json({ success: false, message: 'Missing assignment_id' });
+        }
+
+        const sysCode = systemCode || 'schooler_system';
+        const docRef = db.collection(sysCode).doc('data').collection('student_discounts').doc(assignment_id);
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+            return res.status(404).json({ success: false, message: 'Assignment not found' });
+        }
+
+        const assignmentData = docSnap.data();
+        const { student_id, academic_year } = assignmentData;
+
+        // Delete from Firebase
+        await docRef.delete();
+
+        // Remove from ERPNext
+        const targetBase = await getSystemUrl(sysCode);
+        const erpApiKey = process.env.ERP_ADMIN_API_KEY;
+        const erpApiSecret = process.env.ERP_ADMIN_API_SECRET;
+
+        let erpMessage = 'Assignment removed from database.';
+
+        if (targetBase) {
+            try {
+                const feeFilter = JSON.stringify([
+                    ["student", "=", student_id],
+                    ["academic_year", "=", academic_year],
+                    ["docstatus", "<", 2] 
+                ]);
+                
+                const authHeaders = req.headers.cookie ? { 'Cookie': req.headers.cookie } : { 'Authorization': `token ${erpApiKey}:${erpApiSecret}` };
+
+                const feeRes = await axios.get(`${targetBase}/api/resource/Fees?filters=${feeFilter}&limit_page_length=20`, {
+                    headers: authHeaders
+                });
+
+                if (feeRes.data.data && feeRes.data.data.length > 0) {
+                    for (const feeInfo of feeRes.data.data) {
+                        const feeName = feeInfo.name;
+                        
+                        const feeDetailsRes = await axios.get(`${targetBase}/api/resource/Fees/${encodeURIComponent(feeName)}`, {
+                            headers: authHeaders
+                        });
+                        
+                        const feeDoc = feeDetailsRes.data.data;
+                        
+                        // Skip if the fee is already fully paid!
+                        if (feeDoc.outstanding_amount <= 0) {
+                            continue;
+                        }
+
+                        const newComponents = (feeDoc.components || []).filter(comp => comp.fees_category !== 'Discount');
+
+                        if (newComponents.length < (feeDoc.components || []).length) {
+                            await axios.put(`${targetBase}/api/resource/Fees/${encodeURIComponent(feeName)}`, {
+                                components: newComponents
+                            }, {
+                                headers: authHeaders
+                            });
+                        }
+                    }
+                    erpMessage += ' ERPNext fees reverted successfully.';
+                }
+            } catch (erpErr) {
+                console.error('ERPNext Fee Revert Error:', erpErr.response?.data || erpErr.message);
+                erpMessage += ' However, failed to revert ERPNext Fees.';
+            }
+        }
+
+        res.json({ success: true, message: erpMessage });
+
+    } catch (err) {
+        console.error('Remove Discount Error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});

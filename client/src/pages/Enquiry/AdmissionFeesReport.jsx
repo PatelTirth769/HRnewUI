@@ -77,6 +77,12 @@ const AdmissionFeesReport = () => {
 
     const filteredData = useMemo(() => {
         return payments.filter(item => {
+            // ONLY SHOW PAID RECORDS (exclude unpaid/created/pending)
+            const itemStatus = (item.status || '').toLowerCase();
+            if (itemStatus !== 'verified' && itemStatus !== 'paid' && itemStatus !== 'success') {
+                return false;
+            }
+
             // Program filter
             if (filters.program !== 'All' && item.program !== filters.program) return false;
             // Fee Type filter
@@ -84,7 +90,7 @@ const AdmissionFeesReport = () => {
             // Mode filter
             if (filters.paymentMode !== 'All' && (item.payment_mode || '').toUpperCase() !== filters.paymentMode.toUpperCase()) return false;
             // Status filter
-            if (filters.status !== 'All' && (item.status || '').toLowerCase() !== filters.status.toLowerCase()) return false;
+            if (filters.status !== 'All' && itemStatus !== filters.status.toLowerCase()) return false;
             
             // Date filter
             if (filters.dateRange && filters.dateRange.length === 2 && item.created_at) {
@@ -113,7 +119,8 @@ const AdmissionFeesReport = () => {
         let totalAmount = 0;
         let successfulCount = 0;
         filteredData.forEach(item => {
-            if (item.status === 'verified') {
+            const itemStatus = (item.status || '').toLowerCase();
+            if (itemStatus === 'verified' || itemStatus === 'paid' || itemStatus === 'success') {
                 totalAmount += Number(item.amount) || 0;
                 successfulCount++;
             }

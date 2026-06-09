@@ -13,6 +13,7 @@ const emptyForm = () => ({
     work_address: '',
     date_of_birth: '',
     user_id: '',
+    students: [],
     interests: [],
 });
 
@@ -73,6 +74,7 @@ const Guardian = () => {
                 work_address: d.work_address || '',
                 date_of_birth: d.date_of_birth || '',
                 user_id: d.user_id || '',
+                students: d.students || [],
                 interests: d.interests || [],
             });
         } catch (err) {
@@ -285,6 +287,34 @@ const Guardian = () => {
                     <div>
                         <label className={labelStyle}>Date of Birth</label>
                         <input type="date" className={inputStyle} value={form.date_of_birth} onChange={e => updateField('date_of_birth', e.target.value)} />
+                    </div>
+                </div>
+
+                <div className="mt-10">
+                    <h3 className="font-semibold text-gray-800 text-sm mb-4 uppercase tracking-wider">Guardian Of</h3>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden max-w-2xl">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 text-gray-600 border-b text-[13px]">
+                                <tr>
+                                    <th className="px-3 py-2.5 text-left w-12">No.</th>
+                                    <th className="px-3 py-2.5 text-left">Student</th>
+                                    <th className="px-3 py-2.5 text-left">Student Name</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 italic">
+                                {(!form.students || form.students.length === 0) ? (
+                                    <tr><td colSpan="3" className="text-center py-10 text-gray-400 italic text-sm">No Students Linked</td></tr>
+                                ) : (
+                                    form.students.map((student, idx) => (
+                                        <tr key={idx} className="hover:bg-gray-50/50 transition-colors not-italic">
+                                            <td className="px-3 py-2.5 text-gray-400">{idx + 1}</td>
+                                            <td className="px-3 py-2.5 font-medium text-gray-700">{student.student}</td>
+                                            <td className="px-3 py-2.5 text-gray-600">{student.student_name}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 

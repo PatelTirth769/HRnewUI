@@ -179,13 +179,13 @@ export default function AddEnquiry() {
             const [progRes, yearRes, guardianRes] = await Promise.all([
                 API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
-                API.get('/api/resource/Guardian?fields=["name","guardian_name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
             ]);
             const programs = progRes.data.data?.map(p => p.name) || [];
             const years = yearRes.data.data?.map(y => y.name) || [];
             
             setAcademicYears(years);
-            setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name })));
+            setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '', mobile_number: g.mobile_number || '' })));
             await fetchRestrictions(programs);
         } catch (err) {
             console.error('Error fetching ERPNext data:', err);
@@ -351,7 +351,11 @@ export default function AddEnquiry() {
             g[idx] = { ...g[idx], [key]: val };
             if (key === 'guardian') {
                 const found = guardiansList.find(gl => gl.name === val);
-                if (found) g[idx].guardian_name = found.guardian_name;
+                if (found) {
+                    g[idx].guardian_name = found.guardian_name;
+                    g[idx].email_address = found.email_address;
+                    g[idx].mobile_number = found.mobile_number;
+                }
             }
             return { ...prev, guardians: g };
         });

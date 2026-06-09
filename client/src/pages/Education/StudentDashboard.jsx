@@ -453,6 +453,88 @@ const StudentDashboard = () => {
       } catch (err) {
         console.error('Error fetching work for student dashboard:', err);
       }
+
+      // Fetch Discounts and Apply
+      let studentDiscountsMap = {};
+      let feeDiscountsMap = {};
+      try {
+        const studentId = profile?.name;
+        if (studentId) {
+            const sdSnaps = await getDocs(collection(db, 'schooler', 'data', 'student_discounts'));
+            sdSnaps.forEach(doc => {
+                const data = doc.data();
+                if (data.student_id === studentId) {
+                    if (!studentDiscountsMap[data.student_id]) studentDiscountsMap[data.student_id] = [];
+                    studentDiscountsMap[data.student_id].push(data);
+                }
+            });
+
+            const fdSnaps = await getDocs(collection(db, 'schooler', 'data', 'fees_discounts'));
+            fdSnaps.forEach(doc => { feeDiscountsMap[doc.id] = doc.data(); });
+        }
+      } catch (err) {
+        console.warn('Error fetching discounts:', err.message);
+      }
+
+      // Apply Discounts to feeRecords
+      feeList.forEach(fee => {
+        let originalTotal = parseFloat(fee.grand_total) || 0;
+        let discountAmount = 0;
+        const studentId = fee.student;
+        if (feeStructureDetails) {
+            const termComp = feeStructureDetails.components?.find(c => c.fees_category === fee.academic_term || c.name === fee.academic_term);
+            if (termComp) {
+                const originalTermAmount = parseFloat(termComp.amount) || 0;
+                if (fee.grand_total < originalTermAmount) {
+                    discountAmount = originalTermAmount - fee.grand_total;
+                    originalTotal = originalTermAmount;
+                } else if (studentDiscountsMap[studentId]) {
+                    const activeDiscount = studentDiscountsMap[studentId][0];
+                    if (activeDiscount && feeDiscountsMap[activeDiscount.discount_id]) {
+                        if (!activeDiscount.terms || activeDiscount.terms.length === 0 || activeDiscount.terms.includes(fee.academic_term)) {
+                            const fd = feeDiscountsMap[activeDiscount.discount_id];
+                            if (fd.percentage > 0) {
+                                discountAmount = (originalTermAmount * fd.percentage) / 100;
+                                fee.grand_total = originalTermAmount - discountAmount;
+                                if (fee.outstanding_amount > 0) fee.outstanding_amount = fee.grand_total;
+                                originalTotal = originalTermAmount;
+                                fee.discount_name = fd.name;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        fee.original_fee = originalTotal;
+        fee.discount_amount = discountAmount;
+      });
+
+      // Apply Discounts to feeStructureDetails (Simulated fees)
+      let globalDiscountName = '';
+      if (feeStructureDetails && feeStructureDetails.components) {
+          feeStructureDetails.components.forEach(comp => {
+              const studentId = profile?.name;
+              let originalTotal = parseFloat(comp.amount) || 0;
+              let discountAmount = 0;
+              if (studentDiscountsMap[studentId]) {
+                  const activeDiscount = studentDiscountsMap[studentId][0];
+                  if (activeDiscount && feeDiscountsMap[activeDiscount.discount_id]) {
+                      const compTerm = comp.fees_category || comp.name;
+                      if (!activeDiscount.terms || activeDiscount.terms.length === 0 || activeDiscount.terms.includes(compTerm)) {
+                          const fd = feeDiscountsMap[activeDiscount.discount_id];
+                          if (fd.percentage > 0) {
+                              discountAmount = (originalTotal * fd.percentage) / 100;
+                              comp.amount = originalTotal - discountAmount;
+                              comp.discount_name = fd.name;
+                              globalDiscountName = fd.name;
+                          }
+                      }
+                  }
+              }
+              comp.original_fee = originalTotal;
+              comp.discount_amount = discountAmount;
+          });
+      }
       
       setStudentData({
         profile,
@@ -558,7 +640,11 @@ const StudentDashboard = () => {
                 amount: payload.amount,
                 fees_category: feesCategory,
                 fee_structure: payload.fee_structure,
-                systemCode: 'schooler'
+                systemCode: 'schooler',
+                original_fee: selectedFee.original_fee || 0,
+                discount_amount: selectedFee.discount_amount || 0,
+                discount_name: selectedFee.discount_name || '',
+                discount_percentage: selectedFee.discount_percentage || 0
               });
 
               if (verifyRes.data.success) {
@@ -669,7 +755,11 @@ const StudentDashboard = () => {
       amount: record.amount,
       feeName: record.fees_category,
       paymentMode: record.payment_mode ? `${record.payment_mode} PAYMENT` : 'ONLINE PAYMENT',
-      transactionNo: record.payment_id || 'N/A'
+      transactionNo: record.payment_id || 'N/A',
+      original_fee: record.original_fee || 0,
+      discount_amount: record.discount_amount || 0,
+      discount_name: record.discount_name || '',
+      discount_percentage: record.discount_percentage || 0
     };
 
     setSelectedReceipt(receiptData);
@@ -705,8 +795,36 @@ const StudentDashboard = () => {
   }
 
   const totalPaidAmount = Object.values(paidTerms).reduce((sum, term) => sum + (term.amount || 0), 0);
-  const totalAcademicFees = studentData.feeStructureDetails?.total_amount || 0;
+  const originalAcademicFees = studentData.feeStructureDetails?.total_amount || 0;
+  const totalAcademicFees = studentData.feeStructureDetails?.components?.reduce((sum, c) => sum + (c.amount || 0), 0) || originalAcademicFees;
   const remainingPendingFees = Math.max(0, totalAcademicFees - totalPaidAmount);
+  const originalRemainingPendingFees = Math.max(0, originalAcademicFees - totalPaidAmount);
+  
+  let totalDiscount = 0;
+  let activeDiscountName = '';
+  
+  if (studentData.feeStructureDetails) {
+    totalDiscount = originalRemainingPendingFees - remainingPendingFees;
+    if (studentData.feeStructureDetails.components) {
+       const compWithDiscount = studentData.feeStructureDetails.components.find(c => c.discount_amount > 0);
+       if (compWithDiscount && compWithDiscount.discount_name) activeDiscountName = compWithDiscount.discount_name;
+    }
+  } 
+  
+  if (studentData.feeRecords && studentData.feeRecords.length > 0) {
+    const originalPending = studentData.feeRecords.reduce((sum, f) => sum + (f.original_fee || f.outstanding_amount || 0), 0);
+    // If we didn't calculate a discount from feeStructure, try feeRecords
+    if (!studentData.feeStructureDetails) {
+      totalDiscount = originalPending - studentData.fees;
+    }
+    // Always try to grab the discount name from feeRecords if it wasn't found
+    if (!activeDiscountName) {
+      const recWithDiscount = studentData.feeRecords.find(f => f.discount_amount > 0);
+      if (recWithDiscount && recWithDiscount.discount_name) {
+          activeDiscountName = recWithDiscount.discount_name;
+      }
+    }
+  }
 
   const profile = studentData.profile;
   const studentName = profile ? `${profile.first_name || ''} ${profile.middle_name || ''} ${profile.last_name || ''}`.trim() : userEmail;
@@ -762,14 +880,24 @@ const StudentDashboard = () => {
             <Col xs={24} sm={12} md={6}>
               <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
                 {studentData.permissions.fees ? (
-                  <Statistic 
-                    title="PENDING FEES" 
-                    value={studentData.feeStructureDetails ? remainingPendingFees : studentData.fees} 
-                    valueStyle={{ color: '#ff4d4f', fontWeight: 800 }} 
-                    prefix={<WalletOutlined />} 
-                    precision={2} 
-                    formatter={(value) => `₹${value.toLocaleString()}`} 
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <Statistic 
+                      title="PENDING FEES" 
+                      value={studentData.feeStructureDetails ? remainingPendingFees : studentData.fees} 
+                      valueStyle={{ color: '#ff4d4f', fontWeight: 800 }} 
+                      prefix={<WalletOutlined />} 
+                      precision={2} 
+                      formatter={(value) => `₹${value.toLocaleString()}`} 
+                    />
+                    {totalDiscount > 0 && (
+                      <div style={{ marginTop: 8, fontSize: 11, color: '#888' }}>
+                         <span style={{ textDecoration: 'line-through' }}>₹{(studentData.feeStructureDetails ? originalRemainingPendingFees : (studentData.fees + totalDiscount)).toLocaleString()}</span>
+                         <span style={{ marginLeft: 6, color: '#a855f7', fontWeight: 'bold', background: '#f3e8ff', padding: '2px 6px', borderRadius: 4 }}>
+                            -₹{totalDiscount.toLocaleString()} Off {activeDiscountName ? `(${activeDiscountName})` : ''}
+                         </span>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div style={{ textAlign: 'center', padding: '10px' }}><LockOutlined style={{ color: '#bfbfbf', fontSize: '24px' }} /><br/><Text type="secondary">Access Locked</Text></div>
                 )}
@@ -1004,7 +1132,19 @@ const StudentDashboard = () => {
                       return (
                         <List.Item extra={
                           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <span className="font-bold">₹{item.outstanding_amount.toLocaleString()}</span>
+                            <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                {item.discount_amount > 0 && (
+                                    <div style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 11, marginBottom: '-2px' }}>
+                                        ₹{item.original_fee?.toLocaleString()}
+                                    </div>
+                                )}
+                                <span className="font-bold">₹{item.outstanding_amount.toLocaleString()}</span>
+                                {item.discount_amount > 0 && (
+                                    <span style={{ color: '#a855f7', fontSize: 10, fontWeight: 700, background: '#f3e8ff', padding: '0 6px', borderRadius: 4, marginTop: 2 }}>
+                                        -₹{item.discount_amount.toLocaleString()} Off {item.discount_name ? `(${item.discount_name})` : ''}
+                                    </span>
+                                )}
+                            </div>
                             <Tag color={isPaid ? "green" : "red"} style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>{isPaid ? "PAID" : "UNPAID"}</Tag>
                             {!isPaid && (
                               <Button 
@@ -1050,7 +1190,19 @@ const StudentDashboard = () => {
                         return (
                           <List.Item extra={
                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                              <span className="font-bold">₹{item.amount.toLocaleString()}</span>
+                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                  {item.discount_amount > 0 && (
+                                      <div style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 11, marginBottom: '-2px' }}>
+                                          ₹{item.original_fee?.toLocaleString()}
+                                      </div>
+                                  )}
+                                  <span className="font-bold">₹{item.amount.toLocaleString()}</span>
+                                  {item.discount_amount > 0 && (
+                                      <span style={{ color: '#a855f7', fontSize: 10, fontWeight: 700, background: '#f3e8ff', padding: '0 6px', borderRadius: 4, marginTop: 2 }}>
+                                          -₹{item.discount_amount.toLocaleString()} Off {item.discount_name ? `(${item.discount_name})` : ''}
+                                      </span>
+                                  )}
+                              </div>
                               <Tag color={isPaid ? "green" : "red"} style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>{isPaid ? "PAID" : "UNPAID"}</Tag>
                               {!isPaid && (
                                 <Button 
@@ -1091,6 +1243,7 @@ const StudentDashboard = () => {
                   dataSource={paymentHistory}
                   rowKey="order_id"
                   pagination={{ pageSize: 5 }}
+                  scroll={{ x: 'max-content' }}
                   columns={[
                     { title: 'Semester', dataIndex: 'fees_category', key: 'semester' },
                     { 
@@ -1165,6 +1318,7 @@ const StudentDashboard = () => {
                   dataSource={(studentData.fullSchedule || []).filter(item => !selectedDayFilter || item.custom_day === selectedDayFilter)}
                   rowKey="name"
                   pagination={{ pageSize: 10 }}
+                  scroll={{ x: 'max-content' }}
                   columns={[
                     { title: 'ID', dataIndex: 'name', key: 'id', width: 120, ellipsis: true },
                     { 

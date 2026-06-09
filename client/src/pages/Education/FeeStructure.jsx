@@ -235,21 +235,27 @@ const FeeStructure = () => {
         }
     };
 
-    const handleSubmit = async () => {
+    const handleAction = async (action) => {
         if (!editingRecord) return;
-        if (!window.confirm(`Permanently Submit ${editingRecord}? This action cannot be undone.`)) return;
+        if (!window.confirm(`Are you sure you want to ${action} ${editingRecord}?`)) return;
         setSubmitting(true);
         try {
-            await API.put(`/api/resource/Fee Structure/${encodeURIComponent(editingRecord)}`, { docstatus: 1 });
-            api.success({ message: 'Fee Structure submitted successfully.' });
+            if (action === 'submit') {
+                const res = await API.get(`/api/resource/Fee Structure/${encodeURIComponent(editingRecord)}`);
+                const latestDoc = res.data.data;
+                await API.post('/api/method/frappe.client.submit', { doc: { ...latestDoc, doctype: 'Fee Structure' } });
+            } else {
+                await API.post('/api/method/frappe.client.cancel', { doctype: 'Fee Structure', name: editingRecord });
+            }
+            api.success({ message: `Fee Structure ${action === 'submit' ? 'submitted' : 'cancelled'} successfully.` });
             setView('list');
         } catch (err) {
-            console.error('Submit error:', err);
+            console.error(`${action} error:`, err);
             let errMsg = err.response?.data?._server_messages || err.response?.data?.message || err.message;
             if (typeof errMsg === 'string' && errMsg.startsWith('[')) {
                 try { const parsed = JSON.parse(errMsg); errMsg = parsed.map(m => { try { return JSON.parse(m).message; } catch { return m; } }).join('\n'); } catch { /* */ }
             }
-            api.error({ message: 'Submit Failed', description: typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg) });
+            api.error({ message: `${action === 'submit' ? 'Submit' : 'Cancel'} Failed`, description: typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg) });
         } finally {
             setSubmitting(false);
         }
@@ -325,8 +331,8 @@ const FeeStructure = () => {
                                                 <button className="text-blue-600 hover:underline font-semibold" onClick={() => { setEditingRecord(row.name); setView('form'); }}>{row.name}</button>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.docstatus === 1 ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
-                                                    {row.docstatus === 1 ? 'Submitted' : 'Draft'}
+                                                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.docstatus === 1 ? 'bg-green-50 text-green-600 border border-green-200' : row.docstatus === 2 ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-gray-50 text-gray-600 border border-gray-200'}`}>
+                                                    {row.docstatus === 1 ? 'Submitted' : row.docstatus === 2 ? 'Cancelled' : 'Draft'}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-gray-900 font-medium">{row.academic_year || '-'}</td>
@@ -358,8 +364,8 @@ const FeeStructure = () => {
                         {!editingRecord ? (
                             <span className="px-2 py-0.5 rounded text-[11px] uppercase bg-red-100 text-red-600 font-medium">Not Saved</span>
                         ) : (
-                            <span className={`px-2 py-0.5 rounded text-[11px] uppercase font-medium ${form.docstatus === 1 ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-600'}`}>
-                                {form.docstatus === 1 ? 'Submitted' : 'Draft'}
+                            <span className={`px-2 py-0.5 rounded text-[11px] uppercase font-medium ${form.docstatus === 1 ? 'bg-green-50 text-green-700' : form.docstatus === 2 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-600'}`}>
+                                {form.docstatus === 1 ? 'Submitted' : form.docstatus === 2 ? 'Cancelled' : 'Draft'}
                             </span>
                         )}
                     </div>
@@ -367,11 +373,14 @@ const FeeStructure = () => {
                         <button className="p-2 border border-blue-400 text-blue-600 rounded-md hover:bg-blue-50" onClick={() => setView('list')}>
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                         </button>
-                        {editingRecord && form.docstatus === 0 && (
-                            <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition shadow-sm" onClick={handleDelete}>Delete</button>
+                        {editingRecord && (form.docstatus === 0 || form.docstatus === 2) && (
+                            <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition shadow-sm disabled:opacity-50" onClick={handleDelete} disabled={submitting}>Delete</button>
+                        )}
+                        {editingRecord && form.docstatus === 1 && (
+                            <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition shadow-sm disabled:opacity-50" onClick={() => handleAction('cancel')} disabled={submitting}>Cancel</button>
                         )}
                         {editingRecord && form.docstatus === 0 && (
-                            <button className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition shadow-sm" onClick={handleSubmit} disabled={submitting}>
+                            <button className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition shadow-sm disabled:opacity-50" onClick={() => handleAction('submit')} disabled={submitting}>
                                 {submitting ? 'Submitting...' : 'Submit'}
                             </button>
                         )}

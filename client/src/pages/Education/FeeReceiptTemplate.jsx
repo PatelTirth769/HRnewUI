@@ -35,6 +35,10 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
         feeName = 'TUITION FEES',
         paymentMode = 'ONLINE PAYMENT',
         transactionNo = 'N/A',
+        original_fee = 0,
+        discount_amount = 0,
+        discount_name = '',
+        discount_percentage = 0
     } = receiptData;
 
     const {
@@ -94,8 +98,28 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
                 </thead>
                 <tbody>
                     <tr>
-                        <td style={{ padding: '15px 12px', border: '1px solid #e5e7eb', fontWeight: '500' }}>{feeName}</td>
-                        <td style={{ padding: '15px 12px', textAlign: 'right', border: '1px solid #e5e7eb', fontWeight: 'bold', fontSize: '16px' }}>{amount.toLocaleString('en-IN')}</td>
+                        <td style={{ padding: '15px 12px', border: '1px solid #e5e7eb', fontWeight: '500' }}>
+                            {feeName}
+                            {discount_amount > 0 && (
+                                <div style={{ fontSize: '11px', color: '#a855f7', marginTop: '4px', fontWeight: 'bold' }}>
+                                    Includes Discount: {discount_name || 'Special Discount'} 
+                                    {discount_percentage > 0 ? ` (${discount_percentage}%)` : ''}
+                                </div>
+                            )}
+                        </td>
+                        <td style={{ padding: '15px 12px', textAlign: 'right', border: '1px solid #e5e7eb', fontWeight: 'bold', fontSize: '16px' }}>
+                            {discount_amount > 0 && (
+                                <div style={{ textDecoration: 'line-through', color: '#9ca3af', fontSize: '12px' }}>
+                                    ₹ {original_fee.toLocaleString('en-IN')}
+                                </div>
+                            )}
+                            {discount_amount > 0 && (
+                                <div style={{ color: '#a855f7', fontSize: '12px', marginBottom: '4px' }}>
+                                    -₹ {discount_amount.toLocaleString('en-IN')}
+                                </div>
+                            )}
+                            ₹ {amount.toLocaleString('en-IN')}
+                        </td>
                     </tr>
                 </tbody>
                 <tfoot>

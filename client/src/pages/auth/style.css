@@ -58,20 +58,17 @@ input::placeholder {
 }
 
 .login-page-logo-bg {
-  position: absolute;
-  top: 5vh;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(42vw, 460px);
+  margin: 4vh auto 0;
+  width: min(25vw, 240px);
+  max-height: 28vh;
+  object-fit: contain;
   max-width: 90vw;
-  opacity: 0.9;
+  opacity: 1;
   pointer-events: none;
   user-select: none;
   z-index: 0;
   filter: drop-shadow(0 16px 40px rgba(0, 0, 0, 0.18));
 }
-
-/* Removed duplicate .login-page block */
 
 /* ─── Two-panel auth layout ─── */
 .auth-container-multi {
@@ -87,11 +84,9 @@ input::placeholder {
 .auth-container {
   flex: 1;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 2rem 1rem;
-  padding-top: 40vh;
-  /* Push card down to avoid covering top text */
+  padding: 1rem 1rem 1.5rem;
   position: relative;
   z-index: 1;
 }
@@ -99,18 +94,18 @@ input::placeholder {
 .auth-card {
   width: 420px;
   max-width: 92vw;
-  padding: 28px 32px;
+  padding: 24px 32px;
 }
 
 @media (max-width: 768px) {
   .login-page-logo-bg {
-    top: 8vh;
-    width: min(62vw, 330px);
-    opacity: 0.85;
+    margin: 6vh auto 0;
+    width: min(45vw, 220px);
+    opacity: 1;
   }
 
   .auth-container {
-    padding-top: 34vh;
+    padding-top: 1rem;
   }
 }
 
