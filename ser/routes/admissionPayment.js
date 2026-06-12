@@ -310,9 +310,21 @@ router.get('/history-all', async (req, res) => {
             .get();
 
         const history = [];
+        const regMap = {};
 
-        // Add all actual payments
-        payments.forEach(p => history.push(p));
+        // Build registration map for easy lookup
+        regSnapshot.forEach(doc => {
+            const reg = doc.data();
+            if (reg.registrationNo) {
+                regMap[reg.registrationNo] = reg.custom_board || '';
+            }
+        });
+
+        // Add all actual payments with board mapped from registrations
+        payments.forEach(p => {
+            p.board = regMap[p.registration_no] || '';
+            history.push(p);
+        });
 
         // Add unpaid registrations
         regSnapshot.forEach(doc => {
@@ -332,6 +344,7 @@ router.get('/history-all', async (req, res) => {
                     admission_no: '',
                     program: reg.program || '',
                     academic_year: reg.academic_year || '',
+                    board: reg.custom_board || '',
                     fee_name: 'Registration Fee',
                     fee_type: 'Registration',
                     amount: parseFloat(reg.feeAmount) || 0,

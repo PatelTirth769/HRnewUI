@@ -58,6 +58,7 @@ export default function ClassworkAssignment() {
     const [programs, setPrograms] = useState([]);
     const [studentGroups, setStudentGroups] = useState([]);
     const [subjects, setSubjects] = useState([]);
+    const [boards, setBoards] = useState([]);
     const [loadingMasters, setLoadingMasters] = useState(false);
 
     // Modal state
@@ -66,6 +67,7 @@ export default function ClassworkAssignment() {
     const [form] = Form.useForm();
 
     // Filter states
+    const [filterBoard, setFilterBoard] = useState('');
     const [filterProgram, setFilterProgram] = useState('');
     const [filterGroup, setFilterGroup] = useState('');
     const [filterSubject, setFilterSubject] = useState('');
@@ -101,15 +103,17 @@ export default function ClassworkAssignment() {
     const fetchMasters = async () => {
         setLoadingMasters(true);
         try {
-            const [pRes, sgRes, cRes] = await Promise.all([
+            const [pRes, sgRes, cRes, bRes] = await Promise.all([
                 API.get('/api/resource/Program?limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Student Group?fields=["name","program"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
-                API.get('/api/resource/Course?limit_page_length=None').catch(() => ({ data: { data: [] } }))
+                API.get('/api/resource/Course?limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Company?limit_page_length=None').catch(() => ({ data: { data: [] } }))
             ]);
             
             setPrograms(pRes.data?.data || []);
             setStudentGroups(sgRes.data?.data || []);
             setSubjects(cRes.data?.data || []);
+            setBoards(bRes.data?.data || []);
         } catch (error) {
             console.error('Error fetching masters:', error);
         } finally {
@@ -128,6 +132,7 @@ export default function ClassworkAssignment() {
             const payload = {
                 title: values.title,
                 description: values.description || '',
+                board: values.board || '',
                 program: values.program || '',
                 studentGroup: values.studentGroup || '',
                 subject: values.subject || '',
@@ -206,6 +211,7 @@ export default function ClassworkAssignment() {
         form.setFieldsValue({
             title: record.title,
             description: record.description,
+            board: record.board,
             program: record.program,
             studentGroup: record.studentGroup,
             subject: record.subject,
@@ -221,6 +227,7 @@ export default function ClassworkAssignment() {
     // Filter assignments
     const filteredAssignments = useMemo(() => {
         return assignments.filter(item => {
+            const matchesBoard = !filterBoard || item.board === filterBoard;
             const matchesProgram = !filterProgram || item.program === filterProgram;
             const matchesGroup = !filterGroup || item.studentGroup === filterGroup;
             const matchesSubject = !filterSubject || 
@@ -231,12 +238,13 @@ export default function ClassworkAssignment() {
                 item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 item.subject?.toLowerCase().includes(searchQuery.toLowerCase());
             
-            return matchesProgram && matchesGroup && matchesSubject && matchesStatus && matchesSearch;
+            return matchesBoard && matchesProgram && matchesGroup && matchesSubject && matchesStatus && matchesSearch;
         });
-    }, [assignments, filterProgram, filterGroup, filterSubject, filterStatus, searchQuery]);
+    }, [assignments, filterBoard, filterProgram, filterGroup, filterSubject, filterStatus, searchQuery]);
 
     // Reset all filters
     const handleClearFilters = () => {
+        setFilterBoard('');
         setFilterProgram('');
         setFilterGroup('');
         setFilterSubject('');
@@ -258,6 +266,7 @@ export default function ClassworkAssignment() {
             'Title': item.title,
             'Description': item.description,
             'Subject (Course)': item.subject || 'N/A',
+            'Board': item.board || 'Any',
             'Program': item.program || 'Any',
             'Student Group': item.studentGroup || 'Any',
             'Classwork Date': item.classworkDate,
@@ -312,6 +321,7 @@ export default function ClassworkAssignment() {
                         <span className="font-semibold">{record.subject || 'N/A'}</span>
                     </div>
                     <div className="text-[11px] text-gray-500">
+                        {record.board && <span className="mr-2 font-medium bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">Board: {record.board}</span>}
                         <span>Prog: {record.program || 'Any'}</span>
                         {record.studentGroup && <span className="ml-2 font-medium bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">Group: {record.studentGroup}</span>}
                     </div>
@@ -452,16 +462,32 @@ export default function ClassworkAssignment() {
                         </Button>
                     )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                     <div>
                         <Input 
-                            placeholder="Search by title/desc..." 
+                            placeholder="Search..." 
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             prefix={<SearchOutlined className="text-gray-400" />}
                             className="w-full"
                         />
                     </div>
+                    <div>
+                        <Select
+                            placeholder="Filter Board"
+                            className="w-full"
+                            value={filterBoard || undefined}
+                            onChange={val => setFilterBoard(val || '')}
+                            allowClear
+                            showSearch
+                            optionFilterProp="children"
+                        >
+                            {boards.map(b => (
+                                <Select.Option key={b.name} value={b.name}>{b.name}</Select.Option>
+                            ))}
+                        </Select>
+                    </div>
+
                     <div>
                         <Select
                             placeholder="Filter Program"
@@ -583,10 +609,25 @@ export default function ClassworkAssignment() {
                         />
                     </Form.Item>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Form.Item
+                            name="board"
+                            label="Board"
+                        >
+                            <Select 
+                                placeholder="Select Board" 
+                                showSearch
+                                optionFilterProp="children"
+                                allowClear
+                            >
+                                {boards.map(b => (
+                                    <Select.Option key={b.name} value={b.name}>{b.name}</Select.Option>
+                                ))}
+                            </Select>
+                        </Form.Item>
                         <Form.Item
                             name="program"
-                            label="Program"
+                            label="Program (Class)"
                             rules={[{ required: true, message: 'Please select Program' }]}
                         >
                             <Select 

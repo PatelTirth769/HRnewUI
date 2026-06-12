@@ -306,7 +306,9 @@ router.all('/:systemCode/*', async (req, res) => {
         }
 
         if (response.status >= 400) {
-            console.error(`ERP Proxy [${systemCode}] Error ${response.status} for ${targetUrl}:`, JSON.stringify(response.data, null, 2));
+            let shortMsg = response.data?._server_messages || response.data?.message || 'Check network panel for details';
+            if (typeof shortMsg === 'string' && shortMsg.length > 200) shortMsg = shortMsg.substring(0, 200) + '...';
+            console.error(`ERP Proxy [${systemCode}] Error ${response.status} for ${targetUrl} - ${shortMsg}`);
         }
 
         res.status(response.status).json(response.data);

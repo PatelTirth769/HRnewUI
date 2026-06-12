@@ -124,7 +124,7 @@ const StudentReportGenerationTool = () => {
                         </select>
                     </div>
                     <div>
-                        <label className={labelStyle}>Program *</label>
+                        <label className={labelStyle}>Program (Class) *</label>
                         <select className={inputStyle} value={form.program} onChange={v => setForm({...form, program: v.target.value})}>
                             <option value="">Select Program</option>
                             {masters.programs.map(p => <option key={p} value={p}>{p}</option>)}

@@ -93,7 +93,7 @@ export default function RegistrationReport() {
     const columns = [
         { title: 'Reg. Date', dataIndex: 'created_at', key: 'date', render: (val) => val?.toDate ? val.toDate().toLocaleDateString() : new Date(val).toLocaleDateString() },
         { title: 'Student Name', render: (_, r) => `${r.first_name} ${r.last_name}`, key: 'name' },
-        { title: 'Program', dataIndex: 'program', key: 'program' },
+        { title: 'Program (Class)', dataIndex: 'program', key: 'program' },
         { title: 'Receipt No', dataIndex: 'receiptNo', key: 'receipt' },
         { title: 'Amount', dataIndex: 'feeAmount', key: 'amount', render: (val, r) => `₹${val || 0} (${r.isFeePaid ? 'PAID' : 'UNPAID'})` },
 

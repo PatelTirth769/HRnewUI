@@ -119,7 +119,8 @@ const SalesInvoice = () => {
         if (!window.confirm(action === 'submit' ? 'Submit?' : 'Cancel?')) return;
         setSaving(true);
         try { const ep = action === 'submit' ? '/api/method/frappe.client.submit' : '/api/method/frappe.client.cancel';
-            await API.post(ep, { doc: { ...formData, doctype: 'Sales Invoice' } });
+            const payload = action === 'submit' ? { doc: { ...formData, doctype: 'Sales Invoice' } } : { doctype: 'Sales Invoice', name: editingRecord };
+            await API.post(ep, payload);
             notification.success({ message: `${action === 'submit' ? 'Submitted' : 'Cancelled'}.` }); setView('list');
         } catch (e) { const m = e.response?.data?._server_messages ? JSON.parse(e.response.data._server_messages)[0] : e.message; notification.error({ message: 'Failed', description: m }); }
         finally { setSaving(false); }

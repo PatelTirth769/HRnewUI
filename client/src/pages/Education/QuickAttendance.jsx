@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { notification } from 'antd';
 import API from '../../services/api';
 import * as XLSX from 'xlsx';
 
@@ -10,10 +9,12 @@ const QuickAttendance = () => {
     // Filter states
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedProgram, setSelectedProgram] = useState('');
+    const [selectedBoard, setSelectedBoard] = useState('');
     const [selectedGroup, setSelectedGroup] = useState('');
 
     // Dropdown data
     const [programs, setPrograms] = useState([]);
+    const [boards, setBoards] = useState([]);
     const [allStudentGroups, setAllStudentGroups] = useState([]);
     const [filteredGroups, setFilteredGroups] = useState([]);
 
@@ -30,19 +31,33 @@ const QuickAttendance = () => {
     // Track if data was fetched for current filters
     const [fetchedFor, setFetchedFor] = useState(null);
 
+    // ─── Custom Toast ───
+    const [toast, setToast] = useState(null); // { type: 'success'|'warning'|'error', title, desc }
+    const toastTimerRef = useRef(null);
+    const showToast = (type, title, desc) => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToast({ type, title, desc });
+        toastTimerRef.current = setTimeout(() => setToast(null), 5000);
+    };
+
     // ─── Fetch Programs & Student Groups on mount ───
     useEffect(() => {
         const fetchMasters = async () => {
             setLoadingMasters(true);
             try {
-                const [pRes, sgRes] = await Promise.all([
+                const [pRes, sgRes, bRes] = await Promise.all([
                     API.get('/api/resource/Program?limit_page_length=None').catch(() => ({ data: { data: [] } })),
-                    API.get('/api/resource/Student Group?fields=["name","program"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                    API.get('/api/resource/Student Group?fields=["name","program","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                    API.get('/api/resource/Company?limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 ]);
                 setPrograms(pRes.data.data?.map(d => ({ value: d.name, label: d.name })) || []);
-                const groups = sgRes.data.data?.map(d => ({ value: d.name, label: d.name, program: d.program })) || [];
+                const groups = sgRes.data.data?.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board })) || [];
                 setAllStudentGroups(groups);
                 setFilteredGroups(groups);
+                
+                const fetchedBoards = bRes.data.data?.map(c => c.name) || [];
+                const studentBoards = [...new Set(groups.map(g => g.custom_board).filter(Boolean))];
+                setBoards([...new Set([...fetchedBoards, ...studentBoards])].sort());
             } catch (err) {
                 console.error('Error fetching masters:', err);
             } finally {
@@ -52,19 +67,23 @@ const QuickAttendance = () => {
         fetchMasters();
     }, []);
 
-    // ─── Filter student groups when program changes ───
+    // ─── Filter student groups when program or board changes ───
     useEffect(() => {
+        let filtered = allStudentGroups;
         if (selectedProgram) {
-            setFilteredGroups(allStudentGroups.filter(g => g.program === selectedProgram));
-        } else {
-            setFilteredGroups(allStudentGroups);
+            filtered = filtered.filter(g => g.program === selectedProgram);
         }
-        // Reset group selection when program changes
+        if (selectedBoard) {
+            filtered = filtered.filter(g => g.custom_board === selectedBoard);
+        }
+        setFilteredGroups(filtered);
+        
+        // Reset group selection when filters change
         setSelectedGroup('');
         setStudents([]);
         setExistingMap({});
         setFetchedFor(null);
-    }, [selectedProgram, allStudentGroups]);
+    }, [selectedProgram, selectedBoard, allStudentGroups]);
 
     // ─── Clear students when date changes ───
     useEffect(() => {
@@ -160,15 +179,12 @@ const QuickAttendance = () => {
 
             const existingCount = Object.keys(existMap).length;
             if (existingCount > 0) {
-                notification.info({
-                    message: 'Existing Records Found',
-                    description: `${existingCount} student(s) already have attendance for ${date}. Their status has been pre-filled.`
-                });
+                showToast('info', 'Existing Records Found', `${existingCount} student(s) already have attendance for ${date}. Their status has been pre-filled.`);
             }
 
         } catch (err) {
             console.error('Error fetching students:', err);
-            notification.error({ message: 'Fetch Failed', description: 'Could not retrieve student list.' });
+            showToast('error', 'Fetch Failed', 'Could not retrieve student list.');
         } finally {
             setFetchingStudents(false);
         }
@@ -189,7 +205,7 @@ const QuickAttendance = () => {
     // ─── Download Attendance ───
     const handleDownloadAttendance = () => {
         if (students.length === 0) {
-            notification.warning({ message: 'No Data', description: 'There are no students to download.' });
+            showToast('warning', 'No Data', 'There are no students to download.');
             return;
         }
 
@@ -212,12 +228,17 @@ const QuickAttendance = () => {
 
         const filename = `Quick_Attendance_${selectedGroup || 'Group'}_${date}.xlsx`;
         XLSX.writeFile(wb, filename);
-        notification.success({ message: 'Download Started', description: `Successfully exported ${students.length} student attendance records.` });
+        showToast('success', 'Download Started', `Successfully exported ${students.length} student attendance records.`);
     };
 
     // ─── Save Attendance ───
     const handleSave = async () => {
         if (students.length === 0) return;
+
+        if (!fetchedFor || fetchedFor.group !== selectedGroup || fetchedFor.date !== date) {
+            showToast('warning', 'Validation Error', 'Please click "Get Students" to refresh the list for the selected Date and Group before saving.');
+            return;
+        }
 
         setSaving(true);
         setSaveProgress({ done: 0, total: students.length });
@@ -254,7 +275,7 @@ const QuickAttendance = () => {
             } catch (err) {
                 failCount++;
                 const errMsg = err.response?.data?._server_messages
-                    ? (() => { try { return JSON.parse(JSON.parse(err.response.data._server_messages)[0]).message; } catch(e) { return err.message; } })()
+                    ? (() => { try { return JSON.parse(JSON.parse(err.response.data._server_messages)[0]).message; } catch { return err.message; } })()
                     : err.response?.data?.message || err.message;
                 errors.push(`${s.student_name}: ${errMsg}`);
             }
@@ -262,25 +283,20 @@ const QuickAttendance = () => {
             setSaveProgress({ done: i + 1, total: students.length });
         }
 
+        const pCount = students.filter(s => s.status === 'Present').length;
+        const aCount = students.filter(s => s.status === 'Absent').length;
+
         if (failCount === 0) {
-            notification.success({
-                message: 'Attendance Saved',
-                description: `Successfully saved attendance for all ${successCount} students.`
-            });
+            showToast('success', 'Attendance Saved Successfully', `✅ Present: ${pCount}  |  ❌ Absent: ${aCount}`);
         } else if (successCount > 0) {
-            notification.warning({
-                message: 'Partially Saved',
-                description: `Saved: ${successCount}, Failed: ${failCount}. ${errors[0]}`
-            });
+            showToast('warning', 'Attendance Saved Partially', `Present: ${pCount}, Absent: ${aCount}. Failed: ${failCount} record(s). Issue: ${errors[0]}`);
         } else {
-            notification.error({
-                message: 'Save Failed',
-                description: `All ${failCount} records failed. ${errors[0]}`
-            });
+            showToast('error', 'Attendance Upload Failed', `Failed to upload ${failCount} record(s). Issue: ${errors[0]}`);
         }
 
         setSaving(false);
     };
+
 
     // ─── Counts ───
     const presentCount = students.filter(s => s.status === 'Present').length;
@@ -291,6 +307,57 @@ const QuickAttendance = () => {
 
     return (
         <div className="p-6 max-w-7xl mx-auto pb-40">
+
+            {/* ── Custom Toast ── */}
+            {toast && (
+                <div
+                    onClick={() => setToast(null)}
+                    style={{
+                        position: 'fixed',
+                        top: '24px',
+                        right: '24px',
+                        zIndex: 99999,
+                        minWidth: '320px',
+                        maxWidth: '420px',
+                        borderRadius: '10px',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                        padding: '16px 20px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '12px',
+                        animation: 'slideIn 0.3s ease',
+                        background:
+                            toast.type === 'success' ? '#f0fdf4' :
+                            toast.type === 'warning' ? '#fffbeb' :
+                            toast.type === 'error'   ? '#fef2f2' : '#eff6ff',
+                        border:
+                            toast.type === 'success' ? '1px solid #86efac' :
+                            toast.type === 'warning' ? '1px solid #fde68a' :
+                            toast.type === 'error'   ? '1px solid #fca5a5' : '1px solid #93c5fd',
+                    }}
+                >
+                    <span style={{ fontSize: '20px', lineHeight: '1', marginTop: '1px' }}>
+                        {toast.type === 'success' ? '✅' : toast.type === 'warning' ? '⚠️' : toast.type === 'error' ? '❌' : 'ℹ️'}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                        <div style={{
+                            fontWeight: '700',
+                            fontSize: '14px',
+                            color: toast.type === 'success' ? '#166534' : toast.type === 'warning' ? '#92400e' : toast.type === 'error' ? '#991b1b' : '#1e40af',
+                            marginBottom: '3px',
+                        }}>
+                            {toast.title}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#374151', lineHeight: '1.5' }}>
+                            {toast.desc}
+                        </div>
+                    </div>
+                    <span style={{ color: '#9ca3af', fontSize: '16px', lineHeight: '1' }}>×</span>
+                </div>
+            )}
+            <style>{`@keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+
             {/* Header */}
             <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
                 <div className="flex items-center gap-3">
@@ -361,7 +428,7 @@ const QuickAttendance = () => {
 
                     {/* Program */}
                     <div>
-                        <label className={labelStyle}>Program</label>
+                        <label className={labelStyle}>Program (Class)</label>
                         <select
                             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400 hover:border-gray-300 transition-colors bg-white"
                             style={{ height: '38px' }}
@@ -372,6 +439,23 @@ const QuickAttendance = () => {
                             <option value="">All Programs</option>
                             {programs.map(p => (
                                 <option key={p.value} value={p.value}>{p.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Board */}
+                    <div>
+                        <label className={labelStyle}>Board</label>
+                        <select
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400 hover:border-gray-300 transition-colors bg-white"
+                            style={{ height: '38px' }}
+                            value={selectedBoard}
+                            onChange={e => setSelectedBoard(e.target.value)}
+                            disabled={loadingMasters}
+                        >
+                            <option value="">All Boards</option>
+                            {boards.map(b => (
+                                <option key={b} value={b}>{b}</option>
                             ))}
                         </select>
                     </div>

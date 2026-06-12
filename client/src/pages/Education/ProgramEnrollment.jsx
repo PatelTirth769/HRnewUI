@@ -95,7 +95,7 @@ const ProgramEnrollment = () => {
 
     const fetchDropdowns = async () => {
         try {
-            const [sRes, pRes, yRes, tRes, cRes, hRes, bRes, csRes, fsRes] = await Promise.all([
+            const [sRes, pRes, yRes, tRes, cRes, hRes, bRes, csRes, fsRes, peRes] = await Promise.all([
                 API.get('/api/resource/Student?fields=["name","first_name","last_name","program"]&limit_page_length=None'),
                 API.get('/api/resource/Program?limit_page_length=None'),
                 API.get('/api/resource/Academic Year?limit_page_length=None'),
@@ -105,12 +105,23 @@ const ProgramEnrollment = () => {
                 API.get('/api/resource/Student Batch Name?limit_page_length=None'),
                 API.get('/api/resource/Course?limit_page_length=None'),
                 API.get('/api/resource/Fee Schedule?limit_page_length=None'),
+                API.get('/api/resource/Program Enrollment?fields=["student","program","docstatus"]&limit_page_length=None'),
             ]);
+
+            const enrollmentsData = peRes.data.data || [];
+            const allocatedMap = {};
+            enrollmentsData.forEach(e => {
+                if (e.docstatus === 1) {
+                    allocatedMap[e.student] = e.program;
+                }
+            });
+
             setDropdowns({
                 students: sRes.data.data?.map(d => ({
                     id: d.name,
                     name: `${d.first_name || ''} ${d.last_name || ''}`.trim(),
-                    program: d.program || ''
+                    program: d.program || '',
+                    allocatedProgram: allocatedMap[d.name] || null
                 })) || [],
                 programs: pRes.data.data?.map(d => d.name) || [],
                 academicYears: yRes.data.data?.map(d => d.name) || [],
@@ -281,10 +292,10 @@ const ProgramEnrollment = () => {
             } else {
                 // Batch enroll multiple students in parallel
                 await Promise.all(studentList.map(async (studentId) => {
-                    const payload = { ...form, student: studentId };
+                    const payload = { ...form, student: studentId, docstatus: 1 };
                     return API.post('/api/resource/Program Enrollment', payload);
                 }));
-                notification.success({ message: `Successfully enrolled ${studentList.length} student(s).` });
+                notification.success({ message: `Successfully enrolled and submitted ${studentList.length} student(s).` });
             }
             setView('list');
         } catch (err) {
@@ -299,13 +310,21 @@ const ProgramEnrollment = () => {
         setSaving(true);
         try {
             const ep = action === 'submit' ? '/api/method/frappe.client.submit' : '/api/method/frappe.client.cancel';
-            const payload = {
-                doc: {
-                    ...form,
+            let payload;
+            if (action === 'submit') {
+                payload = {
+                    doc: {
+                        ...form,
+                        doctype: 'Program Enrollment',
+                        name: editingRecord
+                    }
+                };
+            } else {
+                payload = {
                     doctype: 'Program Enrollment',
                     name: editingRecord
-                }
-            };
+                };
+            }
             await API.post(ep, payload);
             notification.success({ message: `Program Enrollment ${action === 'submit' ? 'submitted' : 'cancelled'} successfully.` });
             setView('list');
@@ -403,7 +422,7 @@ const ProgramEnrollment = () => {
                             />
                         </div>
                         <div className="flex flex-col gap-2">
-                            <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Program</label>
+                            <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Program (Class)</label>
                             <select
                                 value={filterProgram}
                                 onChange={(e) => setFilterProgram(e.target.value)}
@@ -463,7 +482,7 @@ const ProgramEnrollment = () => {
                             <tr>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">ID</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Student</th>
-                                <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Program</th>
+                                <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Program (Class)</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Date</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Academic Year</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Status</th>
@@ -553,11 +572,13 @@ const ProgramEnrollment = () => {
                     <button className="p-2 border border-gray-300 text-gray-600 rounded-md hover:bg-gray-50 transition" onClick={() => setView('list')}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                     </button>
+                    {editingRecord && (form.docstatus === 0 || form.docstatus === 2) && (
+                        <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition" onClick={triggerDelete}>
+                            Delete
+                        </button>
+                    )}
                     {editingRecord && form.docstatus === 0 && (
                         <>
-                            <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition" onClick={triggerDelete}>
-                                Delete
-                            </button>
                             <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition" onClick={handleSave} disabled={saving}>
                                 {saving ? 'Saving...' : 'Save'}
                             </button>
@@ -625,7 +646,7 @@ const ProgramEnrollment = () => {
                                                 <option value="">Select Student</option>
                                                 {dropdowns.students
                                                     .filter(s => !form.program || s.program === form.program)
-                                                    .map(s => <option key={s.id} value={s.id}>{s.id} - {s.name}</option>)
+                                                    .map(s => <option key={s.id} value={s.id}>{s.name || s.id}{s.allocatedProgram ? ` - Allocated - ${s.allocatedProgram}` : ''}</option>)
                                                 }
                                             </select>
                                         ) : (
@@ -640,13 +661,20 @@ const ProgramEnrollment = () => {
                                                 showSearch
                                                 optionFilterProp="children"
                                                 filterOption={(input, option) =>
-                                                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                                    (option?.searchStr ?? '').toLowerCase().includes(input.toLowerCase())
                                                 }
                                                 options={dropdowns.students
                                                     .filter(s => !form.program || s.program === form.program)
                                                     .map(s => ({
                                                         value: s.id,
-                                                        label: `${s.id} - ${s.name}`
+                                                        label: s.allocatedProgram ? (
+                                                            <span>
+                                                                {s.name || s.id} <span className="text-green-600 font-semibold ml-1">- Allocated - {s.allocatedProgram}</span>
+                                                            </span>
+                                                        ) : (
+                                                            <span>{s.name || s.id}</span>
+                                                        ),
+                                                        searchStr: `${s.name || s.id} ${s.allocatedProgram ? `Allocated ${s.allocatedProgram}` : ''}`
                                                     }))
                                                 }
                                             />
@@ -673,7 +701,7 @@ const ProgramEnrollment = () => {
                                 </div>
                                 <div className="space-y-6">
                                     <div>
-                                        <label className={labelStyle}>Program *</label>
+                                        <label className={labelStyle}>Program (Class) *</label>
                                         <select className={inputStyle} value={form.program} onChange={e => handleProgramChange(e.target.value)} disabled={!isEditable}>
                                             <option value="">Select Program</option>
                                             {dropdowns.programs.map(p => <option key={p} value={p}>{p}</option>)}

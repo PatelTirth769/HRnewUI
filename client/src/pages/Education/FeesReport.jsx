@@ -19,6 +19,7 @@ const FeesReport = () => {
     const [filters, setFilters] = useState({
         academic_year: '2026-27',
         program: '',
+        board: '',
         term: '',
         status: '',
         payment_mode: '',
@@ -92,7 +93,7 @@ const FeesReport = () => {
             try {
                 const fsListRes = await API.get('/api/resource/Fee Structure', {
                     params: {
-                        fields: JSON.stringify(["name", "program", "total_amount"]),
+                        fields: JSON.stringify(["name", "program", "total_amount", "company"]),
                         limit_page_length: 'None'
                     }
                 });
@@ -106,7 +107,7 @@ const FeesReport = () => {
                     try {
                         const res = await API.get(`/api/resource/Fee Structure/${encodeURIComponent(fs.name)}`);
                         if (res.data?.data) structureDetails[fs.name] = res.data.data;
-                    } catch (e) { /* skip */ }
+                    } catch { /* skip */ }
                 })
             );
 
@@ -115,7 +116,7 @@ const FeesReport = () => {
             try {
                 const stuRes = await API.get('/api/resource/Student', {
                     params: {
-                        fields: JSON.stringify(["name", "student_name", "program", "enabled"]),
+                        fields: JSON.stringify(["name", "student_name", "program", "enabled", "custom_board"]),
                         filters: JSON.stringify([["enabled", "=", 1]]),
                         limit_page_length: 'None'
                     }
@@ -139,13 +140,13 @@ const FeesReport = () => {
             // Priority: Program Enrollment > Student.program
             const studentInfoMap = {};
             allStudents.forEach(s => {
-                studentInfoMap[s.name] = { student_name: s.student_name || s.name, program: s.program || '' };
+                studentInfoMap[s.name] = { student_name: s.student_name || s.name, program: s.program || '', board: s.custom_board || '' };
             });
             // Override with Program Enrollment data (authoritative)
             enrollments.forEach(e => {
                 if (e.student && e.program) {
                     if (!studentInfoMap[e.student]) {
-                        studentInfoMap[e.student] = { student_name: e.student_name || e.student, program: e.program };
+                        studentInfoMap[e.student] = { student_name: e.student_name || e.student, program: e.program, board: '' };
                     } else {
                         studentInfoMap[e.student].program = e.program;
                         if (e.student_name) studentInfoMap[e.student].student_name = e.student_name;
@@ -176,6 +177,7 @@ const FeesReport = () => {
                 const studentId = fee.student;
                 const studentName = fee.student_name || studentInfoMap[studentId]?.student_name || 'Unknown';
                 const program = fee.program || studentInfoMap[studentId]?.program || '-';
+                const board = studentInfoMap[studentId]?.board || '-';
                 const termName = fee.academic_term || fee.name;
                 const key = `${studentId}_${termName}`;
                 const totalFee = parseFloat(fee.grand_total) || 0;
@@ -199,7 +201,7 @@ const FeesReport = () => {
                 }
 
                 // Find fee structure name
-                const feeStructureName = fee.fee_structure || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program) || '-';
+                const feeStructureName = fee.fee_structure || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program && (!board || board === '-' || structureDetails[k]?.company === board)) || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program) || '-';
 
                 if (!groupedRecords[key] || status === 'PAID') {
                     groupedRecords[key] = {
@@ -208,6 +210,7 @@ const FeesReport = () => {
                         student_id: studentId,
                         student_name: studentName,
                         program: program,
+                        board: board,
                         fee_structure: feeStructureName,
                         academic_term: termName,
                         academic_year: fee.academic_year || '-',
@@ -245,6 +248,7 @@ const FeesReport = () => {
                     student_id: p.student_id,
                     student_name: p.student_name || studentInfoMap[p.student_id]?.student_name || 'Unknown',
                     program: programName,
+                    board: studentInfoMap[p.student_id]?.board || '-',
                     fee_structure: fsName,
                     academic_term: termName,
                     academic_year: '-',
@@ -259,19 +263,12 @@ const FeesReport = () => {
             });
 
             // Generate rows from Student + Fee Structure components for students with NO Fees/Payment records
-            // Build a map: program -> fee structure name
-            const programToStructure = {};
-            Object.entries(structureDetails).forEach(([fsName, fsData]) => {
-                if (fsData.program) {
-                    programToStructure[fsData.program] = fsName;
-                }
-            });
-
             allStudents.forEach(student => {
                 const studentId = student.name;
                 const studentName = studentInfoMap[studentId]?.student_name || student.student_name || studentId;
                 const program = studentInfoMap[studentId]?.program || student.program || '';
-                const fsName = programToStructure[program];
+                const board = studentInfoMap[studentId]?.board || student.custom_board || '-';
+                const fsName = Object.keys(structureDetails).find(k => structureDetails[k]?.program === program && (!board || board === '-' || structureDetails[k]?.company === board)) || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program);
 
                 // If student has a fee structure with components, generate term-wise rows
                 if (fsName && structureDetails[fsName]) {
@@ -308,6 +305,7 @@ const FeesReport = () => {
                             student_id: studentId,
                             student_name: studentName,
                             program: program || '-',
+                            board: board,
                             fee_structure: fsName,
                             academic_term: termName,
                             academic_year: '-',
@@ -330,6 +328,7 @@ const FeesReport = () => {
                             student_id: studentId,
                             student_name: studentName,
                             program: program || 'Not Assigned',
+                            board: board,
                             fee_structure: '-',
                             academic_term: '-',
                             academic_year: '-',
@@ -365,6 +364,7 @@ const FeesReport = () => {
             data = data.filter(s => s.student_name.toLowerCase().includes(q) || s.student_id.toLowerCase().includes(q));
         }
         if (filters.program) data = data.filter(s => s.program === filters.program);
+        if (filters.board) data = data.filter(s => s.board === filters.board);
         if (filters.term) data = data.filter(s => s.academic_term === filters.term);
         if (filters.status === 'PAID') data = data.filter(s => s.status === 'PAID');
         else if (filters.status === 'UNPAID') data = data.filter(s => s.status !== 'PAID');
@@ -396,14 +396,14 @@ const FeesReport = () => {
         totalRecords: filteredData.length,
     }), [filteredData]);
 
-    const clearAllFilters = () => setFilters({ academic_year: '2026-27', program: '', term: '', status: '', payment_mode: '', student_search: '', date_range: null });
+    const clearAllFilters = () => setFilters({ academic_year: '2026-27', program: '', board: '', term: '', status: '', payment_mode: '', student_search: '', date_range: null });
 
-    const activeFilterCount = [filters.program, filters.term, filters.status, filters.payment_mode, filters.student_search, filters.date_range].filter(Boolean).length;
+    const activeFilterCount = [filters.program, filters.board, filters.term, filters.status, filters.payment_mode, filters.student_search, filters.date_range].filter(Boolean).length;
 
     const exportCSV = () => {
-        const headers = ['Student Name', 'Student ID', 'Program', 'Fee Structure', 'Term', 'Total Fee', 'Paid Amount', 'Outstanding', 'Status', 'Paid Date', 'Receipt No', 'Payment Mode'];
+        const headers = ['Student Name', 'Student ID', 'Program', 'Board', 'Fee Structure', 'Term', 'Total Fee', 'Paid Amount', 'Outstanding', 'Status', 'Paid Date', 'Receipt No', 'Payment Mode'];
         const rows = filteredData.map(r => [
-            r.student_name, r.student_id, r.program, r.fee_structure, r.academic_term,
+            r.student_name, r.student_id, r.program, r.board, r.fee_structure, r.academic_term,
             r.total_fee, r.paid_amount, r.outstanding, r.status,
             r.paid_date ? dayjs(r.paid_date).format('DD-MM-YYYY HH:mm') : '-',
             r.receipt_no, r.payment_mode
@@ -429,10 +429,11 @@ const FeesReport = () => {
             sorter: (a, b) => (a.student_name || '').localeCompare(b.student_name || ''),
         },
         {
-            title: 'PROGRAM', key: 'program_info', ellipsis: true,
+            title: 'PROGRAM & BOARD', key: 'program_info', ellipsis: true,
             render: (_, r) => (
                 <div style={{ minWidth: 0 }}>
                     <Tag color="cyan" style={{ margin: 0, fontWeight: 600 }}>{r.program}</Tag>
+                    {r.board && r.board !== '-' && <Tag color="geekblue" style={{ margin: '0 0 0 4px', fontWeight: 600 }}>{r.board}</Tag>}
                     <div style={{ fontSize: 10, color: '#64748b', fontWeight: 500, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.fee_structure}</div>
                 </div>
             ),
@@ -485,6 +486,12 @@ const FeesReport = () => {
         return Array.from(terms).sort();
     }, [allData]);
 
+    const dataBoards = useMemo(() => {
+        const boards = new Set();
+        allData.forEach(r => { if (r.board && r.board !== '-') boards.add(r.board); });
+        return Array.from(boards).sort();
+    }, [allData]);
+
     const dataPrograms = useMemo(() => {
         const progs = new Set();
         allData.forEach(r => { if (r.program && r.program !== '-') progs.add(r.program); });
@@ -492,11 +499,14 @@ const FeesReport = () => {
     }, [allData]);
 
     const dataStudents = useMemo(() => {
-        const source = filters.program ? allData.filter(r => r.program === filters.program) : allData;
+        let source = allData;
+        if (filters.program) source = source.filter(r => r.program === filters.program);
+        if (filters.board) source = source.filter(r => r.board === filters.board);
+        
         const map = new Map();
         source.forEach(r => { if (!map.has(r.student_id)) map.set(r.student_id, r.student_name); });
         return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-    }, [allData, filters.program]);
+    }, [allData, filters.program, filters.board]);
 
     return (
         <div style={{ padding: '32px', maxWidth: 1700, margin: '0 auto' }}>
@@ -556,9 +566,15 @@ const FeesReport = () => {
                             </Select>
                         </Col>
                         <Col xs={24} sm={12} lg={4}>
-                            <label style={labelStyle}>Program</label>
+                            <label style={labelStyle}>Program (Class)</label>
                             <Select style={{ width: '100%' }} placeholder="All Programs" allowClear value={filters.program || undefined} onChange={v => setFilters(p => ({ ...p, program: v || '', student_search: '' }))}>
                                 {(dropdowns.programs.length > 0 ? dropdowns.programs : dataPrograms).map(p => <Option key={p} value={p}>{p}</Option>)}
+                            </Select>
+                        </Col>
+                        <Col xs={24} sm={12} lg={4}>
+                            <label style={labelStyle}>Board</label>
+                            <Select style={{ width: '100%' }} placeholder="All Boards" allowClear value={filters.board || undefined} onChange={v => setFilters(p => ({ ...p, board: v || '', student_search: '' }))}>
+                                {dataBoards.map(b => <Option key={b} value={b}>{b}</Option>)}
                             </Select>
                         </Col>
                         <Col xs={24} sm={12} lg={3}>

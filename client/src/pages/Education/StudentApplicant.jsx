@@ -313,7 +313,7 @@ const StudentApplicant = () => {
                             <tr>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">ID</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Applicant Name</th>
-                                <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Program</th>
+                                <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Program (Class)</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Status</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Applied On</th>
                             </tr>
@@ -435,7 +435,7 @@ const StudentApplicant = () => {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className={labelStyle}>Program *</label>
+                                            <label className={labelStyle}>Program (Class) *</label>
                                             <select className={inputStyle} value={form.program} onChange={e => updateField('program', e.target.value)}>
                                                 <option value="">Select Program</option>
                                                 {dropdowns.programs.map(p => <option key={p} value={p}>{p}</option>)}
@@ -585,7 +585,7 @@ const StudentApplicant = () => {
                                                     <th className="px-3 py-2.5 text-left w-12 text-gray-400 font-normal">No.</th>
                                                     <th className="px-3 py-2.5 text-left">Full Name</th>
                                                     <th className="px-3 py-2.5 text-left">Gender</th>
-                                                    <th className="px-3 py-2.5 text-left">Program</th>
+                                                    <th className="px-3 py-2.5 text-left">Program (Class)</th>
                                                     <th className="px-3 py-2.5 text-left">Date of Birth</th>
                                                     <th className="px-3 py-2 text-center w-10"></th>
                                                 </tr>

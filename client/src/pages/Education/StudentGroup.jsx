@@ -28,6 +28,7 @@ const emptyForm = () => ({
     academic_term: '',
     group_based_on: '',
     program: '',
+    custom_board: '',
     student_group_name: '',
     batch: '',
     course: '',
@@ -46,8 +47,10 @@ const StudentGroup = () => {
 
     // List states
     const [groups, setGroups] = useState([]);
+    const [studentCountMap, setStudentCountMap] = useState({}); // { groupName: count }
     const [loadingList, setLoadingList] = useState(true);
     const [search, setSearch] = useState('');
+    const [filterBoard, setFilterBoard] = useState('');
 
     // Form states
     const [activeTab, setActiveTab] = useState('Details');
@@ -60,6 +63,7 @@ const StudentGroup = () => {
     const [academicTerms, setAcademicTerms] = useState([]);
     const [programs, setPrograms] = useState([]);
     const [batches, setBatches] = useState([]);
+    const [boards, setBoards] = useState([]);
     const [studentCategories, setStudentCategories] = useState([]);
     const [instructorsList, setInstructorsList] = useState([]);
     const [studentsList, setStudentsList] = useState([]);
@@ -87,7 +91,11 @@ const StudentGroup = () => {
         if (view === 'form') {
             const fetchFilteredStudents = async () => {
                 if (!form.academic_year) {
-                    setFilteredStudentsList(studentsList);
+                    let fallbackList = studentsList;
+                    if (form.custom_board) {
+                        fallbackList = fallbackList.filter(s => s.custom_board === form.custom_board);
+                    }
+                    setFilteredStudentsList(fallbackList);
                     return;
                 }
                 try {
@@ -112,6 +120,13 @@ const StudentGroup = () => {
                         enrolled = peStudents;
                     }
 
+                    // Apply Board Filter locally
+                    if (form.custom_board) {
+                        const boardMap = {};
+                        studentsList.forEach(s => { boardMap[s.name] = s.custom_board; });
+                        enrolled = enrolled.filter(s => boardMap[s.student] === form.custom_board);
+                    }
+
                     if (enrolled.length > 0) {
                         setFilteredStudentsList(enrolled.map(s => ({
                             name: s.student,
@@ -122,25 +137,62 @@ const StudentGroup = () => {
                     }
                 } catch (err) {
                     console.error("Error fetching filtered students:", err);
-                    setFilteredStudentsList(studentsList);
+                    let fallbackList = studentsList;
+                    if (form.custom_board) {
+                        fallbackList = fallbackList.filter(s => s.custom_board === form.custom_board);
+                    }
+                    setFilteredStudentsList(fallbackList);
                 }
             };
             fetchFilteredStudents();
         } else {
             setFilteredStudentsList([]);
         }
-    }, [form.academic_year, form.academic_term, form.program, form.batch, form.student_category, form.course, form.group_based_on, studentsList, view]);
+    }, [form.academic_year, form.academic_term, form.program, form.batch, form.student_category, form.course, form.group_based_on, form.custom_board, studentsList, view]);
 
     const fetchGroups = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Student Group?fields=["name","student_group_name","academic_year","academic_term","group_based_on","program","batch","max_strength","disabled","custom_class_teacher"]&limit_page_length=None&order_by=modified desc';
+            const url = '/api/resource/Student Group?fields=["name","student_group_name","academic_year","academic_term","group_based_on","program","custom_board","batch","max_strength","disabled","custom_class_teacher"]&limit_page_length=None&order_by=modified desc';
             const response = await API.get(url);
-            setGroups(response.data.data || []);
+            const groupData = response.data.data || [];
+            setGroups(groupData);
+
+            // Fetch student counts per group asynchronously by fetching the individual records
+            // We do this in the background so it doesn't block the list render
+            fetchStudentCounts(groupData);
+
+            if (boards.length === 0) {
+                const compRes = await API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } }));
+                if (compRes.data?.data) {
+                    setBoards(compRes.data.data.map(c => c.name));
+                }
+            }
         } catch (err) {
             console.error('Error fetching student groups:', err);
         } finally {
             setLoadingList(false);
+        }
+    };
+
+    const fetchStudentCounts = async (groupData) => {
+        try {
+            // Fetch up to 50 groups to avoid overloading the server if the list is huge
+            const groupsToFetch = groupData.slice(0, 100);
+            const countPromises = groupsToFetch.map(g => 
+                API.get(`/api/resource/Student Group/${encodeURIComponent(g.name)}`)
+                   .then(res => ({ name: g.name, count: res.data.data?.students?.length || 0 }))
+                   .catch(() => ({ name: g.name, count: 0 }))
+            );
+            
+            const results = await Promise.all(countPromises);
+            const countMap = {};
+            results.forEach(r => {
+                countMap[r.name] = r.count;
+            });
+            setStudentCountMap(countMap);
+        } catch (err) {
+            console.error('Error fetching student counts:', err);
         }
     };
 
@@ -150,7 +202,7 @@ const StudentGroup = () => {
             return { data: { data: [] } };
         });
         try {
-            const [yearRes, termRes, programRes, batchRes, categoryRes, instructorRes, courseRes, studentRes] = await Promise.all([
+            const [yearRes, termRes, programRes, batchRes, categoryRes, instructorRes, courseRes, studentRes, boardRes] = await Promise.all([
                 safeGet('/api/resource/Academic Year?fields=["name"]&limit_page_length=None&order_by=name desc'),
                 safeGet('/api/resource/Academic Term?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 safeGet('/api/resource/Program?fields=["name"]&limit_page_length=None&order_by=name asc'),
@@ -158,18 +210,21 @@ const StudentGroup = () => {
                 safeGet('/api/resource/Student Category?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 safeGet('/api/resource/Instructor?fields=["name","instructor_name"]&limit_page_length=None&order_by=name asc'),
                 safeGet('/api/resource/Course?fields=["name"]&limit_page_length=None&order_by=name asc'),
-                safeGet('/api/resource/Student?fields=["name","first_name","last_name"]&limit_page_length=None&order_by=name asc'),
+                safeGet('/api/resource/Student?fields=["name","first_name","last_name","custom_board"]&limit_page_length=None&order_by=name asc'),
+                safeGet('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc'),
             ]);
             setAcademicYears((yearRes.data.data || []).map(y => y.name));
             setAcademicTerms((termRes.data.data || []).map(t => t.name));
             setPrograms((programRes.data.data || []).map(p => p.name));
             setBatches((batchRes.data.data || []).map(b => b.name));
+            setBoards((boardRes.data.data || []).map(b => b.name));
             setStudentCategories((categoryRes.data.data || []).map(c => c.name));
             setInstructorsList((instructorRes.data.data || []).map(i => ({ name: i.name, instructor_name: i.instructor_name || i.name })));
             setCoursesList((courseRes.data.data || []).map(c => c.name));
             setStudentsList((studentRes.data.data || []).map(s => ({
                 name: s.name,
-                student_name: `${s.first_name || ''} ${s.last_name || ''}`.trim()
+                student_name: `${s.first_name || ''} ${s.last_name || ''}`.trim(),
+                custom_board: s.custom_board || ''
             })));
         } catch (err) {
             console.error('Error fetching dropdown data:', err);
@@ -186,6 +241,7 @@ const StudentGroup = () => {
                 academic_term: d.academic_term || '',
                 group_based_on: d.group_based_on || '',
                 program: d.program || '',
+                custom_board: d.custom_board || '',
                 student_group_name: d.student_group_name || '',
                 batch: d.batch || '',
                 course: d.course || '',
@@ -421,6 +477,7 @@ const StudentGroup = () => {
 
     if (view === 'list') {
         const filtered = groups.filter(g => {
+            if (filterBoard && g.custom_board !== filterBoard) return false;
             if (!search) return true;
             const q = search.toLowerCase();
             return (
@@ -428,12 +485,17 @@ const StudentGroup = () => {
                 (g.student_group_name || '').toLowerCase().includes(q) ||
                 (g.academic_year || '').toLowerCase().includes(q) ||
                 (g.program || '').toLowerCase().includes(q) ||
+                (g.custom_board || '').toLowerCase().includes(q) ||
                 (g.custom_class_teacher || '').toLowerCase().includes(q)
             );
         });
 
-        const hasActiveFilters = !!search;
-        const clearFilters = () => setSearch('');
+        const filterOptions = boards.length > 0 ? boards : [...new Set(groups.map(g => g.custom_board).filter(Boolean))];
+        const hasActiveFilters = !!search || !!filterBoard;
+        const clearFilters = () => {
+            setSearch('');
+            setFilterBoard('');
+        };
 
         return (
             <div className="p-6">
@@ -451,6 +513,10 @@ const StudentGroup = () => {
 
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
                     <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-64" placeholder="Search ID, Name, Year or Program..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <select className="border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" value={filterBoard} onChange={(e) => setFilterBoard(e.target.value)}>
+                        <option value="">All Boards</option>
+                        {filterOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
                     {hasActiveFilters && (
                         <button className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1" onClick={clearFilters}>
                             ✕ Clear Filters
@@ -468,7 +534,8 @@ const StudentGroup = () => {
                                 <th className="px-4 py-3 font-medium text-gray-600">Student Group Name</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Based on</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Academic Year</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">Program</th>
+                                <th className="px-4 py-3 font-medium text-gray-600">Program (Class)</th>
+                                <th className="px-4 py-3 font-medium text-gray-600">Board</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Class Teacher</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 text-right">Max</th>
                             </tr>
@@ -496,10 +563,18 @@ const StudentGroup = () => {
                                                 {row.disabled ? 'Disabled' : 'Enabled'}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-gray-900 font-medium">{row.student_group_name || '-'}</td>
+                                        <td className="px-4 py-3 text-gray-900 font-medium">
+                                            {row.student_group_name || '-'}
+                                            <span className="ml-1.5 text-[11px] text-gray-400 font-normal">
+                                                ({studentCountMap[row.name] || 0})
+                                            </span>
+                                        </td>
                                         <td className="px-4 py-3 text-gray-600">{row.group_based_on || '-'}</td>
                                         <td className="px-4 py-3 text-gray-600">{row.academic_year || '-'}</td>
                                         <td className="px-4 py-3 text-gray-600">{row.program || '-'}</td>
+                                        <td className="px-4 py-3 text-gray-600">
+                                            {row.custom_board ? <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-semibold">{row.custom_board}</span> : '-'}
+                                        </td>
                                         <td className="px-4 py-3 text-gray-600">{row.custom_class_teacher || '-'}</td>
                                         <td className="px-4 py-3 text-gray-600 text-right">{row.max_strength || '0'}</td>
                                     </tr>
@@ -598,10 +673,17 @@ const StudentGroup = () => {
                                     </div>
                                 )}
                                 <div>
-                                    <label className={labelStyle}>Program</label>
+                                    <label className={labelStyle}>Program (Class)</label>
                                     <select className={inputStyle} value={form.program} onChange={e => updateField('program', e.target.value)}>
                                         <option value="">Select Program...</option>
                                         {programs.map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className={labelStyle}>Board</label>
+                                    <select className={inputStyle} value={form.custom_board} onChange={e => updateField('custom_board', e.target.value)}>
+                                        <option value="">Select Board...</option>
+                                        {boards.map(b => <option key={b} value={b}>{b}</option>)}
                                     </select>
                                 </div>
                                 <div>
@@ -697,7 +779,7 @@ const StudentGroup = () => {
                                                                 )}
                                                             >
                                                                 {filteredStudentsList.map(sl => (
-                                                                    <Option key={sl.name} value={sl.name}>{sl.name} - {sl.student_name}</Option>
+                                                                    <Option key={sl.name} value={sl.name}>{sl.student_name || sl.name}</Option>
                                                                 ))}
                                                             </Select>
                                                         </td>
@@ -752,7 +834,7 @@ const StudentGroup = () => {
                                             optionFilterProp="children"
                                         >
                                             {filteredStudentsList.map(sl => (
-                                                <Option key={sl.name} value={sl.name}>{sl.name} - {sl.student_name}</Option>
+                                                <Option key={sl.name} value={sl.name}>{sl.student_name || sl.name}</Option>
                                             ))}
                                         </Select>
                                     </div>

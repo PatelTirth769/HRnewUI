@@ -196,7 +196,7 @@ const StudentLog = () => {
                                 <th className="px-4 py-3 font-medium text-gray-600">Type</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Date</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Academic Year</th>
-                                <th className="px-4 py-3 font-medium text-gray-600">Program</th>
+                                <th className="px-4 py-3 font-medium text-gray-600">Program (Class)</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Batch</th>
                             </tr>
                         </thead>
@@ -302,7 +302,7 @@ const StudentLog = () => {
                         <input type="date" className={inputStyle} value={form.date} onChange={e => updateField('date', e.target.value)} />
                     </div>
                     <div>
-                        <label className={labelStyle}>Program</label>
+                        <label className={labelStyle}>Program (Class)</label>
                         <select className={inputStyle} value={form.program} onChange={e => updateField('program', e.target.value)}>
                             <option value="">Select Program...</option>
                             {programs.map(p => <option key={p} value={p}>{p}</option>)}

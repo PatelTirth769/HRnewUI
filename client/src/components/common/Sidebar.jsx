@@ -374,8 +374,10 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                             // If no items left after filtering, and this is NOT a dynamic module (or it's Firebase and explicitly empty)
                             if (filteredItems.length === 0 && activeModule !== 'transport') return null;
 
+                            const isDisabled = section.disabled;
+
                             return (
-                                <div key={section.title} className="bg-white rounded-xl overflow-hidden border border-gray-50 shadow-sm">
+                                <div key={section.title} className={`bg-white rounded-xl overflow-hidden border border-gray-50 shadow-sm ${isDisabled ? 'opacity-50 blur-[1.5px] pointer-events-none select-none grayscale' : ''}`}>
                                     <button
                                         onClick={() => toggleSection(section.title)}
                                         className={`w-full flex items-center gap-3 px-4 py-3.5 text-sm font-bold transition-all duration-200 ${expandedSections[section.title]
@@ -405,10 +407,12 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                                             )}
                                             {filteredItems.map((item) => {
                                                 const isActive = location.pathname === item.path;
+                                                const isItemDisabled = item.disabled;
                                                 return (
                                                     <div
                                                         key={item.label}
                                                         onClick={() => {
+                                                            if (isItemDisabled) return;
                                                             console.log('Sidebar: Navigating to', item.path);
                                                             navigate(item.path);
                                                             onClose();
@@ -420,6 +424,7 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                                                                 ? 'bg-white text-blue-700 shadow-sm border border-blue-100 ring-1 ring-blue-50'
                                                                 : 'text-gray-500 hover:bg-white hover:text-gray-900 border border-transparent'
                                                             }
+                            ${isItemDisabled ? 'opacity-50 blur-[1px] pointer-events-none select-none grayscale' : ''}
                           `}
                                                     >
                                                         {isActive && <div className="absolute left-0 w-1 h-4 bg-blue-600 rounded-full" />}

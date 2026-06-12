@@ -303,8 +303,11 @@ const FeeStructure = () => {
                         </div>
                     </div>
 
-                    <div className="mb-4">
-                        <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-64" placeholder="Search Program, Year or ID..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <div className="flex items-center gap-3 mb-4 flex-wrap">
+                        <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-80 shadow-sm focus:ring-1 focus:ring-blue-400" placeholder="Search Program, Year or ID..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                        <div className="ml-auto text-xs text-gray-400 font-medium tracking-wide uppercase">
+                            {!loadingList && `${filtered.length} Total Fee Structures`}
+                        </div>
                     </div>
 
                     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
@@ -314,7 +317,7 @@ const FeeStructure = () => {
                                     <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">ID</th>
                                     <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Status</th>
                                     <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Academic Year</th>
-                                    <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Program</th>
+                                    <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Program (Class)</th>
                                     <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Academic Term</th>
                                     <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Student Category</th>
                                 </tr>
@@ -400,7 +403,7 @@ const FeeStructure = () => {
                                 <input type="text" className={inputStyle} value={form.naming_series} onChange={e => updateField('naming_series', e.target.value)} disabled={!isEditable} />
                             </div>
                             <div>
-                                <label className={labelStyle}>Program *</label>
+                                <label className={labelStyle}>Program (Class) *</label>
                                 <select className={inputStyle} value={form.program} onChange={e => updateField('program', e.target.value)} disabled={!isEditable}>
                                     <option value="">Select Program</option>
                                     {dropdowns.programs.map(p => <option key={p} value={p}>{p}</option>)}
@@ -496,7 +499,7 @@ const FeeStructure = () => {
                             </select>
                         </div>
                         <div>
-                            <label className={labelStyle}>Company</label>
+                            <label className={labelStyle}>Company (Board)</label>
                             <select className={inputStyle} value={form.company} onChange={e => updateField('company', e.target.value)} disabled={!isEditable}>
                                 <option value="">Select Company</option>
                                 {dropdowns.companies.map(c => <option key={c} value={c}>{c}</option>)}

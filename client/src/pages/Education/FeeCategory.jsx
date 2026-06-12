@@ -258,7 +258,7 @@ const FeeCategory = () => {
                             <thead className="bg-gray-50 text-gray-600 border-b">
                                 <tr>
                                     <th className="px-3 py-2 text-left w-12 font-normal text-gray-400">No.</th>
-                                    <th className="px-3 py-2 text-left">Company *</th>
+                                    <th className="px-3 py-2 text-left">Company (Board) *</th>
                                     <th className="px-3 py-2 text-left">Default Income Account</th>
                                     <th className="px-3 py-2 text-left">Default Cost Center</th>
                                     <th className="px-3 py-2 text-center w-10"></th>

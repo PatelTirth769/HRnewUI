@@ -3,16 +3,50 @@ import { Table, Dropdown, Menu, notification } from 'antd';
 import { ReloadOutlined, MoreOutlined } from '@ant-design/icons';
 import API from '../../services/api';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
 
 export default function AbsentStudentReport() {
     const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
+    const [selectedBoard, setSelectedBoard] = useState('All');
+    const [boards, setBoards] = useState([]);
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState([]);
     const [columns, setColumns] = useState([]);
     const [executionTime, setExecutionTime] = useState('0.000000');
+    
+    const [studentBoardMap, setStudentBoardMap] = useState({});
 
     useEffect(() => {
-        handleGenerate();
+        const fetchMasters = async () => {
+            try {
+                const [cRes, sRes, sgRes] = await Promise.all([
+                    API.get('/api/resource/Company?limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                    API.get('/api/resource/Student?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                    API.get('/api/resource/Student Group?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } }))
+                ]);
+                
+                const groupBoardMap = {};
+                sgRes.data.data?.forEach(sg => {
+                    groupBoardMap[sg.name] = sg.custom_board || '';
+                });
+
+                const boardMap = {};
+                const studentBoards = new Set();
+                sRes.data.data?.forEach(s => {
+                    boardMap[s.name] = s.custom_board || '';
+                    if (s.custom_board) studentBoards.add(s.custom_board);
+                });
+                setStudentBoardMap({ student: boardMap, group: groupBoardMap });
+                
+                const companyBoards = cRes.data.data?.map(c => c.name) || [];
+                setBoards([...new Set([...companyBoards, ...Array.from(studentBoards)])].sort());
+            } catch (err) {
+                console.error('Failed to fetch masters:', err);
+            }
+        };
+        fetchMasters().then(() => {
+            handleGenerate();
+        });
     }, []);
 
     const handleGenerate = async () => {
@@ -37,15 +71,47 @@ export default function AbsentStudentReport() {
                             <div className="h-4 bg-[#f1f3f5] rounded w-full border border-gray-100"></div>
                         </div>
                     ),
+                    _label: label,
                     dataIndex: colKey,
                     key: colKey,
                     sorter: (a, b) => (a[colKey] || '').localeCompare(b[colKey] || ''),
                     render: (text) => <span className={colKey === 'student' ? 'font-semibold text-gray-900' : 'text-gray-600'}>{text}</span>
                 };
             });
+            
+            // Inject Board Column
+            const studentColIndex = tableCols.findIndex(c => c.key === 'student' || c.key === 'student_name');
+            const insertIndex = studentColIndex >= 0 ? studentColIndex + 1 : 1;
+            tableCols.splice(insertIndex, 0, {
+                title: (
+                    <div className="flex flex-col">
+                        <span className="mb-1">Board</span>
+                        <div className="h-4 bg-[#f1f3f5] rounded w-full border border-gray-100"></div>
+                    </div>
+                ),
+                _label: 'Board',
+                dataIndex: 'custom_board',
+                key: 'custom_board',
+                sorter: (a, b) => (a.custom_board || '').localeCompare(b.custom_board || ''),
+                render: (text) => text ? <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold tracking-wide border border-indigo-100">{text}</span> : '-'
+            });
 
             setColumns(tableCols);
-            setData(reportResult?.map((r, i) => ({ ...r, key: i })) || []);
+            
+            let finalData = reportResult?.map((r, i) => {
+                let resolvedBoard = studentBoardMap.student?.[r.student];
+                if (!resolvedBoard && r.student_group) {
+                    resolvedBoard = studentBoardMap.group?.[r.student_group];
+                }
+                
+                return { 
+                    ...r, 
+                    key: i,
+                    custom_board: resolvedBoard || ''
+                };
+            }) || [];
+            
+            setData(finalData);
         } catch (err) {
             console.error('Error fetching absent report:', err);
             notification.error({ message: 'Error', description: 'Failed to fetch absent student data.' });
@@ -57,8 +123,31 @@ export default function AbsentStudentReport() {
         }
     };
 
+    const handleExport = () => {
+        const filteredData = data.filter(r => selectedBoard === 'All' || r.custom_board === selectedBoard);
+        if (filteredData.length === 0) {
+            notification.warning({ message: 'No Data', description: 'There is no data to export.' });
+            return;
+        }
+
+        const exportData = filteredData.map(row => {
+            const exportedRow = {};
+            columns.forEach(col => {
+                exportedRow[col._label || col.key] = row[col.dataIndex];
+            });
+            return exportedRow;
+        });
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Absent Students");
+        XLSX.writeFile(wb, `Absent_Student_Report_${date}.xlsx`);
+    };
+
     const actionMenu = (
-        <Menu>
+        <Menu onClick={({ key }) => {
+            if (key === 'export') handleExport();
+        }}>
             <Menu.Item key="print">Print</Menu.Item>
             <Menu.Item key="pdf">PDF</Menu.Item>
             <Menu.Item key="export">Export</Menu.Item>
@@ -103,6 +192,15 @@ export default function AbsentStudentReport() {
                         className="bg-[#f0f1f3] border-none rounded px-3 py-[3px] text-[13px] text-gray-700 outline-none w-[150px] h-[26px] hover:bg-[#e4e6ea] focus:ring-1 focus:ring-gray-300 transition-colors cursor-pointer"
                         value={date} onChange={(e) => { setDate(e.target.value); }} onBlur={handleGenerate} />
                     
+                    <select 
+                        className="bg-[#f0f1f3] border-none rounded px-3 py-[3px] text-[13px] text-gray-700 outline-none w-[150px] h-[26px] hover:bg-[#e4e6ea] focus:ring-1 focus:ring-gray-300 transition-colors cursor-pointer"
+                        value={selectedBoard} 
+                        onChange={(e) => { setSelectedBoard(e.target.value); }}
+                    >
+                        <option value="All">All Boards</option>
+                        {boards.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+
                     <button 
                         className="bg-gray-900 text-white px-4 py-[3px] rounded text-[12px] font-bold hover:bg-gray-800 transition shadow-sm h-[26px] flex items-center ml-2"
                         onClick={handleGenerate}
@@ -120,10 +218,10 @@ export default function AbsentStudentReport() {
                         </div>
                     )}
 
-                    {data.length > 0 ? (
+                    {data.filter(r => selectedBoard === 'All' || r.custom_board === selectedBoard).length > 0 ? (
                         <Table
                             columns={columns}
-                            dataSource={data}
+                            dataSource={data.filter(r => selectedBoard === 'All' || r.custom_board === selectedBoard)}
                             pagination={false}
                             size="small"
                             scroll={{ x: 'max-content', y: 'calc(100vh - 280px)' }}

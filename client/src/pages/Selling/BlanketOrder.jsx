@@ -79,8 +79,9 @@ const BlanketOrder = () => {
         setSaving(true);
         try {
             const ep = action === 'submit' ? '/api/method/frappe.client.submit' : '/api/method/frappe.client.cancel';
-            await API.post(ep, { doctype: 'Blanket Order', name: editingRecord });
-            notification.success({ message: `${action === 'submit' ? 'Submitted' : 'Cancelled'}.` });
+            const payload = action === 'submit' ? { doc: { ...formData, doctype: 'Blanket Order' } } : { doctype: 'Blanket Order', name: editingRecord };
+            await API.post(ep, payload);
+            notification.success({ message: `Blanket Order ${action === 'submit' ? 'Submitted' : 'Cancelled'}` });
             setView('list');
         } catch (e) {
             const m = e.response?.data?._server_messages ? JSON.parse(e.response.data._server_messages)[0] : e.message;

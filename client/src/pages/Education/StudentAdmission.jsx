@@ -352,7 +352,7 @@ const StudentAdmission = () => {
                                 <thead className="bg-gray-50 text-gray-600 border-b text-[13px]">
                                     <tr>
                                         <th className="px-3 py-2.5 text-left w-12 text-gray-400 font-normal">No.</th>
-                                        <th className="px-3 py-2.5 text-left w-1/3">Program</th>
+                                        <th className="px-3 py-2.5 text-left w-1/3">Program (Class)</th>
                                         <th className="px-3 py-2.5 text-left">Minimum Age</th>
                                         <th className="px-3 py-2.5 text-left">Maximum Age</th>
                                         <th className="px-3 py-2.5 text-left">Application Fee</th>

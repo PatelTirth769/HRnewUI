@@ -325,7 +325,7 @@ const InstructorDashboard = () => {
                                     { title: 'Academic Year', dataIndex: 'academic_year', key: 'ay' },
                                     { title: 'Term', dataIndex: 'academic_term', key: 'term' },
                                     { 
-                                        title: 'Program', 
+                                        title: 'Program (Class)', 
                                         dataIndex: 'program', 
                                         key: 'program',
                                         render: (text) => <Tag color="blue" className="border-none rounded-md font-medium">{text}</Tag>

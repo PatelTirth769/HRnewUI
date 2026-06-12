@@ -228,14 +228,18 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
     const [visibleCount, setVisibleCount] = useState(20);
     const [availableClasses, setAvailableClasses] = useState([]);
     const [academicYears, setAcademicYears] = useState([]);
+    const [boards, setBoards] = useState([]);
 
     // Filters state
     const [filterDateFrom, setFilterDateFrom] = useState('');
     const [filterDateTo, setFilterDateTo] = useState('');
     const [filterProgram, setFilterProgram] = useState('All');
     const [filterAcademicYear, setFilterAcademicYear] = useState('All');
+    const [filterBoard, setFilterBoard] = useState('All');
     const [filterStatus, setFilterStatus] = useState('All');
     const [filterFeeStatus, setFilterFeeStatus] = useState('All');
+    const [filterImportedOnly, setFilterImportedOnly] = useState(false);
+    const [filterImportedDate, setFilterImportedDate] = useState('');
 
 
     const initFormData = {
@@ -243,6 +247,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
         admission_date: new Date().toISOString().split('T')[0],
         academic_year: '2025-2026',
         program: '',
+        custom_board: '',
         first_name: '',
         last_name: '',
         gender: '',
@@ -266,13 +271,15 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
 
     const fetchERPNextData = async () => {
         try {
-            const [progRes, yearRes] = await Promise.all([
+            const [progRes, yearRes, companyRes] = await Promise.all([
                 API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
             ]);
             const programs = progRes.data.data?.map(p => p.name) || [];
             const years = yearRes.data.data?.map(y => y.name) || [];
             setAcademicYears(years);
+            setBoards((companyRes.data.data || []).map(c => c.name));
             await fetchRestrictions(programs);
         } catch (err) {
             console.error('Error fetching ERPNext data:', err);
@@ -330,6 +337,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
             ...initFormData,
             admissionNo: `ADM-${Date.now().toString().slice(-6)}`,
             program: reg.program,
+            custom_board: reg.custom_board || '',
             first_name: reg.first_name,
             last_name: reg.last_name,
             gender: reg.gender,
@@ -520,6 +528,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                     country: selectedRegistration?.country || 'India',
                     academic_year: formData.academic_year || selectedRegistration?.academic_year,
                     program: formData.program || selectedRegistration?.program,
+                    custom_board: formData.custom_board || selectedRegistration?.custom_board || null,
                     status: 'Admitted',
                     roll_number: formData.roll_number || selectedRegistration?.roll_number || null,
                     gr_number: formData.gr_number || selectedRegistration?.gr_number || null,
@@ -676,6 +685,13 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                 return false;
             }
 
+            // 2.7 Board Filter
+            if (filterBoard !== 'All') {
+                const docBoard = (d.custom_board || '').toString().trim().toLowerCase();
+                const selBoard = filterBoard.toString().trim().toLowerCase();
+                if (docBoard !== selBoard) return false;
+            }
+
             // 3. Status Filter (Pending vs Confirmed vs Disabled)
             const isDisabled = d.isDisabled === true;
             if (filterStatus === 'All' && isDisabled) return false; // Hide disabled by default
@@ -693,9 +709,11 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
 
             // 4. Fee Status Filter
             if (filterFeeStatus !== 'All') {
-                const isPaid = !!d.isFeePaid;
+                const isOldStudent = d.paymentMode === 'Old Student' || (d.fees_status && d.fees_status.toLowerCase() === 'old student');
+                const isPaid = !!d.isFeePaid && !isOldStudent;
+                if (filterFeeStatus === 'Old Student' && !isOldStudent) return false;
                 if (filterFeeStatus === 'Paid' && !isPaid) return false;
-                if (filterFeeStatus === 'Unpaid' && isPaid) return false;
+                if (filterFeeStatus === 'Unpaid' && !!d.isFeePaid) return false;
             }
 
             // 5. Date Range Filter
@@ -719,9 +737,15 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                 }
             }
 
+            // 6. Imported Data Filter
+            if (filterImportedOnly) {
+                if (!d.is_imported) return false;
+                if (filterImportedDate && d.imported_date !== filterImportedDate) return false;
+            }
+
             return true;
         });
-    }, [registrations, searchQuery, filterProgram, filterAcademicYear, filterStatus, filterDateFrom, filterDateTo, filterFeeStatus]);
+    }, [registrations, searchQuery, filterProgram, filterAcademicYear, filterBoard, filterStatus, filterDateFrom, filterDateTo, filterFeeStatus, filterImportedOnly, filterImportedDate]);
 
     if (view === 'form') {
         return (
@@ -741,11 +765,12 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                 <div className="bg-white p-8 shadow-xl rounded-b-xl border border-gray-100 space-y-8">
                     <div>
                         <SectionHeader title="1. Admission Metadata" color="red" />
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <InputField label="Admission No" disabled value={formData.admissionNo} />
                             <InputField label="Admission Date" type="date" value={formData.admission_date} onChange={(v) => setFormData({...formData, admission_date: v})} />
                             <SelectField label="Academic Year" value={formData.academic_year} options={academicYears} onChange={(v) => setFormData({...formData, academic_year: v})} />
                             <SelectField label="Final Admission Program (Class)" required value={formData.program} options={availableClasses} onChange={(v) => setFormData({...formData, program: v})} />
+                            <SelectField label="Board" value={formData.custom_board} options={boards} onChange={(v) => setFormData({...formData, custom_board: v})} />
 
                             <InputField label="Roll Number" value={formData.roll_number} onChange={(v) => setFormData({...formData, roll_number: v})} placeholder="Enter Roll Number" />
                             <InputField label="GR Number" value={formData.gr_number} onChange={(v) => setFormData({...formData, gr_number: v})} placeholder="Enter GR Number" />
@@ -793,7 +818,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
 
             {/* Filter Section */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6">
                     <div className="flex flex-col gap-2">
                         <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Start Date</label>
                         <input
@@ -839,6 +864,19 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                         </select>
                     </div>
                     <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Board</label>
+                        <select
+                            value={filterBoard}
+                            onChange={(e) => setFilterBoard(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                        >
+                            <option value="All">All Boards</option>
+                            {boards.map((b) => (
+                                <option key={b} value={b}>{b}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-2">
                         <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Admission Status</label>
                         <select
                             value={filterStatus}
@@ -861,23 +899,54 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                             <option value="All">All Payments</option>
                             <option value="Paid">✅ PAID</option>
                             <option value="Unpaid">⏳ UNPAID</option>
+                            <option value="Old Student">🎓 OLD STUDENT</option>
                         </select>
                     </div>
                 </div>
-                <div className="mt-4 flex justify-end">
-                    <button
-                        onClick={() => {
-                            setFilterDateFrom('');
-                            setFilterDateTo('');
-                            setFilterAcademicYear('All');
-                            setFilterProgram('All');
-                            setFilterStatus('All');
-                            setFilterFeeStatus('All');
-                        }}
-                        className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all cursor-pointer"
-                    >
-                        Reset Filters
-                    </button>
+                <div className="flex items-center justify-between mt-4 border-t border-gray-100 pt-4">
+                    <div className="flex flex-wrap items-center gap-4">
+                        <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={filterImportedOnly}
+                                onChange={(e) => setFilterImportedOnly(e.target.checked)}
+                                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            />
+                            Show Imported Data Only
+                        </label>
+                        {filterImportedOnly && (
+                            <div className="flex items-center gap-2">
+                                <label className="text-[13px] font-bold text-gray-600 uppercase tracking-wider">Import Date:</label>
+                                <input
+                                    type="date"
+                                    value={filterImportedDate}
+                                    onChange={(e) => setFilterImportedDate(e.target.value)}
+                                    className="border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
+                                />
+                                {filterImportedDate && (
+                                    <button onClick={() => setFilterImportedDate('')} className="text-gray-400 hover:text-red-500 text-xs font-bold ml-1">✕ Clear</button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex justify-end">
+                        <button
+                            onClick={() => {
+                                setFilterDateFrom('');
+                                setFilterDateTo('');
+                                setFilterAcademicYear('All');
+                                setFilterProgram('All');
+                                setFilterBoard('All');
+                                setFilterStatus('All');
+                                setFilterFeeStatus('All');
+                                setFilterImportedOnly(false);
+                                setFilterImportedDate('');
+                            }}
+                            className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all cursor-pointer"
+                        >
+                            Reset Filters
+                        </button>
+                    </div>
                 </div>
             </div>
 

@@ -314,7 +314,7 @@ const Fees = () => {
                             <tr>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">ID</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Student</th>
-                                <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Program</th>
+                                <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Program (Class)</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Posting Date</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px] text-right">Grand Total</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px] text-right">Outstanding</th>
@@ -389,7 +389,7 @@ const Fees = () => {
                             <input type="text" className={inputStyle} value={form.student_name} disabled />
                         </div>
                         <div>
-                            <label className={labelStyle}>Program</label>
+                            <label className={labelStyle}>Program (Class)</label>
                             <select className={inputStyle} value={form.program} onChange={e => updateField('program', e.target.value)}>
                                 <option value="">Select Program</option>
                                 {dropdowns.programs.map(p => <option key={p} value={p}>{p}</option>)}

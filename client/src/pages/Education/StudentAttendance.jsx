@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
+import { FiEdit2, FiTrash2 } from 'react-icons/fi';
 import API from '../../services/api';
 import * as XLSX from 'xlsx';
 
@@ -21,7 +22,7 @@ const StudentAttendance = () => {
     // List states
     const [attendanceList, setAttendanceList] = useState([]);
     const [loadingList, setLoadingList] = useState(true);
-    const [filters, setFilters] = useState({ name: '', student: '', student_name: '', program: '', student_group: '', status: '', start_date: '', end_date: '' });
+    const [filters, setFilters] = useState({ name: '', student: '', student_name: '', program: '', student_group: '', status: '', start_date: '', end_date: '', board: 'All' });
     const [pageSize, setPageSize] = useState(20);
     const [visibleCount, setVisibleCount] = useState(20);
 
@@ -33,6 +34,7 @@ const StudentAttendance = () => {
     const [form, setForm] = useState(emptyForm());
     const [loadingForm, setLoadingForm] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [originalStatus, setOriginalStatus] = useState(null); // tracks saved status for Update detection
 
     // Filtered dropdown states
     const [filteredStudents, setFilteredStudents] = useState([]);
@@ -52,8 +54,10 @@ const StudentAttendance = () => {
         studentGroups: [],
         masterStudents: [],
         masterStudentGroups: [],
+        boards: [],
         statusOptions: ['Present', 'Absent', 'On Leave', 'Half Day'],
         namingSeries: ['EDU-ATT-.YYYY.-'],
+        boards: [],
     });
 
     // --- Data Import States ---
@@ -338,6 +342,9 @@ const StudentAttendance = () => {
                 return false;
             }
             if (filters.end_date && (!row.date || row.date > filters.end_date)) {
+                return false;
+            }
+            if (filters.board !== 'All' && row.custom_board !== filters.board) {
                 return false;
             }
             return true;
@@ -783,13 +790,14 @@ const StudentAttendance = () => {
     useEffect(() => {
         const updateFilteredFilterData = async () => {
             // 1. Filter Student Groups in Filter Bar
+            let sgList = dropdowns.masterStudentGroups || [];
             if (filters.program) {
-                setFilteredFilterStudentGroups(
-                    dropdowns.masterStudentGroups.filter(g => g.program === filters.program)
-                );
-            } else {
-                setFilteredFilterStudentGroups(dropdowns.masterStudentGroups || []);
+                sgList = sgList.filter(g => g.program === filters.program);
             }
+            if (filters.board && filters.board !== 'All') {
+                sgList = sgList.filter(g => g.custom_board === filters.board);
+            }
+            setFilteredFilterStudentGroups(sgList);
 
             // 2. Filter Students in Filter Bar
             if (filters.student_group) {
@@ -827,12 +835,16 @@ const StudentAttendance = () => {
                     setLoadingFilterStudents(false);
                 }
             } else {
-                setFilteredFilterStudents(dropdowns.masterStudents || []);
+                let stList = dropdowns.masterStudents || [];
+                if (filters.board && filters.board !== 'All') {
+                    stList = stList.filter(s => s.custom_board === filters.board);
+                }
+                setFilteredFilterStudents(stList);
             }
         };
 
         updateFilteredFilterData();
-    }, [filters.program, filters.student_group, dropdowns.masterStudentGroups, dropdowns.masterStudents]);
+    }, [filters.program, filters.student_group, filters.board, dropdowns.masterStudentGroups, dropdowns.masterStudents]);
 
     useEffect(() => {
         if (view === 'list') {
@@ -851,21 +863,28 @@ const StudentAttendance = () => {
     const fetchDropdowns = async () => {
         try {
             const safeGet = (url) => API.get(url).catch(() => ({ data: { data: [] } }));
-            const [sRes, csRes, pRes, sgRes] = await Promise.all([
-                safeGet('/api/resource/Student?fields=["name","first_name","last_name"]&limit_page_length=None'),
+            const [sRes, csRes, pRes, sgRes, bRes] = await Promise.all([
+                safeGet('/api/resource/Student?fields=["name","first_name","last_name","custom_board"]&limit_page_length=None'),
                 safeGet('/api/resource/Course Schedule?limit_page_length=None'),
                 safeGet('/api/resource/Program?limit_page_length=None'),
-                safeGet('/api/resource/Student Group?fields=["name","program"]&limit_page_length=None'),
+                safeGet('/api/resource/Student Group?fields=["name","program","custom_board"]&limit_page_length=None'),
+                safeGet('/api/resource/Company?limit_page_length=None'),
             ]);
             const studentsList = sRes.data.data?.map(d => ({ 
                 value: d.name, 
-                label: `${d.name} - ${d.first_name || ''} ${d.last_name || ''}`.trim() 
+                label: `${d.name} - ${d.first_name || ''} ${d.last_name || ''}`.trim(),
+                custom_board: d.custom_board 
             })) || [];
             const studentGroupsList = sgRes.data.data?.map(d => ({ 
                 value: d.name, 
                 label: d.name,
-                program: d.program 
+                program: d.program,
+                custom_board: d.custom_board
             })) || [];
+            
+            const fetchedBoards = bRes.data.data?.map(c => c.name) || [];
+            const studentBoards = [...new Set(sRes.data.data?.map(s => s.custom_board).filter(Boolean))];
+            const allBoards = [...new Set([...fetchedBoards, ...studentBoards])].sort();
 
             setDropdowns(prev => ({
                 ...prev,
@@ -875,6 +894,7 @@ const StudentAttendance = () => {
                 programs: pRes.data.data?.map(d => ({ value: d.name, label: d.name })) || [],
                 studentGroups: studentGroupsList,
                 masterStudentGroups: studentGroupsList,
+                boards: allBoards,
             }));
         } catch (err) {
             console.error('Error fetching dropdowns:', err);
@@ -884,13 +904,14 @@ const StudentAttendance = () => {
     useEffect(() => {
         const updateFilteredData = async () => {
             // 1. Filter Student Groups
+            let formSgList = dropdowns.masterStudentGroups || [];
             if (form.program) {
-                setFilteredStudentGroups(
-                    dropdowns.masterStudentGroups.filter(g => g.program === form.program)
-                );
-            } else {
-                setFilteredStudentGroups(dropdowns.masterStudentGroups || []);
+                formSgList = formSgList.filter(g => g.program === form.program);
             }
+            if (form.custom_board) {
+                formSgList = formSgList.filter(g => g.custom_board === form.custom_board);
+            }
+            setFilteredStudentGroups(formSgList);
 
             // 2. Filter Students
             if (form.student_group) {
@@ -928,21 +949,44 @@ const StudentAttendance = () => {
                     setLoadingStudents(false);
                 }
             } else {
-                setFilteredStudents(dropdowns.masterStudents || []);
+                let formStList = dropdowns.masterStudents || [];
+                if (form.custom_board) {
+                    formStList = formStList.filter(s => s.custom_board === form.custom_board);
+                }
+                setFilteredStudents(formStList);
             }
         };
 
         if (view === 'form') {
             updateFilteredData();
         }
-    }, [form.program, form.student_group, dropdowns.masterStudents, dropdowns.masterStudentGroups, view]);
+    }, [form.program, form.student_group, form.custom_board, dropdowns.masterStudents, dropdowns.masterStudentGroups, view]);
 
     const fetchAttendanceList = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Student Attendance?fields=["name","student","student_name","date","status","student_group","docstatus"]&limit_page_length=None&order_by=date desc';
+            const url = '/api/resource/Student Attendance?fields=["name","student","student_name","date","status","student_group","docstatus","custom_board"]&limit_page_length=None&order_by=date desc';
             const response = await API.get(url);
-            setAttendanceList(response.data.data || []);
+            
+            // Map custom_board if missing from student profile or student group as fallback
+            const data = response.data.data || [];
+            const mappedData = data.map(row => {
+                let board = row.custom_board;
+                if (!board) {
+                    const student = dropdowns.masterStudents?.find(s => s.value === row.student);
+                    if (student && student.custom_board) {
+                        board = student.custom_board;
+                    } else if (row.student_group) {
+                        const group = dropdowns.masterStudentGroups?.find(g => g.value === row.student_group);
+                        if (group && group.custom_board) {
+                            board = group.custom_board;
+                        }
+                    }
+                }
+                return { ...row, custom_board: board || '' };
+            });
+            
+            setAttendanceList(mappedData);
         } catch (err) {
             console.error('Error fetching attendance list:', err);
         } finally {
@@ -955,11 +999,35 @@ const StudentAttendance = () => {
         try {
             const res = await API.get(`/api/resource/Student Attendance/${encodeURIComponent(id)}`);
             setForm(res.data.data);
+            setOriginalStatus(res.data.data.status); // remember the saved status
         } catch (err) {
             console.error('Error fetching attendance:', err);
             notification.error({ message: 'Error', description: 'Failed to load attendance record.' });
         } finally {
             setLoadingForm(false);
+        }
+    };
+
+    // Update just the status of a submitted record (like ERPNext Update button)
+    const handleUpdateStatus = async () => {
+        if (!editingRecord) return;
+        setSaving(true);
+        try {
+            // Cancel, then re-submit with new status (ERPNext workflow for submitted docs)
+            await API.put(`/api/resource/Student Attendance/${encodeURIComponent(editingRecord)}`, {
+                ...form,
+                docstatus: 1
+            });
+            notification.success({ message: 'Updated', description: `Status changed to "${form.status}" successfully.` });
+            setOriginalStatus(form.status);
+            fetchAttendance(editingRecord);
+        } catch (err) {
+            const errMsg = err.response?.data?._server_messages
+                ? (() => { try { return JSON.parse(JSON.parse(err.response.data._server_messages)[0]).message; } catch { return err.message; } })()
+                : err.response?.data?.message || err.message;
+            notification.error({ message: 'Update Failed', description: errMsg });
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -1033,6 +1101,21 @@ const StudentAttendance = () => {
             setView('list');
         } catch (err) {
             notification.error({ message: 'Delete Failed', description: err.message });
+        }
+    };
+
+    // Delete directly from list row
+    const handleDeleteRecord = async (recordName) => {
+        if (!window.confirm(`Are you sure you want to delete attendance record "${recordName}"?\nThis action cannot be undone.`)) return;
+        try {
+            await API.delete(`/api/resource/Student Attendance/${encodeURIComponent(recordName)}`);
+            notification.success({ message: 'Deleted', description: `${recordName} has been deleted.` });
+            fetchAttendanceList();
+        } catch (err) {
+            const errMsg = err.response?.data?._server_messages
+                ? (() => { try { return JSON.parse(JSON.parse(err.response.data._server_messages)[0]).message; } catch { return err.message; } })()
+                : err.response?.data?.message || err.message;
+            notification.error({ message: 'Delete Failed', description: errMsg });
         }
     };
 
@@ -1249,8 +1332,9 @@ const StudentAttendance = () => {
                                                     <th className="px-3 py-2 font-bold text-gray-600">Student Name</th>
                                                     <th className="px-3 py-2 font-bold text-gray-600">Date</th>
                                                     <th className="px-3 py-2 font-bold text-gray-600">Status</th>
-                                                    <th className="px-3 py-2 font-bold text-gray-600">Student Group</th>
-                                                    <th className="px-3 py-2 font-bold text-gray-600">Program</th>
+                                                    <th className="px-4 py-3 font-bold text-gray-600">Student Group</th>
+                                                    <th className="px-4 py-3 font-bold text-gray-600">Board</th>
+                                                    <th className="px-4 py-3 font-bold text-gray-600 text-center">Status</th>                   <th className="px-3 py-2 font-bold text-gray-600">Program (Class)</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1487,7 +1571,7 @@ const StudentAttendance = () => {
                                                 onChange={(e) => setSelectedFields(prev => ({ ...prev, program: e.target.checked }))}
                                                 className="w-3.5 h-3.5 rounded text-blue-600 border-gray-300 focus:ring-blue-500"
                                             />
-                                            <span>Program</span>
+                                            <span>Program (Class)</span>
                                         </label>
                                         <label className="flex items-center gap-2 cursor-pointer text-gray-600">
                                             <input 
@@ -1576,6 +1660,24 @@ const StudentAttendance = () => {
             if (filters.end_date && (!row.date || row.date > filters.end_date)) {
                 return false;
             }
+            
+            // Dynamically resolve board in case dropdowns loaded after attendanceList
+            let resolvedBoard = row.custom_board;
+            if (!resolvedBoard) {
+                const studentObj = dropdowns.masterStudents?.find(s => s.value === row.student);
+                if (studentObj && studentObj.custom_board) {
+                    resolvedBoard = studentObj.custom_board;
+                } else if (row.student_group) {
+                    const groupObj = dropdowns.masterStudentGroups?.find(g => g.value === row.student_group);
+                    if (groupObj && groupObj.custom_board) {
+                        resolvedBoard = groupObj.custom_board;
+                    }
+                }
+            }
+            
+            if (filters.board && filters.board !== 'All' && resolvedBoard !== filters.board) {
+                return false;
+            }
             return true;
         });
 
@@ -1607,7 +1709,7 @@ const StudentAttendance = () => {
                     <div className="flex justify-between items-center mb-3">
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Filter By</span>
                         {Object.values(filters).some(v => v !== '') && (
-                            <button className="text-xs text-red-500 hover:text-red-700 font-semibold flex items-center gap-1" onClick={() => setFilters({ name: '', student: '', student_name: '', program: '', student_group: '', status: '', start_date: '', end_date: '' })}>
+                            <button className="text-xs text-red-500 hover:text-red-700 font-semibold flex items-center gap-1" onClick={() => setFilters({ name: '', student: '', student_name: '', program: '', student_group: '', status: '', start_date: '', end_date: '', board: 'All' })}>
                                 ✕ Clear Filters
                             </button>
                         )}
@@ -1638,7 +1740,7 @@ const StudentAttendance = () => {
                                 value={filters.program} 
                                 onChange={e => setFilters(prev => ({ ...prev, program: e.target.value, student_group: '', student: '' }))}
                             >
-                                <option value="">Program</option>
+                                <option value="">Program (Class)</option>
                                 {dropdowns.programs?.map(p => (
                                     <option key={p.value} value={p.value}>{p.label}</option>
                                 ))}
@@ -1653,6 +1755,14 @@ const StudentAttendance = () => {
                                 <option value="">Student Group</option>
                                 {filteredFilterStudentGroups?.map(sg => (
                                     <option key={sg.value} value={sg.value}>{sg.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <select className="w-full border border-gray-300 rounded px-3 py-2 text-xs focus:outline-none focus:border-blue-500 bg-white text-gray-600" value={filters.board} onChange={e => setFilters(prev => ({ ...prev, board: e.target.value }))}>
+                                <option value="All">All Boards</option>
+                                {dropdowns.boards?.map(b => (
+                                    <option key={b} value={b}>{b}</option>
                                 ))}
                             </select>
                         </div>
@@ -1686,9 +1796,10 @@ const StudentAttendance = () => {
                                 <th className="px-4 py-3 font-semibold text-gray-600">Student</th>
                                 <th className="px-4 py-3 font-semibold text-gray-600">Date</th>
                                 <th className="px-4 py-3 font-semibold text-gray-600">Status</th>
-                                <th className="px-4 py-3 font-semibold text-gray-600 w-1/4">
+                                <th className="px-4 py-3 font-semibold text-gray-600">Group</th>
+                                <th className="px-4 py-3 font-semibold text-gray-600">
                                     <div className="flex justify-between items-center">
-                                        <span>Group</span>
+                                        <span>Board</span>
                                         {!loadingList && filtered.length > 0 && (
                                             <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                                                 {Math.min(visibleCount, filtered.length)} of {filtered.length}
@@ -1696,6 +1807,7 @@ const StudentAttendance = () => {
                                         )}
                                     </div>
                                 </th>
+                                <th className="px-4 py-3 font-semibold text-gray-600 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1705,7 +1817,7 @@ const StudentAttendance = () => {
                                 <tr><td colSpan="5" className="text-center py-10 text-gray-400 italic">No attendance records found.</td></tr>
                             ) : (
                                 filtered.slice(0, visibleCount).map((row) => (
-                                    <tr key={row.name} className="border-b hover:bg-gray-50">
+                                    <tr key={row.name} className="border-b hover:bg-gray-50 group">
                                         <td className="px-4 py-3">
                                             <button className="text-blue-600 hover:underline font-medium" onClick={() => { setEditingRecord(row.name); setView('form'); }}>{row.name}</button>
                                         </td>
@@ -1733,6 +1845,38 @@ const StudentAttendance = () => {
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-gray-500">{row.student_group || '-'}</td>
+                                        <td className="px-4 py-3">
+                                            {(() => {
+                                                let renderedBoard = row.custom_board;
+                                                if (!renderedBoard) {
+                                                    const studentObj = dropdowns.masterStudents?.find(s => s.value === row.student);
+                                                    if (studentObj && studentObj.custom_board) renderedBoard = studentObj.custom_board;
+                                                    else if (row.student_group) {
+                                                        const groupObj = dropdowns.masterStudentGroups?.find(g => g.value === row.student_group);
+                                                        if (groupObj && groupObj.custom_board) renderedBoard = groupObj.custom_board;
+                                                    }
+                                                }
+                                                return renderedBoard ? <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold tracking-wide border border-indigo-100">{renderedBoard}</span> : '-';
+                                            })()}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setEditingRecord(row.name); setView('form'); }}
+                                                    className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors cursor-pointer border border-blue-100"
+                                                    title="Edit"
+                                                >
+                                                    <FiEdit2 className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteRecord(row.name); }}
+                                                    className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors cursor-pointer border border-red-100"
+                                                    title="Delete"
+                                                >
+                                                    <FiTrash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </td>
                                     </tr>
                                 ))
                              )}
@@ -1809,7 +1953,17 @@ const StudentAttendance = () => {
                         </button>
                     )}
 
-                    {editingRecord && form.docstatus === 1 && (
+                    {editingRecord && form.docstatus === 1 && form.status !== originalStatus && (
+                        <button
+                            className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 shadow-sm flex items-center gap-2"
+                            onClick={handleUpdateStatus}
+                            disabled={saving}
+                        >
+                            ✏️ {saving ? 'Updating...' : 'Update'}
+                        </button>
+                    )}
+
+                    {editingRecord && form.docstatus === 1 && form.status === originalStatus && (
                         <button className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:bg-red-700 disabled:opacity-50 shadow-sm" onClick={handleCancelDoc} disabled={saving}>
                             {saving ? 'Cancelling...' : 'Cancel'}
                         </button>
@@ -1831,16 +1985,28 @@ const StudentAttendance = () => {
                     </div>
                     <div>
                         <label className={labelStyle}>Student * {loadingStudents && <span style={{ color: '#1890ff', fontSize: '12px' }}>(Loading...)</span>}</label>
-                        <select className={inputStyle} value={form.student} onChange={e => setForm({ ...form, student: e.target.value })} disabled={loadingStudents || isDocDisabled}>
+                        <select className={inputStyle} value={form.student} onChange={e => {
+                            const val = e.target.value;
+                            const studentData = dropdowns.masterStudents?.find(s => s.value === val);
+                            setForm({ ...form, student: val, custom_board: studentData?.custom_board || form.custom_board });
+                        }} disabled={loadingStudents || isDocDisabled}>
                             <option value="">{loadingStudents ? 'Loading Students...' : 'Select Student'}</option>
                             {filteredStudents.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                         </select>
                     </div>
                     <div>
                         <label className={labelStyle}>Status *</label>
-                        <select className={inputStyle} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} disabled={isDocDisabled}>
+                        <select
+                            className={inputStyle}
+                            value={form.status}
+                            onChange={e => setForm({ ...form, status: e.target.value })}
+                            disabled={form.docstatus === 2} // only disable if Cancelled
+                        >
                             {dropdowns.statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
+                        {form.docstatus === 1 && form.status !== originalStatus && (
+                            <p className="text-xs text-amber-600 mt-1 font-medium">⚠️ Status changed — click Update to save.</p>
+                        )}
                     </div>
                     <div>
                         <label className={labelStyle}>Course Schedule</label>
@@ -1850,7 +2016,7 @@ const StudentAttendance = () => {
                         </select>
                     </div>
                     <div>
-                        <label className={labelStyle}>Program</label>
+                        <label className={labelStyle}>Program (Class)</label>
                         <select className={inputStyle} value={form.program} onChange={e => {
                             setForm({ 
                                 ...form, 
@@ -1874,6 +2040,13 @@ const StudentAttendance = () => {
                         }} disabled={isDocDisabled}>
                             <option value="">Select Group</option>
                             {filteredStudentGroups.map(sg => <option key={sg.value} value={sg.value}>{sg.label}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className={labelStyle}>Board</label>
+                        <select className={inputStyle} value={form.custom_board || ''} onChange={e => setForm({ ...form, custom_board: e.target.value })} disabled={isDocDisabled}>
+                            <option value="">Select Board</option>
+                            {dropdowns.boards?.map(b => <option key={b} value={b}>{b}</option>)}
                         </select>
                     </div>
                 </div>

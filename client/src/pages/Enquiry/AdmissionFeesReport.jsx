@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Table, notification, Select, DatePicker, Button, Tooltip, Input, Card, Statistic, Tag } from 'antd';
 import axios from 'axios';
+import API from '../../services/api';
 import { db } from '../../config/firebase';
 import { FiDownload, FiSearch, FiRefreshCw, FiFilter, FiDollarSign, FiUsers, FiCheckCircle } from 'react-icons/fi';
 import { generateAdmissionReceipt } from './AdmissionFeeReceipt';
@@ -17,6 +18,7 @@ const AdmissionFeesReport = () => {
     // Filters
     const [filters, setFilters] = useState({
         program: 'All',
+        board: 'All',
         feeType: 'All',
         paymentMode: 'All',
         status: 'All',
@@ -26,6 +28,7 @@ const AdmissionFeesReport = () => {
 
     // Unique values for dropdowns
     const [programs, setPrograms] = useState([]);
+    const [boards, setBoards] = useState([]);
 
     useEffect(() => {
         fetchPayments();
@@ -34,17 +37,30 @@ const AdmissionFeesReport = () => {
     const fetchPayments = async () => {
         setLoading(true);
         try {
-            const res = await axios.get('/local-api/admission-payment/history-all');
+            const [res, studentRes] = await Promise.all([
+                axios.get('/local-api/admission-payment/history-all'),
+                API.get('/api/resource/Student?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } }))
+            ]);
+            
             if (res.data?.success) {
                 const data = res.data.data || [];
+                const studentMap = {};
+                (studentRes.data.data || []).forEach(s => {
+                    studentMap[s.name] = s.custom_board;
+                });
+
                 const progSet = new Set();
+                const boardSet = new Set();
                 
                 data.forEach(item => {
+                    item.board = item.board || studentMap[item.student_id] || '';
                     if (item.program) progSet.add(item.program);
+                    if (item.board) boardSet.add(item.board);
                 });
                 
                 setPayments(data);
                 setPrograms(Array.from(progSet).filter(Boolean));
+                setBoards(Array.from(boardSet).filter(Boolean));
             } else {
                 throw new Error(res.data?.message || 'Failed to fetch');
             }
@@ -85,6 +101,8 @@ const AdmissionFeesReport = () => {
 
             // Program filter
             if (filters.program !== 'All' && item.program !== filters.program) return false;
+            // Board filter
+            if (filters.board !== 'All' && item.board !== filters.board) return false;
             // Fee Type filter
             if (filters.feeType !== 'All' && item.fee_type !== filters.feeType) return false;
             // Mode filter
@@ -163,9 +181,14 @@ const AdmissionFeesReport = () => {
             title: 'Program / Year',
             key: 'program',
             render: (_, record) => (
-                <div className="flex flex-col">
-                    <span className="text-sm">{record.program || 'N/A'}</span>
-                    <span className="text-xs text-gray-400">{record.academic_year || 'N/A'}</span>
+                <div className="flex flex-col items-start">
+                    <span className="text-sm font-semibold text-gray-700">{record.program || 'N/A'}</span>
+                    {record.board && (
+                        <span className="text-[10px] uppercase font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded mt-0.5 w-max">
+                            {record.board}
+                        </span>
+                    )}
+                    <span className="text-xs text-gray-400 mt-0.5">{record.academic_year || 'N/A'}</span>
                 </div>
             )
         },
@@ -301,6 +324,17 @@ const AdmissionFeesReport = () => {
                         >
                             <Select.Option value="All">All Programs</Select.Option>
                             {programs.map(p => <Select.Option key={p} value={p}>{p}</Select.Option>)}
+                        </Select>
+                    </div>
+                    <div>
+                        <Select
+                            value={filters.board}
+                            onChange={(v) => setFilters(prev => ({ ...prev, board: v }))}
+                            className="w-full"
+                            placeholder="Board"
+                        >
+                            <Select.Option value="All">All Boards</Select.Option>
+                            {boards.map(b => <Select.Option key={b} value={b}>{b}</Select.Option>)}
                         </Select>
                     </div>
                     <div>

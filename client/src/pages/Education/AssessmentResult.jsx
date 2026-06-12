@@ -251,7 +251,7 @@ const AssessmentResult = () => {
                     
                     {/* Read-only / Reference Fields */}
                     <div>
-                        <label className={labelStyle}>Program</label>
+                        <label className={labelStyle}>Program (Class)</label>
                         <input type="text" className={inputStyle} value={form.program} disabled />
                     </div>
                     <div>

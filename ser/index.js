@@ -5,8 +5,16 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception (prevented crash):', err.message);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection (prevented crash):', reason);
+});
+
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: true, // This allows any origin (like localhost and your live domain) to connect
     credentials: true
 }));
 app.use(express.json());

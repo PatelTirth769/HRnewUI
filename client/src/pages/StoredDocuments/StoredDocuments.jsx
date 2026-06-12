@@ -26,6 +26,8 @@ const StoredDocuments = () => {
     const [filterDateTo, setFilterDateTo] = useState('');
     const [filterProgram, setFilterProgram] = useState('All');
     const [filterAcademicYear, setFilterAcademicYear] = useState('All');
+    const [filterBoard, setFilterBoard] = useState('All');
+    const [pageSize, setPageSize] = useState(20);
 
     useEffect(() => {
         fetchStudentDocuments();
@@ -66,6 +68,7 @@ const StoredDocuments = () => {
                     fullName: `${data.first_name || ''} ${data.middle_name || ''} ${data.last_name || ''}`.trim() || 'Unknown Student',
                     program: data.program || 'N/A',
                     academicYear: data.academic_year || 'N/A',
+                    board: data.custom_board || 'N/A',
                     registrationDate: data.registration_date || (data.created_at?.toDate ? data.created_at.toDate().toISOString().split('T')[0] : ''),
                     mobileNumber: data.student_mobile_number || '',
                     uploadedDocs: uploadedDocs
@@ -129,6 +132,7 @@ const StoredDocuments = () => {
     // Extract unique filter options from the fetched data
     const availablePrograms = [...new Set(students.map(s => s.program))].filter(p => p !== 'N/A');
     const availableAcademicYears = [...new Set(students.map(s => s.academicYear))].filter(y => y !== 'N/A');
+    const availableBoards = [...new Set(students.map(s => s.board))].filter(b => b && b !== 'N/A');
 
     // Apply Filters
     const filteredStudents = useMemo(() => {
@@ -144,6 +148,9 @@ const StoredDocuments = () => {
             // Program Filter
             if (filterProgram !== 'All' && student.program !== filterProgram) return false;
 
+            // Board Filter
+            if (filterBoard !== 'All' && student.board !== filterBoard) return false;
+
             // Academic Year Filter
             if (filterAcademicYear !== 'All' && student.academicYear !== filterAcademicYear) return false;
 
@@ -157,7 +164,11 @@ const StoredDocuments = () => {
 
             return true;
         });
-    }, [students, searchQuery, filterProgram, filterAcademicYear, filterDateFrom, filterDateTo]);
+    }, [students, searchQuery, filterProgram, filterBoard, filterAcademicYear, filterDateFrom, filterDateTo]);
+
+    const displayedStudents = useMemo(() => {
+        return filteredStudents.slice(0, pageSize);
+    }, [filteredStudents, pageSize]);
 
     return (
         <div className="p-8 max-w-7xl mx-auto min-h-screen bg-gray-50/50">
@@ -179,7 +190,7 @@ const StoredDocuments = () => {
                 <div className="space-y-6">
                     {/* Filters Section */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                             <div className="flex flex-col gap-2">
                                 <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2"><FiCalendar /> Start Date</label>
                                 <input
@@ -220,6 +231,17 @@ const StoredDocuments = () => {
                                     {availablePrograms.map(p => <option key={p} value={p}>{p}</option>)}
                                 </select>
                             </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2"><FiBook /> Board</label>
+                                <select
+                                    value={filterBoard}
+                                    onChange={(e) => setFilterBoard(e.target.value)}
+                                    className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                                >
+                                    <option value="All">All Boards</option>
+                                    {availableBoards.map(b => <option key={b} value={b}>{b}</option>)}
+                                </select>
+                            </div>
                         </div>
 
                         <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -240,7 +262,7 @@ const StoredDocuments = () => {
                                 <button 
                                     onClick={() => {
                                         setSearchQuery(''); setFilterDateFrom(''); setFilterDateTo('');
-                                        setFilterProgram('All'); setFilterAcademicYear('All');
+                                        setFilterProgram('All'); setFilterAcademicYear('All'); setFilterBoard('All');
                                     }}
                                     className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200 transition"
                                 >
@@ -263,7 +285,7 @@ const StoredDocuments = () => {
                                 <p className="text-sm mt-1">Try adjusting your filters or search query.</p>
                             </div>
                         ) : (
-                            filteredStudents.map(student => (
+                            displayedStudents.map(student => (
                                 <div key={student.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
                                     <div 
                                         className="p-5 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
@@ -283,6 +305,12 @@ const StoredDocuments = () => {
                                                     </span>
                                                     <span>•</span>
                                                     <span>{student.program}</span>
+                                                    {student.board && student.board !== 'N/A' && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span className="text-gray-600 font-bold">{student.board}</span>
+                                                        </>
+                                                    )}
                                                     <span>•</span>
                                                     <span>{student.academicYear}</span>
                                                 </div>
@@ -368,6 +396,28 @@ const StoredDocuments = () => {
                             ))
                         )}
                     </div>
+
+                    {/* Pagination Controls */}
+                    {!loading && filteredStudents.length > 0 && (
+                        <div className="flex justify-between items-center p-4 bg-gray-50/30 border border-gray-200 mt-4 rounded-xl">
+                            <div className="flex items-center border border-gray-200 rounded-xl bg-white overflow-hidden shadow-xs">
+                                {[20, 100, 500, 2500].map((size) => (
+                                    <button
+                                        key={size}
+                                        className={`px-4 py-1.5 text-xs font-bold border-r border-gray-200 last:border-r-0 hover:bg-gray-50 transition cursor-pointer ${
+                                            pageSize === size ? 'bg-gray-100 text-gray-800' : 'text-gray-500'
+                                        }`}
+                                        onClick={() => setPageSize(size)}
+                                    >
+                                        {size}
+                                    </button>
+                                ))}
+                            </div>
+                            <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                                Displaying {displayedStudents.length} of {filteredStudents.length}
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

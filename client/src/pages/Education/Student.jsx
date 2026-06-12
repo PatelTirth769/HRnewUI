@@ -21,6 +21,7 @@ const emptyForm = () => ({
     joining_date: new Date().toISOString().slice(0, 10),
     last_name: '',
     program: '',
+    custom_board: '',
     user: '',
     student_email_id: '',
     student_mobile_number: '',
@@ -142,7 +143,7 @@ const Student = () => {
         last_name: false, program: false, naming_series: false, joining_date: false, user_id: false,
         student_applicant: false, image: false, student_email_address: true, date_of_birth: false, blood_group: false,
         student_mobile_number: false, gender: false, nationality: false, address_line_1: false, address_line_2: false,
-        pincode: false, city: false, state: false, country: false, customer: false, customer_group: false,
+        pincode: false, city: false, state: false, country: false, custom_board: false, customer: false, customer_group: false,
         date_of_leaving: false, leaving_certificate_number: false, reason_for_leaving: false, student_name: false,
         guardian_guardian: false, guardian_guardian_name: false, guardian_id: false, guardian_relation: false,
         guardian_email_address: false, guardian_mobile_number: false, guardian_occupation: false, guardian_designation: false,
@@ -157,13 +158,16 @@ const Student = () => {
     const [loadingList, setLoadingList] = useState(true);
     const [search, setSearch] = useState('');
     const [selectedProgram, setSelectedProgram] = useState('');
+    const [filterAcademicYear, setFilterAcademicYear] = useState('');
+    const [filterBoard, setFilterBoard] = useState('');
+    const [filterStatus, setFilterStatus] = useState('');
     const [sortByRollNo, setSortByRollNo] = useState(false);
     const [pageSize, setPageSize] = useState(20);
     const [visibleCount, setVisibleCount] = useState(20);
 
     useEffect(() => {
         setVisibleCount(pageSize);
-    }, [search, selectedProgram, pageSize]);
+    }, [search, selectedProgram, filterAcademicYear, filterBoard, filterStatus, pageSize]);
 
     // Form states
     const [activeTab, setActiveTab] = useState('Details');
@@ -176,6 +180,8 @@ const Student = () => {
     const [customerGroups, setCustomerGroups] = useState([]);
     const [guardiansList, setGuardiansList] = useState([]);
     const [programs, setPrograms] = useState([]);
+    const [boards, setBoards] = useState([]);
+    const [academicYears, setAcademicYears] = useState([]);
 
     useEffect(() => {
         if (view === 'list') {
@@ -186,12 +192,15 @@ const Student = () => {
             fetchDropdownData();
         } else {
             setActiveTab('Details');
-            fetchDropdownData();
-            if (editingRecord) {
-                fetchStudent(editingRecord);
-            } else {
-                setForm(emptyForm());
-            }
+            const loadData = async () => {
+                await fetchDropdownData();
+                if (editingRecord) {
+                    await fetchStudent(editingRecord);
+                } else {
+                    setForm(emptyForm());
+                }
+            };
+            loadData();
         }
     }, [view, editingRecord]);
 
@@ -199,7 +208,7 @@ const Student = () => {
     const fetchStudents = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Student?fields=["name","first_name","middle_name","last_name","student_email_id","student_mobile_number","joining_date","enabled","gender","program","gr_number","roll_number"]&limit_page_length=None&order_by=modified desc';
+            const url = '/api/resource/Student?fields=["name","first_name","middle_name","last_name","student_email_id","student_mobile_number","joining_date","enabled","gender","program","gr_number","roll_number","custom_board"]&limit_page_length=None&order_by=modified desc';
             const response = await API.get(url);
             setStudents(response.data.data || []);
         } catch (err) {
@@ -211,16 +220,20 @@ const Student = () => {
 
     const fetchDropdownData = async () => {
         try {
-            const [countryRes, custGroupRes, guardianRes, programRes] = await Promise.all([
+            const [countryRes, custGroupRes, guardianRes, programRes, academicYearRes, companyRes] = await Promise.all([
                 API.get('/api/resource/Country?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Customer Group?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Program?fields=["name"]&limit_page_length=None&order_by=name asc'),
+                API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None&order_by=name asc'),
+                API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc'),
             ]);
             setCountries((countryRes.data.data || []).map(c => c.name));
             setCustomerGroups((custGroupRes.data.data || []).map(c => c.name));
             setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '', mobile_number: g.mobile_number || '' })));
             setPrograms((programRes.data.data || []).map(p => p.name));
+            setBoards((companyRes.data.data || []).map(c => c.name));
+            setAcademicYears((academicYearRes.data.data || []).map(ay => ay.name));
         } catch (err) {
             console.error('Error fetching dropdown data:', err);
         }
@@ -257,9 +270,27 @@ const Student = () => {
                 city: d.city || '',
                 state: d.state || '',
                 country: d.country || 'India',
-                guardians: (d.guardians || []).map((g, idx) => ({ ...g, create_user_account: idx === 0 })),
+                guardians: await Promise.all((d.guardians || []).map(async (g, idx) => {
+                    // Fetch real guardian data since child table only has name and relation
+                    let email_address = '';
+                    let mobile_number = '';
+                    try {
+                        const gRes = await API.get(`/api/resource/Guardian/${encodeURIComponent(g.guardian)}`);
+                        email_address = gRes.data.data.email_address || '';
+                        mobile_number = gRes.data.data.mobile_number || '';
+                    } catch (e) {
+                        console.warn('Could not fetch full guardian details for', g.guardian);
+                    }
+                    return {
+                        ...g,
+                        email_address,
+                        mobile_number,
+                        create_user_account: idx === 0
+                    };
+                })),
                 siblings: d.siblings || [],
                 program: d.program || '',
+                custom_board: d.custom_board || '',
                 customer_group: d.customer_group || '',
                 date_of_leaving: d.date_of_leaving || '',
                 reason_for_leaving: d.reason_for_leaving || '',
@@ -480,9 +511,10 @@ const Student = () => {
             if (editingRecord) {
                 await API.put(`/api/resource/Student/${encodeURIComponent(editingRecord)}`, payload);
                 erpNextStudentName = editingRecord;
-                api.success({ message: 'Student updated successfully.' });
 
                 // --- REVERSE SYNC TO FIREBASE ---
+                let firebaseSyncSuccess = false;
+                let firebaseSyncError = '';
                 try {
                     const admsQuery = query(collection(db, 'schooler_system/enquiry_management/final_admissions'), where('erp_student_id', '==', editingRecord));
                     const admsSnap = await getDocs(admsQuery);
@@ -494,14 +526,55 @@ const Student = () => {
                         
                         const regId = admDoc.data().registrationId;
                         if (regId) {
-                            await updateDoc(doc(db, 'schooler_system/enquiry_management/registrations', regId), { isDisabled });
+                            // Sync common fields back to registration document
+                            const regUpdatePayload = {
+                                isDisabled,
+                                first_name: form.first_name || null,
+                                middle_name: form.middle_name || null,
+                                last_name: form.last_name || null,
+                                gender: form.gender || null,
+                                date_of_birth: form.date_of_birth || null,
+                                blood_group: form.blood_group || null,
+                                student_mobile_number: form.student_mobile_number || null,
+                                student_email_id: safeEmail || null,
+                                program: form.program || null,
+                                custom_board: form.custom_board || null,
+                                gr_number: form.gr_number || null,
+                                roll_number: form.roll_number || null,
+                                address_line_1: form.address_line_1 || null,
+                                perm_address: form.address_line_2 || null,
+                                city: form.city || null,
+                                state: form.state || null,
+                                pincode: form.pincode || null,
+                                country: form.country || null,
+                                custom_aadhaar_uid: form.custom_aadhaar_uid || null,
+                                custom_pen_number: form.custom_pen_number || null,
+                                custom_apaar_id: form.custom_apaar_id || null,
+                                custom_aadhaar_card_number: form.custom_aadhaar_card_number || null,
+                                updated_at: serverTimestamp(),
+                            };
+                            await updateDoc(doc(db, 'schooler_system/enquiry_management/registrations', regId), regUpdatePayload);
+                            console.log('[Student→Registration Sync] Updated disabled status and common fields:', isDisabled);
                         }
-                        console.log('[Firebase Reverse Sync] Updated disabled status:', isDisabled);
+                        firebaseSyncSuccess = true;
+                    } else {
+                        // No admission/registration linked yet — still OK
+                        firebaseSyncSuccess = true;
                     }
                 } catch (syncErr) {
-                    console.warn('Failed to reverse-sync disabled status to Firebase', syncErr);
+                    firebaseSyncError = syncErr?.response?.data?.message || syncErr.message || 'Unknown error';
+                    console.warn('Failed to reverse-sync fields to Firebase', syncErr);
                 }
                 // ---------------------------------
+
+                if (firebaseSyncSuccess) {
+                    api.warning({ 
+                        message: '⚠️ Warning: Update Registration Form', 
+                        description: 'Changes you do in student may not reflect in register form. Please do changes in registration form, not from student.' 
+                    });
+                } else {
+                    api.warning({ message: '⚠️ Student Saved in ERPNext', description: `Student updated but failed to sync Registration record: ${firebaseSyncError}` });
+                }
 
                 // Explicitly update Student record with guardians in child table
                 if (finalGuardians.length > 0) {
@@ -577,27 +650,53 @@ const Student = () => {
                     if (form.password) {
                         userPayload.new_password = form.password;
                     }
-                    try {
-                        await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, userPayload);
-                        console.log('[ERPNext User Sync] Automatically applied mobile number, role profile, and module profile to User record.');
-                    } catch (uErr) {
-                        if (uErr.response?.status === 404) {
-                            await API.post('/api/resource/User', {
-                                email: safeEmail,
-                                first_name: form.first_name || 'Student',
-                                last_name: form.last_name || null,
-                                send_welcome_email: 0,
-                                ...userPayload
-                            });
-                            console.log('[ERPNext User Sync] Explicitly created new User record mapped with Student permissions.');
-                            // Explicit PUT to guarantee password is saved on creation
-                            if (form.password) {
-                                await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, {
-                                    new_password: form.password
-                                }).catch(err => console.warn('[ERPNext Student Password Sync] Explicit PUT failed:', err.message));
+
+                    if (editingRecord) {
+                        // EDITING: Always update the EXISTING user — never create a new one.
+                        // Fetch the current student from ERPNext to get its stored user email.
+                        try {
+                            const existingStudentRes = await API.get(`/api/resource/Student/${encodeURIComponent(erpNextStudentName)}`);
+                            const existingUserEmail = existingStudentRes.data.data?.student_email_id;
+                            if (existingUserEmail) {
+                                const editUserPayload = {
+                                    ...userPayload,
+                                    first_name: form.first_name || undefined,
+                                    middle_name: form.middle_name || undefined,
+                                    last_name: form.last_name || undefined,
+                                };
+                                await API.put(`/api/resource/User/${encodeURIComponent(existingUserEmail)}`, editUserPayload)
+                                    .catch(uPutErr => console.warn('[ERPNext User Update] PUT to existing user failed silently:', uPutErr.message));
+                                console.log('[ERPNext User Sync] Updated existing User record (no new user created):', existingUserEmail);
+                            } else {
+                                console.log('[ERPNext User Sync] No existing user email found on student; skipping user update.');
                             }
-                        } else {
-                            console.warn('[ERPNext User Sync] Non-404 update response:', uErr.message);
+                        } catch (fetchErr) {
+                            console.warn('[ERPNext User Sync] Could not fetch existing student email; skipping user sync:', fetchErr.message);
+                        }
+                    } else {
+                        // NEW STUDENT: Try to update user if exists, otherwise create one
+                        try {
+                            await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, userPayload);
+                            console.log('[ERPNext User Sync] Automatically applied mobile number, role profile, and module profile to User record.');
+                        } catch (uErr) {
+                            if (uErr.response?.status === 404) {
+                                await API.post('/api/resource/User', {
+                                    email: safeEmail,
+                                    first_name: form.first_name || 'Student',
+                                    middle_name: form.middle_name || null,
+                                    last_name: form.last_name || null,
+                                    send_welcome_email: 0,
+                                    ...userPayload
+                                });
+                                console.log('[ERPNext User Sync] Explicitly created new User record mapped with Student permissions.');
+                                if (form.password) {
+                                    await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, {
+                                        new_password: form.password
+                                    }).catch(err => console.warn('[ERPNext Student Password Sync] Explicit PUT failed:', err.message));
+                                }
+                            } else {
+                                console.warn('[ERPNext User Sync] Non-404 update response:', uErr.message);
+                            }
                         }
                     }
                 } catch (profileSyncErr) {
@@ -630,7 +729,6 @@ const Student = () => {
                 description: String(exactError),
                 duration: 10
             });
-            alert("Error from ERPNext: " + exactError);
             
         } finally {
             setSaving(false);
@@ -739,7 +837,7 @@ const Student = () => {
         const apiFieldsToFetch = [];
 
         const orderedFields = [
-            'id', 'enabled', 'first_name', 'middle_name', 'gr_number', 'roll_number', 'last_name', 'program', 'naming_series', 'joining_date', 'user_id', 'student_applicant', 'image', 'student_email_address', 'date_of_birth', 'blood_group',
+            'id', 'enabled', 'first_name', 'middle_name', 'gr_number', 'roll_number', 'last_name', 'program', 'custom_board', 'naming_series', 'joining_date', 'user_id', 'student_applicant', 'image', 'student_email_address', 'date_of_birth', 'blood_group',
             'student_mobile_number', 'gender', 'nationality', 'address_line_1', 'address_line_2', 'pincode', 'city', 'state', 'country', 'customer', 'customer_group', 'date_of_leaving', 'leaving_certificate_number', 'reason_for_leaving', 'student_name',
             'guardian_guardian', 'guardian_guardian_name', 'guardian_id', 'guardian_relation',
             'guardian_email_address', 'guardian_mobile_number', 'guardian_occupation', 'guardian_designation',
@@ -752,6 +850,7 @@ const Student = () => {
             first_name: { label: 'First Name', api: 'first_name', width: 20 }, middle_name: { label: 'Middle Name', api: 'middle_name', width: 20 },
             gr_number: { label: 'GR Number', api: 'gr_number', width: 15 }, roll_number: { label: 'Roll Number', api: 'roll_number', width: 15 },
             last_name: { label: 'Last Name', api: 'last_name', width: 20 }, program: { label: 'Program (Class)', api: 'program', width: 20 },
+            custom_board: { label: 'Board', api: 'custom_board', width: 20 },
             naming_series: { label: 'Naming Series', api: 'naming_series', width: 20 }, joining_date: { label: 'Joining Date', api: 'joining_date', width: 15 },
             user_id: { label: 'User ID', api: 'user_id', width: 20 }, student_applicant: { label: 'Student Applicant', api: 'student_applicant', width: 20 },
             image: { label: 'Image', api: 'image', width: 20 }, student_email_address: { label: 'Student Email Address', api: 'student_email_id', width: 25 },
@@ -1495,6 +1594,7 @@ const Student = () => {
                                 await API.post('/api/resource/User', {
                                     email: safeEmail,
                                     first_name: firstName || 'Student',
+                                    middle_name: middleName || null,
                                     last_name: lastName || null,
                                     send_welcome_email: 0,
                                     ...userPayload
@@ -1997,6 +2097,7 @@ const Student = () => {
                                                 <CheckboxField name="roll_number" label="Roll Number" />
                                                 <CheckboxField name="last_name" label="Last Name" />
                                                 <CheckboxField name="program" label="Program (Class)" />
+                                                <CheckboxField name="custom_board" label="Board" />
                                                 <CheckboxField name="naming_series" label="Naming Series" />
                                                 <CheckboxField name="joining_date" label="Joining Date" />
                                                 <CheckboxField name="user_id" label="User ID" />
@@ -2100,7 +2201,10 @@ const Student = () => {
                 (s.roll_number || '').toLowerCase().includes(search.toLowerCase())
             );
             const matchesProgram = !selectedProgram || s.program === selectedProgram;
-            return matchesSearch && matchesProgram;
+            const matchesAcademicYear = !filterAcademicYear || s.academic_year === filterAcademicYear;
+            const matchesBoard = !filterBoard || s.custom_board === filterBoard;
+            const matchesStatus = !filterStatus || (filterStatus === 'Active' ? s.enabled === 1 : s.enabled === 0);
+            return matchesSearch && matchesProgram && matchesAcademicYear && matchesBoard && matchesStatus;
         });
 
         if (sortByRollNo) {
@@ -2160,8 +2264,48 @@ const Student = () => {
                                     <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                                 </div>
                             </div>
-                            {(search || selectedProgram || sortByRollNo) && (
-                                <button className="text-red-500 hover:text-red-700 text-sm font-bold flex items-center gap-1 active:scale-95 cursor-pointer shrink-0" onClick={() => { setSearch(''); setSelectedProgram(''); setSortByRollNo(false); }}>
+                            <div className="relative">
+                                <select 
+                                    className="bg-white border border-gray-200 rounded-xl pl-4 pr-8 py-2 text-sm focus:border-blue-400 focus:outline-none transition-all font-semibold text-gray-700 appearance-none cursor-pointer"
+                                    value={filterAcademicYear} 
+                                    onChange={(e) => setFilterAcademicYear(e.target.value)}
+                                >
+                                    <option value="">Filter by Year...</option>
+                                    {academicYears.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                </div>
+                            </div>
+                            <div className="relative">
+                                <select 
+                                    className="bg-white border border-gray-200 rounded-xl pl-4 pr-8 py-2 text-sm focus:border-blue-400 focus:outline-none transition-all font-semibold text-gray-700 appearance-none cursor-pointer"
+                                    value={filterBoard} 
+                                    onChange={(e) => setFilterBoard(e.target.value)}
+                                >
+                                    <option value="">Filter by Board...</option>
+                                    {boards.map(b => <option key={b} value={b}>{b}</option>)}
+                                </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                </div>
+                            </div>
+                            <div className="relative">
+                                <select 
+                                    className="bg-white border border-gray-200 rounded-xl pl-4 pr-8 py-2 text-sm focus:border-blue-400 focus:outline-none transition-all font-semibold text-gray-700 appearance-none cursor-pointer"
+                                    value={filterStatus} 
+                                    onChange={(e) => setFilterStatus(e.target.value)}
+                                >
+                                    <option value="">Filter by Status...</option>
+                                    <option value="Active">Active</option>
+                                    <option value="Disabled">Disabled</option>
+                                </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                </div>
+                            </div>
+                            {(search || selectedProgram || filterAcademicYear || filterBoard || filterStatus || sortByRollNo) && (
+                                <button className="text-red-500 hover:text-red-700 text-sm font-bold flex items-center gap-1 active:scale-95 cursor-pointer shrink-0" onClick={() => { setSearch(''); setSelectedProgram(''); setFilterAcademicYear(''); setFilterBoard(''); setFilterStatus(''); setSortByRollNo(false); }}>
                                     ✕ Clear
                                 </button>
                             )}
@@ -2360,7 +2504,9 @@ const Student = () => {
                                     const val = e.target.value;
                                     setForm(prev => {
                                         const next = { ...prev, first_name: val };
-                                        next.student_email_id = generateUniqueEmail(val, next.last_name, students);
+                                        if (!editingRecord) {
+                                            next.student_email_id = generateUniqueEmail(val, next.last_name, students);
+                                        }
                                         return next;
                                     });
                                 }} placeholder="First Name" />
@@ -2399,12 +2545,21 @@ const Student = () => {
                                 </select>
                             </div>
                             <div>
+                                <label className={labelStyle}>Board</label>
+                                <select className={inputStyle} value={form.custom_board || ''} onChange={e => updateField('custom_board', e.target.value)}>
+                                    <option value="">Select Board...</option>
+                                    {boards.map(b => <option key={b} value={b}>{b}</option>)}
+                                </select>
+                            </div>
+                            <div>
                                 <label className={labelStyle}>Last Name</label>
                                 <input className={inputStyle} value={form.last_name || ''} onChange={e => {
                                     const val = e.target.value;
                                     setForm(prev => {
                                         const next = { ...prev, last_name: val };
-                                        next.student_email_id = generateUniqueEmail(next.first_name, val, students);
+                                        if (!editingRecord) {
+                                            next.student_email_id = generateUniqueEmail(next.first_name, val, students);
+                                        }
                                         return next;
                                     });
                                 }} placeholder="Last Name" />
@@ -2623,7 +2778,7 @@ const Student = () => {
                                             <th className="px-3 py-2.5 text-left w-12">No.</th>
                                             <th className="px-3 py-2.5 text-left">Full Name</th>
                                             <th className="px-3 py-2.5 text-left">Gender</th>
-                                            <th className="px-3 py-2.5 text-left">Program</th>
+                                            <th className="px-3 py-2.5 text-left">Program (Class)</th>
                                             <th className="px-3 py-2.5 text-left">DOB</th>
                                             <th className="px-3 py-2 text-center w-10"></th>
                                         </tr>

@@ -394,7 +394,7 @@ export default function AddEnquiry() {
                     <SectionHeader title="Academic Detail" color="red" />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <SelectField label="Academic Year" required value={formData.academic_year} options={academicYears} onChange={(v) => updateField('academic_year', v)} />
-                        <SelectField label="Program" required value={formData.program} options={availableClasses} onChange={(v) => updateField('program', v)} />
+                        <SelectField label="Program (Class)" required value={formData.program} options={availableClasses} onChange={(v) => updateField('program', v)} />
 
                         <InputField label="Enquiry Date" type="date" value={formData.enquiry_date} onChange={(v) => updateField('enquiry_date', v)} />
                     </div>
@@ -681,7 +681,7 @@ export default function AddEnquiry() {
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Enquiry Code</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Student Name</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Source From</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Program</th>
+                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Program (Class)</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Academic Year</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Mobile No.</th>
                                 <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Enquiry Date</th>

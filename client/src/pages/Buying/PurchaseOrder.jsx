@@ -245,7 +245,8 @@ const PurchaseOrder = () => {
         setConfirmAction(null);
         try {
             const endpoint = isSubmit ? '/api/method/frappe.client.submit' : '/api/method/frappe.client.cancel';
-            await API.post(endpoint, { doc: { ...formData, doctype: 'Purchase Order' } });
+            const payload = isSubmit ? { doc: { ...formData, doctype: 'Purchase Order' } } : { doctype: 'Purchase Order', name: editingRecord };
+            await API.post(endpoint, payload);
             notification.success({ message: `Purchase Order has been ${isSubmit ? 'submitted' : 'cancelled'} successfully` });
             fetchDetails(editingRecord);
         } catch (err) {

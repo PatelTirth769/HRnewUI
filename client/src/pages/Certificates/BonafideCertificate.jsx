@@ -503,7 +503,7 @@ export default function BonafideCertificate() {
                         
                         <Row gutter={12} className="mt-3">
                             <Col span={12}>
-                                <Form.Item label="Program" name="program">
+                                <Form.Item label="Program (Class)" name="program">
                                     <AutoComplete
                                         options={programs}
                                         placeholder="Select or type program..."

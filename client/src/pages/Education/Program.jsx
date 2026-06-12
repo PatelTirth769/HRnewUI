@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
+import { FiEdit2, FiTrash2 } from 'react-icons/fi';
 import API from '../../services/api';
 
 const emptyForm = () => ({
     program_name: '',
     program_abbreviation: '',
     department: '',
+    custom_board: '',
     courses: [], // Child table: Program Course
 });
 
@@ -18,6 +20,7 @@ const Program = () => {
     const [programs, setPrograms] = useState([]);
     const [loadingList, setLoadingList] = useState(true);
     const [search, setSearch] = useState('');
+    const [filterBoard, setFilterBoard] = useState('All');
 
     // Form states
     const [form, setForm] = useState(emptyForm());
@@ -27,8 +30,16 @@ const Program = () => {
     // Dropdown options
     const [departments, setDepartments] = useState([]);
     const [allCourses, setAllCourses] = useState([]);
+    const [companies, setCompanies] = useState([]);
 
     useEffect(() => {
+        // Fetch companies once for the filter dropdown
+        if (companies.length === 0) {
+            API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc')
+                .then(res => setCompanies((res.data.data || []).map(c => c.name)))
+                .catch(err => console.error(err));
+        }
+
         if (view === 'list') {
             fetchPrograms();
         } else {
@@ -44,7 +55,7 @@ const Program = () => {
     const fetchPrograms = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Program?fields=["name","program_abbreviation","department"]&limit_page_length=None&order_by=name asc';
+            const url = '/api/resource/Program?fields=["name","program_abbreviation","department","custom_board"]&limit_page_length=None&order_by=name asc';
             const response = await API.get(url);
             setPrograms(response.data.data || []);
         } catch (err) {
@@ -56,12 +67,14 @@ const Program = () => {
 
     const fetchDropdownData = async () => {
         try {
-            const [deptRes, courseRes] = await Promise.all([
+            const [deptRes, courseRes, companyRes] = await Promise.all([
                 API.get('/api/resource/Department?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Course?fields=["name","course_name"]&limit_page_length=None&order_by=name asc'),
+                API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc'),
             ]);
             setDepartments((deptRes.data.data || []).map(d => d.name));
             setAllCourses((courseRes.data.data || []).map(c => ({ name: c.name, title: c.course_name || c.name })));
+            setCompanies((companyRes.data.data || []).map(c => c.name));
         } catch (err) {
             console.error('Error fetching dropdown data:', err);
         }
@@ -76,6 +89,7 @@ const Program = () => {
                 program_name: d.name || '',
                 program_abbreviation: d.program_abbreviation || '',
                 department: d.department || '',
+                custom_board: d.custom_board || '',
                 courses: (d.courses || []).map(c => ({
                     course: c.course || '',
                     course_name: c.course_name || '',
@@ -142,6 +156,7 @@ const Program = () => {
                 program_name: form.program_name,
                 program_abbreviation: form.program_abbreviation,
                 department: form.department || null,
+                custom_board: form.custom_board || null,
                 courses: form.courses.map(c => ({
                     course: c.course,
                     mandatory: c.mandatory ? 1 : 0
@@ -175,28 +190,40 @@ const Program = () => {
         }
     };
 
+    const handleDeleteRow = async (id) => {
+        if (!window.confirm(`Are you sure you want to delete the program "${id}"?`)) return;
+        try {
+            await API.delete(`/api/resource/Program/${encodeURIComponent(id)}`);
+            notification.success({ message: 'Program deleted.' });
+            fetchPrograms();
+        } catch (err) {
+            notification.error({ message: 'Delete Failed', description: err.response?.data?._server_messages || err.message });
+        }
+    };
+
     // --- Styles (Standard App UI) ---
     const inputStyle = "w-full border border-gray-200 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400";
     const labelStyle = "block text-[13px] text-gray-500 mb-1";
 
     if (view === 'list') {
         const filtered = programs.filter(p => {
-            if (!search) return true;
             const q = search.toLowerCase();
-            return (
+            const matchSearch = !search || (
                 (p.name || '').toLowerCase().includes(q) ||
                 (p.program_abbreviation || '').toLowerCase().includes(q) ||
-                (p.department || '').toLowerCase().includes(q)
+                (p.department || '').toLowerCase().includes(q) ||
+                (p.custom_board || '').toLowerCase().includes(q)
             );
+            const matchBoard = filterBoard === 'All' || p.custom_board === filterBoard;
+            return matchSearch && matchBoard;
         });
 
-        const hasActiveFilters = !!search;
-        const clearFilters = () => setSearch('');
+        const clearFilters = () => { setSearch(''); setFilterBoard('All'); };
 
         return (
             <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-semibold text-gray-800">Program</h1>
+                    <h1 className="text-2xl font-semibold text-gray-800">Program (Class)</h1>
                     <div className="flex gap-2">
                         <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 flex items-center gap-2 transition" onClick={fetchPrograms} disabled={loadingList}>
                             {loadingList ? '⟳ Loading...' : '⟳ Refresh'}
@@ -209,8 +236,16 @@ const Program = () => {
 
                 {/* Filter Bar */}
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-64" placeholder="Search Name, Abbr or Dept..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                    {hasActiveFilters && (
+                    <select 
+                        value={filterBoard} 
+                        onChange={e => setFilterBoard(e.target.value)} 
+                        className="border border-gray-300 rounded px-3 py-2 text-sm bg-white outline-none focus:border-blue-400 min-w-[150px]"
+                    >
+                        <option value="All">All Boards</option>
+                        {companies.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-64 outline-none focus:border-blue-400" placeholder="Search Name, Abbr or Dept..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    {(search || filterBoard !== 'All') && (
                         <button className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1" onClick={clearFilters}>
                             ✕ Clear Filters
                         </button>
@@ -225,15 +260,17 @@ const Program = () => {
                             <tr>
                                 <th className="px-4 py-3 font-medium text-gray-600">Program Name</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Abbreviation</th>
+                                <th className="px-4 py-3 font-medium text-gray-600">Board</th>
                                 <th className="px-4 py-3 font-medium text-gray-600">Department</th>
+                                <th className="px-4 py-3 font-medium text-gray-600 text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loadingList ? (
-                                <tr><td colSpan="3" className="text-center py-10 text-gray-400 italic">Fetching from ERPNext...</td></tr>
+                                <tr><td colSpan="5" className="text-center py-10 text-gray-400 italic">Fetching from ERPNext...</td></tr>
                             ) : filtered.length === 0 ? (
                                 <tr>
-                                    <td colSpan="3" className="text-center py-16 text-gray-500">
+                                    <td colSpan="5" className="text-center py-16 text-gray-500">
                                         <p className="text-lg font-medium mb-1">No Programs Found</p>
                                         <p className="text-sm">Try adjusting your search or add a new program.</p>
                                     </td>
@@ -249,7 +286,16 @@ const Program = () => {
                                         <td className="px-4 py-3 text-gray-600 font-medium">
                                             <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-[11px] uppercase">{row.program_abbreviation || '-'}</span>
                                         </td>
+                                        <td className="px-4 py-3 text-gray-600">
+                                            {row.custom_board ? <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px] font-bold">{row.custom_board}</span> : '-'}
+                                        </td>
                                         <td className="px-4 py-3 text-gray-600">{row.department || '-'}</td>
+                                        <td className="px-4 py-3 text-right">
+                                            <div className="flex items-center justify-end gap-2 transition-all">
+                                                <button onClick={(e) => { e.stopPropagation(); setEditingRecord(row.name); setView('form'); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title="Edit"><FiEdit2 className="w-4 h-4" /></button>
+                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteRow(row.name); }} className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors" title="Delete"><FiTrash2 className="w-4 h-4" /></button>
+                                            </div>
+                                        </td>
                                     </tr>
                                 ))
                             )}
@@ -301,6 +347,13 @@ const Program = () => {
                     <div>
                         <label className={labelStyle}>Program Abbreviation</label>
                         <input type="text" className={inputStyle} value={form.program_abbreviation} onChange={e => updateField('program_abbreviation', e.target.value)} placeholder="e.g. B.Sc" />
+                    </div>
+                    <div>
+                        <label className={labelStyle}>Board (Company)</label>
+                        <select className={inputStyle} value={form.custom_board} onChange={e => updateField('custom_board', e.target.value)}>
+                            <option value="">Select Board...</option>
+                            {companies.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
                     </div>
                     <div>
                         <label className={labelStyle}>Department</label>

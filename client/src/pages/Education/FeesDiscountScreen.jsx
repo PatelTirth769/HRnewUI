@@ -12,7 +12,7 @@ import { Radio } from 'antd';
 
 const FeesDiscountScreen = () => {
     const { systemCode } = useUserRole();
-    const currentSystemCode = systemCode || 'schooler';
+    const currentSystemCode = 'schooler_system'; // Hardcoded to main system collection as requested
 
     // Tabs
     const [activeTab, setActiveTab] = useState('categories');
@@ -28,8 +28,8 @@ const FeesDiscountScreen = () => {
     const [assignments, setAssignments] = useState([]);
     const [loadingAssignments, setLoadingAssignments] = useState(false);
     const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
-    const [dropdowns, setDropdowns] = useState({ students: [], academicYears: [], programs: [], terms: [] });
-    const [assignForm, setAssignForm] = useState({ discount_id: '', student_id: [], academic_year: '', target_type: 'specific', program: '', terms: [] });
+    const [dropdowns, setDropdowns] = useState({ students: [], academicYears: [], programs: [], terms: [], boards: [] });
+    const [assignForm, setAssignForm] = useState({ discount_id: '', student_id: [], academic_year: '', target_type: 'specific', program: '', board: '', terms: [] });
     const [assigning, setAssigning] = useState(false);
 
     useEffect(() => {
@@ -104,18 +104,21 @@ const FeesDiscountScreen = () => {
     // --- Assignment Logic ---
     const fetchDropdowns = async () => {
         try {
-            const [sRes, yRes, pRes, tRes] = await Promise.all([
-                API.get('/api/resource/Student?fields=["name","first_name","last_name","program"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+            const [sRes, yRes, pRes, tRes, cRes] = await Promise.all([
+                API.get('/api/resource/Student?fields=["name","first_name","last_name","program","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Year?limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Program?limit_page_length=None').catch(() => ({ data: { data: [] } })),
-                API.get('/api/resource/Fee Category?limit_page_length=None').catch(() => ({ data: { data: [] } }))
+                API.get('/api/resource/Fee Category?limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } }))
             ]);
             setDropdowns({
                 students: sRes.data.data?.map(d => ({
                     id: d.name,
                     name: `${d.first_name || ''} ${d.last_name || ''}`.trim(),
-                    program: d.program || ''
+                    program: d.program || '',
+                    board: d.custom_board || ''
                 })) || [],
+                boards: cRes.data.data?.map(c => c.name) || [...new Set((sRes.data.data || []).map(d => d.custom_board).filter(Boolean))].sort(),
                 academicYears: yRes.data.data?.map(d => d.name) || [],
                 programs: pRes.data.data?.map(d => d.name) || [],
                 terms: tRes.data.data?.map(d => d.name) || []
@@ -154,14 +157,19 @@ const FeesDiscountScreen = () => {
         }
 
         let studentIds = [];
-        if (assignForm.target_type === 'all') {
-            studentIds = dropdowns.students.map(s => s.id);
-        } else if (assignForm.target_type === 'program') {
+
+        if (assignForm.target_type === 'program') {
             if (!assignForm.program) {
                 notification.warning({ message: 'Please select a Program' });
                 return;
             }
-            studentIds = dropdowns.students.filter(s => s.program === assignForm.program).map(s => s.id);
+            studentIds = dropdowns.students
+                .filter(s => s.program === assignForm.program && (!assignForm.board || s.board === assignForm.board))
+                .map(s => s.id);
+        } else if (assignForm.target_type === 'all') {
+            studentIds = dropdowns.students
+                .filter(s => !assignForm.board || s.board === assignForm.board)
+                .map(s => s.id);
         } else {
             if (!assignForm.student_id || assignForm.student_id.length === 0) {
                 notification.warning({ message: 'Please select at least one student' });
@@ -230,6 +238,14 @@ const FeesDiscountScreen = () => {
     const assignmentColumns = [
         { title: 'Student ID', dataIndex: 'student_id', key: 'student_id', className: 'font-semibold' },
         { title: 'Student Name', dataIndex: 'student_name', key: 'student_name' },
+        { 
+            title: 'Board', 
+            key: 'board', 
+            render: (_, record) => {
+                const s = dropdowns.students.find(st => st.id === record.student_id);
+                return s?.board ? <Tag color="cyan">{s.board}</Tag> : <span className="text-gray-400">-</span>;
+            } 
+        },
         { title: 'Academic Year', dataIndex: 'academic_year', key: 'academic_year' },
         { 
             title: 'Terms', 
@@ -333,6 +349,19 @@ const FeesDiscountScreen = () => {
                         </Select>
                     </div>
                     <div>
+                        <label className="block text-sm font-medium mb-1">Board (Optional)</label>
+                        <Select
+                            showSearch
+                            allowClear
+                            className="w-full"
+                            placeholder="Select Board to filter"
+                            value={assignForm.board}
+                            onChange={val => setAssignForm({ ...assignForm, board: val, student_id: [] })}
+                        >
+                            {dropdowns.boards.map(b => <Option key={b} value={b}>{b}</Option>)}
+                        </Select>
+                    </div>
+                    <div>
                         <label className="block text-sm font-medium mb-1">Assign To Target *</label>
                         <Radio.Group 
                             value={assignForm.target_type} 
@@ -374,7 +403,9 @@ const FeesDiscountScreen = () => {
                                 value={assignForm.student_id}
                                 onChange={val => setAssignForm({ ...assignForm, student_id: val })}
                             >
-                                {dropdowns.students.map(s => <Option key={s.id} value={s.id}>{s.id} - {s.name}</Option>)}
+                                {dropdowns.students
+                                    .filter(s => !assignForm.board || s.board === assignForm.board)
+                                    .map(s => <Option key={s.id} value={s.id}>{s.id} - {s.name}</Option>)}
                             </Select>
                         </div>
                     )}

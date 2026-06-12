@@ -261,7 +261,7 @@ const ProgramEnrollmentTool = () => {
                         </div>
                         
                         <div>
-                            <label className={`${labelStyle} flex gap-1 items-center`}>Program <span className="text-red-500">*</span></label>
+                            <label className={`${labelStyle} flex gap-1 items-center`}>Program (Class) <span className="text-red-500">*</span></label>
                             <Select 
                                 className="w-full erp-select bg-red-50/20" 
                                 size="large"

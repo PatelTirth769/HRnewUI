@@ -476,6 +476,7 @@ export const moduleNavigation = {
             {
                 title: 'CONTENT MASTER',
                 icon: 'file-text',
+                disabled: true,
                 items: [
                     { label: 'Article', path: '/education/article', instructorAccess: true },
                     { label: 'Video', path: '/education/video', studentAccess: true, instructorAccess: true, guardianAccess: true },
@@ -521,9 +522,9 @@ export const moduleNavigation = {
                     { label: 'Student Monthly Attendance Sheet', path: '/education/student-monthly-attendance-sheet' },
                     { label: 'Absent Student Report', path: '/education/absent-student-report' },
                     { label: 'Student Batch-Wise Attendance', path: '/education/student-batch-wise-attendance' },
-                    { label: 'Course Enrollment', path: '/education/course-enrollment' },
-                    { label: 'Course Activity', path: '/education/course-activity' },
-                    { label: 'Quiz Activity', path: '/education/quiz-activity' },
+                    { label: 'Course Enrollment', path: '/education/course-enrollment', disabled: true },
+                    { label: 'Course Activity', path: '/education/course-activity', disabled: true },
+                    { label: 'Quiz Activity', path: '/education/quiz-activity', disabled: true },
                 ],
             },
             {
@@ -570,13 +571,13 @@ export const moduleNavigation = {
                 items: [
                     { label: 'Fee Structure', path: '/education/fee-structure' },
                     { label: 'Fee Category', path: '/education/fee-category' },
-                    { label: 'Fee Schedule', path: '/education/fee-schedule' },
-                    { label: 'Fees', path: '/education/fees', studentAccess: true, guardianAccess: true },
+                    { label: 'Fee Schedule', path: '/education/fee-schedule', disabled: true },
+                    { label: 'Fees', path: '/education/fees', studentAccess: true, guardianAccess: true, disabled: true },
                     { label: 'Fees Discount', path: '/education/fees-discount' },
-                    { label: 'Sales Invoice', path: '/accounting/sales-invoice', studentAccess: true, guardianAccess: true },
+                    { label: 'Sales Invoice', path: '/accounting/sales-invoice', studentAccess: true, guardianAccess: true, disabled: true },
                     { label: 'Student Fee Collection', path: '/education/student-fee-collection' },
                     { label: 'Fees report', path: '/education/fees-report' },
-                    { label: 'Program wise Fee Collection', path: '/education/program-wise-fee-collection' },
+                    { label: 'Program wise Fee Collection', path: '/education/program-wise-fee-collection', disabled: true },
                 ],
             },
             {

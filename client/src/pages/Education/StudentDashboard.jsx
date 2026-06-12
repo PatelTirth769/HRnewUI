@@ -374,16 +374,36 @@ const StudentDashboard = () => {
       if (!linkedFeeStructure && programToSearch) {
         console.log('[FeeDebug] Stage 3: Searching by Program name:', programToSearch);
         try {
+          let filters = [["program", "=", programToSearch]];
+          if (profile.custom_board) {
+            filters.push(["company", "=", profile.custom_board]);
+          }
+
           const fsRes = await API.get('/api/resource/Fee Structure', {
             params: {
-              filters: JSON.stringify([["program", "=", programToSearch]]),
+              filters: JSON.stringify(filters),
               fields: JSON.stringify(["name"])
             }
           });
           if (fsRes.data?.data?.length > 0) {
             linkedFeeStructure = fsRes.data.data[0].name;
-            console.log('[FeeDebug] Found in Fee Structure list:', linkedFeeStructure);
-          } else {
+            console.log('[FeeDebug] Found in Fee Structure list with board filter:', linkedFeeStructure);
+          } else if (profile.custom_board) {
+            // Fallback without company filter if no match was found with it
+            console.log('[FeeDebug] Not found with company filter, trying just program...');
+            const fsResFallback = await API.get('/api/resource/Fee Structure', {
+              params: {
+                filters: JSON.stringify([["program", "=", programToSearch]]),
+                fields: JSON.stringify(["name"])
+              }
+            });
+            if (fsResFallback.data?.data?.length > 0) {
+              linkedFeeStructure = fsResFallback.data.data[0].name;
+              console.log('[FeeDebug] Found in Fee Structure list as fallback:', linkedFeeStructure);
+            }
+          }
+
+          if (!linkedFeeStructure) {
             console.log('[FeeDebug] No Fee Structure found with program filter. Trying exact name match...');
             try {
               const fsExact = await API.get(`/api/resource/Fee Structure/${encodeURIComponent(programToSearch)}`);
@@ -460,7 +480,7 @@ const StudentDashboard = () => {
       try {
         const studentId = profile?.name;
         if (studentId) {
-            const sdSnaps = await getDocs(collection(db, 'schooler', 'data', 'student_discounts'));
+            const sdSnaps = await getDocs(collection(db, 'schooler_system', 'data', 'student_discounts'));
             sdSnaps.forEach(doc => {
                 const data = doc.data();
                 if (data.student_id === studentId) {
@@ -469,7 +489,7 @@ const StudentDashboard = () => {
                 }
             });
 
-            const fdSnaps = await getDocs(collection(db, 'schooler', 'data', 'fees_discounts'));
+            const fdSnaps = await getDocs(collection(db, 'schooler_system', 'data', 'fees_discounts'));
             fdSnaps.forEach(doc => { feeDiscountsMap[doc.id] = doc.data(); });
         }
       } catch (err) {
@@ -913,7 +933,8 @@ const StudentDashboard = () => {
                     <Descriptions column={{ xxl: 2, xl: 2, lg: 2, md: 1, sm: 1, xs: 1 }} bordered size="large">
                       <Descriptions.Item label="Student ID"><Text strong>{profile.name}</Text></Descriptions.Item>
                       <Descriptions.Item label="Joining Date">{profile.joining_date}</Descriptions.Item>
-                      <Descriptions.Item label="Program"><Tag color="blue">{profile.program || 'N/A'}</Tag></Descriptions.Item>
+                      <Descriptions.Item label="Program (Class)"><Tag color="blue">{profile.program || 'N/A'}</Tag></Descriptions.Item>
+                      <Descriptions.Item label="Board"><Tag color="geekblue">{profile.custom_board || 'N/A'}</Tag></Descriptions.Item>
                       <Descriptions.Item label="Student Group">
                         {studentData.studentGroups && studentData.studentGroups.length > 0 ? (
                           studentData.studentGroups.map(group => <Tag color="cyan" key={group}>{group}</Tag>)

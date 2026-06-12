@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { notification, Spin, Tabs, Modal } from 'antd';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import API from '../../services/api';
 import axios from 'axios';
@@ -12,6 +12,9 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import schoolLogo from '../../assets/images/SSVLOGO.png';
 import { generateAdmissionReceipt } from './AdmissionFeeReceipt';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+dayjs.extend(relativeTime);
 
 
 
@@ -325,6 +328,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
         // Student Detail
         academic_year: '2025-2026',
         program: '',
+        custom_board: '',
         rte_student: '',
         roll_number: '',
         gr_number: '',
@@ -438,12 +442,13 @@ export default function RegistrationForm({ initialView = 'list' }) {
         if (saved) {
             try { return JSON.parse(saved); } catch (e) {}
         }
-        return initFormData;
+        return { ...initFormData, registrationNo: `REG-${Date.now().toString().slice(-6)}` };
     });
     const [selectedSibling, setSelectedSibling] = useState('');
     const [availableClasses, setAvailableClasses] = useState([]);
     const [availableCastes, setAvailableCastes] = useState(['General', 'OBC', 'SC', 'ST']);
     const [academicYears, setAcademicYears] = useState([]);
+    const [boards, setBoards] = useState([]);
     const [guardiansList, setGuardiansList] = useState([]);
     const [paymentProcessing, setPaymentProcessing] = useState(false);
     const [previewModal, setPreviewModal] = useState({ visible: false, url: '', name: '', type: '' });
@@ -453,8 +458,11 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const [filterDateTo, setFilterDateTo] = useState('');
     const [filterProgram, setFilterProgram] = useState('All');
     const [filterAcademicYear, setFilterAcademicYear] = useState('All');
+    const [filterBoard, setFilterBoard] = useState('All');
     const [filterStatus, setFilterStatus] = useState('All');
     const [filterFeeStatus, setFilterFeeStatus] = useState('All');
+    const [filterImportedOnly, setFilterImportedOnly] = useState(false);
+    const [filterImportedDate, setFilterImportedDate] = useState('');
 
     // --- Data Import States ---
     const [importView, setImportView] = useState('list');
@@ -474,7 +482,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const [templateType, setTemplateType] = useState('Blank Template');
     const [selectedFields, setSelectedFields] = useState({
         // Academic
-        academic_year: true, program: true, roll_number: false, gr_number: false, registration_date: false,
+        academic_year: true, program: true, custom_board: false, roll_number: false, gr_number: false, registration_date: false,
         // Basic Detail
         first_name: true, middle_name: false, last_name: false, student_full_name: false, gender: true,
         date_of_birth: false, place_of_birth: false, caste: false, sub_caste: false, category: false,
@@ -703,11 +711,12 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
     const fetchERPNextData = async () => {
         try {
-            const [progRes, yearRes, guardianRes, casteRes] = await Promise.all([
+            const [progRes, yearRes, guardianRes, casteRes, companyRes] = await Promise.all([
                 API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Student Category?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
             ]);
             
             const programs = progRes.data.data?.map(p => p.name) || [];
@@ -719,6 +728,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             }
             
             setAcademicYears(years);
+            setBoards((companyRes.data.data || []).map(c => c.name));
             setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '', mobile_number: g.mobile_number || '' })));
             await fetchRestrictions(programs);
         } catch (err) {
@@ -915,10 +925,16 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
         setSaving(true);
         try {
+            // Ensure registrationNo is populated on formData so it goes to ERPNext and Firebase
+            const currentRegNo = formData.registrationNo || `REG-${Date.now().toString().slice(-6)}`;
+            if (!formData.registrationNo) {
+                setFormData(prev => ({ ...prev, registrationNo: currentRegNo }));
+                formData.registrationNo = currentRegNo;
+            }
+
             // Check if we are newly disabling this registration
             if (formData.isDisabled && editingRecord && !editingRecord.isDisabled) {
                 try {
-                    const { collection, query, where, getDocs } = require('firebase/firestore');
                     const admsQuery = query(collection(db, 'schooler_system/enquiry_management/final_admissions'), where('registrationId', '==', editingRecord.id));
                     const admsSnap = await getDocs(admsQuery);
                     if (!admsSnap.empty) {
@@ -951,12 +967,103 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 updated_at: serverTimestamp()
             };
 
+            // Auto-generate registration code if missing
+            if (!finalData.registrationNo) {
+                finalData.registrationNo = `REG-${Date.now().toString().slice(-6)}`;
+            }
+
             console.log('[Registration Save] 💾 Saving Registration to Firebase. Document Data inside payload:', finalData.documents);
 
             if (editingRecord) {
                 const docRef = doc(db, REGISTRATIONS_PATH, editingRecord.id);
                 await updateDoc(docRef, finalData);
-                api.success({ message: 'Registration Updated Successfully' });
+
+                // --- FORWARD SYNC: Update linked ERPNext Student record ---
+                let erpSyncSuccess = false;
+                let erpSyncError = '';
+                try {
+                    const admsQuery = query(
+                        collection(db, 'schooler_system/enquiry_management/final_admissions'),
+                        where('registrationId', '==', editingRecord.id)
+                    );
+                    const admsSnap = await getDocs(admsQuery);
+                    if (!admsSnap.empty) {
+                        const adm = admsSnap.docs[0].data();
+                        if (adm.erp_student_id) {
+                            // Build the student update payload from matching fields
+                            const studentUpdatePayload = {
+                                first_name: formData.first_name || null,
+                                middle_name: formData.middle_name || null,
+                                last_name: formData.last_name || null,
+                                gender: formData.gender || null,
+                                date_of_birth: formData.date_of_birth || null,
+                                blood_group: formData.blood_group || null,
+                                student_mobile_number: formData.student_mobile_number || null,
+                                student_email_id: formData.student_email_id || null,
+                                program: formData.program || null,
+                                custom_board: formData.custom_board || null,
+                                gr_number: formData.gr_number || null,
+                                roll_number: formData.roll_number || null,
+                                address_line_1: formData.address_line_1 || null,
+                                address_line_2: formData.perm_address || null,
+                                city: formData.city || null,
+                                state: formData.state || null,
+                                pincode: formData.pincode || null,
+                                country: formData.country || null,
+                                custom_aadhaar_uid: formData.custom_aadhaar_uid || null,
+                                custom_pen_number: formData.custom_pen_number || null,
+                                custom_apaar_id: formData.custom_apaar_id || null,
+                                custom_aadhaar_card_number: formData.custom_aadhaar_card_number || null,
+                            };
+                            await API.put(`/api/resource/Student/${encodeURIComponent(adm.erp_student_id)}`, studentUpdatePayload);
+                            
+                            // Sync with User record as well
+                            try {
+                                const studentRes = await API.get(`/api/resource/Student/${encodeURIComponent(adm.erp_student_id)}`);
+                                const existingUserEmail = studentRes.data.data?.student_email_id;
+                                if (existingUserEmail) {
+                                    const cleanPhone = formData.student_mobile_number ? String(formData.student_mobile_number).replace(/[\s+-]/g, '') : '';
+                                    const cleanStudentUsername = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+                                    
+                                    const editUserPayload = {
+                                        first_name: formData.first_name || undefined,
+                                        middle_name: formData.middle_name || undefined,
+                                        last_name: formData.last_name || undefined,
+                                        mobile_no: formData.student_mobile_number ? String(formData.student_mobile_number).trim() : null,
+                                        role_profile_name: 'Student',
+                                        module_profile: 'Student',
+                                        enabled: 1,
+                                        roles: [{ role: 'Student' }]
+                                    };
+                                    if (cleanStudentUsername) {
+                                        editUserPayload.username = cleanStudentUsername;
+                                    }
+                                    await API.put(`/api/resource/User/${encodeURIComponent(existingUserEmail)}`, editUserPayload)
+                                        .catch(uPutErr => console.warn('[Registration→User Sync] PUT to user failed silently:', uPutErr.message));
+                                    console.log('[Registration→User Sync] Successfully updated User record for student:', existingUserEmail);
+                                }
+                            } catch (uSyncErr) {
+                                console.warn('[Registration→User Sync] Failed to update User profile during sync:', uSyncErr.message);
+                            }
+
+                            erpSyncSuccess = true;
+                            console.log('[Registration→Student Sync] Successfully synced fields to ERPNext Student:', adm.erp_student_id);
+                        }
+                    } else {
+                        // No admission found yet (registration not converted), that's fine
+                        erpSyncSuccess = true;
+                    }
+                } catch (erpSyncErr) {
+                    erpSyncError = erpSyncErr?.response?.data?.message || erpSyncErr.message || 'Unknown error';
+                    console.warn('[Registration→Student Sync] Failed to sync to ERPNext Student:', erpSyncErr);
+                }
+                // ---------------------------------------------------------
+
+                if (erpSyncSuccess) {
+                    api.success({ message: '✅ Student Updated Successfully', description: 'Changes have been saved in both Registration and Student records.' });
+                } else {
+                    api.warning({ message: '⚠️ Registration Saved', description: `Registration updated but failed to sync Student record: ${erpSyncError}` });
+                }
             } else {
                 await addDoc(colRef, {
                     ...finalData,
@@ -1009,6 +1116,13 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 return false;
             }
 
+            // 2.7 Board Filter
+            if (filterBoard !== 'All') {
+                const docBoard = (d.custom_board || '').toString().trim().toLowerCase();
+                const selBoard = filterBoard.toString().trim().toLowerCase();
+                if (docBoard !== selBoard) return false;
+            }
+
             // 3. Status Filter (Converted vs Open vs Disabled)
             const isDisabled = d.isDisabled === true;
             if (filterStatus === 'All' && isDisabled) return false; // Hide disabled by default
@@ -1054,9 +1168,15 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 }
             }
 
+            // 6. Imported Data Filter
+            if (filterImportedOnly) {
+                if (!d.is_imported) return false;
+                if (filterImportedDate && d.imported_date !== filterImportedDate) return false;
+            }
+
             return true;
         });
-    }, [data, searchQuery, filterProgram, filterAcademicYear, filterStatus, filterFeeStatus, filterDateFrom, filterDateTo]);
+    }, [data, searchQuery, filterProgram, filterAcademicYear, filterBoard, filterStatus, filterFeeStatus, filterDateFrom, filterDateTo, filterImportedOnly, filterImportedDate]);
 
     const updateField = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -1277,6 +1397,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
         // Academic
         academic_year: { label: 'Academic Year', width: 15 },
         program: { label: 'Program (Class)', width: 20 },
+        custom_board: { label: 'Board', width: 20 },
         rte_student: { label: 'RTE Student', width: 15 },
         roll_number: { label: 'Roll Number', width: 15 },
         gr_number: { label: 'GR Number', width: 15 },
@@ -1570,6 +1691,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     const email = String(getField(row, 'Student Email Address', 'student_email_id')).trim();
                     const academicYear = String(getField(row, 'Academic Year', 'academic_year')).trim();
                     const program = String(getField(row, 'Program (Class)', 'Program', 'program')).trim();
+                    const customBoard = String(getField(row, 'Board', 'custom_board')).trim();
                     const rteStudent = String(getField(row, 'RTE Student', 'rte_student')).trim();
                     const rollNumber = String(getField(row, 'Roll Number', 'roll_number')).trim();
                     const grNumber = String(getField(row, 'GR Number', 'gr_number')).trim();
@@ -1764,6 +1886,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         ...initFormData,
                         academic_year: academicYear || initFormData.academic_year,
                         program: program || '',
+                        custom_board: customBoard || '',
                         rte_student: rteStudent || '',
                         roll_number: rollNumber,
                         gr_number: grNumber,
@@ -1825,7 +1948,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         lctc_issue_date: lctcDate,
                         guardians: finalGuardians,
                         created_at: serverTimestamp(),
-                        updated_at: serverTimestamp()
+                        updated_at: serverTimestamp(),
+                        is_imported: true,
+                        imported_date: new Date().toISOString().split('T')[0]
                     };
 
                     // Remove document array defaults for imported records (no files uploaded)
@@ -1847,6 +1972,8 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             }
                         });
                         updatePayload.updated_at = serverTimestamp();
+                        updatePayload.is_imported = true;
+                        updatePayload.imported_date = new Date().toISOString().split('T')[0];
                         
                         await updateDoc(doc(db, REGISTRATIONS_PATH, existingDoc.id), updatePayload);
                         successCount++;
@@ -1939,9 +2066,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
             children: (
                 <div className="space-y-4">
                     <SectionHeader title="Academic Detail" color="red" />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <SelectField label="Academic Year" required value={formData.academic_year} options={academicYears} onChange={(v) => updateField('academic_year', v)} />
                         <SelectField label="Program (Class)" required value={formData.program} options={availableClasses} onChange={(v) => updateField('program', v)} />
+                        <SelectField label="Board" value={formData.custom_board} options={boards} onChange={(v) => updateField('custom_board', v)} />
                         <SelectField label="RTE Student" value={formData.rte_student} options={['Yes', 'No']} onChange={(v) => updateField('rte_student', v)} />
                         <InputField label="Roll Number" value={formData.roll_number} onChange={(v) => updateField('roll_number', v)} placeholder="Enter Roll Number" />
                         <InputField label="GR Number" value={formData.gr_number} onChange={(v) => updateField('gr_number', v)} placeholder="Enter GR Number" />
@@ -1954,7 +2082,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         <InputField label="First Name" required value={formData.first_name} onChange={(v) => {
                             setFormData(prev => {
                                 const next = { ...prev, first_name: v };
-                                next.student_email_id = generateUniqueEmail(v, next.last_name, data);
+                                if (!editingRecord) {
+                                    next.student_email_id = generateUniqueEmail(v, next.last_name, data);
+                                }
                                 next.student_full_name = [v, next.middle_name, next.last_name].filter(Boolean).join(' ').trim();
                                 return next;
                             });
@@ -1969,7 +2099,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         <InputField label="Last Name" value={formData.last_name} onChange={(v) => {
                             setFormData(prev => {
                                 const next = { ...prev, last_name: v };
-                                next.student_email_id = generateUniqueEmail(next.first_name, v, data);
+                                if (!editingRecord) {
+                                    next.student_email_id = generateUniqueEmail(next.first_name, v, data);
+                                }
                                 next.student_full_name = [next.first_name, next.middle_name, v].filter(Boolean).join(' ').trim();
                                 return next;
                             });
@@ -2589,6 +2721,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                         <p>YYYY-MM-DD or DD-MM-YYYY (auto-detected). Excel date serial numbers are also supported.</p>
                                     </div>
                                     <div className="bg-white/60 rounded-lg p-3 border border-blue-100/50">
+                                        <p className="font-bold mb-1">🏫 Board Field</p>
+                                        <p>If you have multiple Boards (like CBSE, GSEB), ensure you provide the exact same name as in the Company list in ERPNext.</p>
+                                    </div>
+                                    <div className="bg-white/60 rounded-lg p-3 border border-blue-100/50">
                                         <p className="font-bold mb-1">✅ Allowed Values</p>
                                         <ul className="list-disc pl-4 space-y-0.5">
                                             <li><b>Gender:</b> Male, Female, Other</li>
@@ -2791,7 +2927,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         <div className="max-h-[400px] overflow-y-auto border border-gray-100 rounded-xl p-4 bg-gray-50/50 space-y-4">
                             {/* Academic */}
                             <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">📚 Academic Detail</h4>
-                            <div className="grid grid-cols-3 gap-2">{['academic_year','program','rte_student','roll_number','gr_number','registration_date'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
+                            <div className="grid grid-cols-3 gap-2">{['academic_year','program','custom_board','rte_student','roll_number','gr_number','registration_date'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
                             {/* Basic */}
                             <div><h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">👤 Basic Detail</h4>
                             <div className="grid grid-cols-3 gap-2">{['first_name','middle_name','last_name','student_full_name','gender','date_of_birth','place_of_birth','caste','sub_caste','category','religion','mother_tongue','blood_group','custom_aadhaar_uid','custom_pen_number','custom_apaar_id','custom_aadhaar_card_number'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
@@ -2923,7 +3059,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
     };
 
     return (
-        <div className="p-6 max-w-[1400px] mx-auto pb-24 text-gray-800 font-inter">
+        <div className="p-6 w-full mx-auto pb-24 text-gray-800 font-inter">
             {contextHolder}
             <div className="flex justify-between items-center mb-6">
                 <div>
@@ -2961,7 +3097,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
             {/* Filter Section */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6">
                     <div className="flex flex-col gap-2">
                         <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Start Date</label>
                         <input
@@ -2994,7 +3130,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         </select>
                     </div>
                     <div className="flex flex-col gap-2">
-                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Program</label>
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Program (Class)</label>
                         <select
                             value={filterProgram}
                             onChange={(e) => setFilterProgram(e.target.value)}
@@ -3003,6 +3139,19 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             <option value="All">All Programs</option>
                             {availableClasses.map((p) => (
                                 <option key={p} value={p}>{p}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Board</label>
+                        <select
+                            value={filterBoard}
+                            onChange={(e) => setFilterBoard(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                        >
+                            <option value="All">All Boards</option>
+                            {boards.map((b) => (
+                                <option key={b} value={b}>{b}</option>
                             ))}
                         </select>
                     </div>
@@ -3033,15 +3182,40 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         </select>
                     </div>
                 </div>
-                <div className="mt-4 flex justify-end">
+                <div className="flex items-center justify-between mt-4 border-t border-gray-100 pt-4">
+                    <div className="flex flex-wrap items-center gap-4">
+                        <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={filterImportedOnly}
+                                onChange={(e) => setFilterImportedOnly(e.target.checked)}
+                                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            />
+                            Show Imported Data Only
+                        </label>
+                        {filterImportedOnly && (
+                            <div className="flex items-center gap-2">
+                                <label className="text-[13px] font-bold text-gray-600 uppercase tracking-wider">Import Date:</label>
+                                <input
+                                    type="date"
+                                    value={filterImportedDate}
+                                    onChange={(e) => setFilterImportedDate(e.target.value)}
+                                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                />
+                            </div>
+                        )}
+                    </div>
                     <button
                         onClick={() => {
                             setFilterDateFrom('');
                             setFilterDateTo('');
                             setFilterAcademicYear('All');
                             setFilterProgram('All');
+                            setFilterBoard('All');
                             setFilterStatus('All');
                             setFilterFeeStatus('All');
+                            setFilterImportedOnly(false);
+                            setFilterImportedDate('');
                         }}
                         className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all cursor-pointer"
                     >
@@ -3070,20 +3244,21 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-[12px]">
+                    <table className="w-full text-left text-[11px]">
                         <thead>
                             <tr className="bg-gray-50/50">
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Registration Code</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Student Name</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Program</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Academic Year</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Mobile No.</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Date of Registration</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Date of Birth</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Fee Status</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Status</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Download</th>
-                                <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right">Action</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Registration Code</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Student Name</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Program (Class)</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Academic Year</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Mobile No.</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Date of Registration</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Date of Birth</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Fee Status</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Status</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Last Updated On</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Download</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px] text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -3103,14 +3278,14 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             ) : (
                                 filteredData.slice(0, visibleCount).map((row, index) => (
                                     <tr key={`${row.id}_${index}`} className="hover:bg-blue-50/30 transition-all cursor-pointer group" onClick={() => { setEditingRecord(row); setView('form'); }}>
-                                        <td className="px-6 py-4 font-bold text-blue-600 tracking-tight">{row.registrationNo}</td>
-                                        <td className="px-6 py-4 font-bold text-gray-900 tracking-tight">{row.first_name} {row.last_name}</td>
-                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.program || '-'}</td>
-                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.academic_year || '-'}</td>
-                                        <td className="px-6 py-4 text-gray-600 font-bold">{row.student_mobile_number || '-'}</td>
-                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.registration_date || '-'}</td>
-                                        <td className="px-6 py-4 text-gray-600 font-medium">{row.date_of_birth || '-'}</td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-2 py-3 font-bold text-blue-600 tracking-tight">{row.registrationNo}</td>
+                                        <td className="px-2 py-3 font-bold text-gray-900 tracking-tight">{row.first_name} {row.last_name}</td>
+                                        <td className="px-2 py-3 text-gray-600 font-medium">{row.program || '-'}</td>
+                                        <td className="px-2 py-3 text-gray-600 font-medium">{row.academic_year || '-'}</td>
+                                        <td className="px-2 py-3 text-gray-600 font-bold">{row.student_mobile_number || '-'}</td>
+                                        <td className="px-2 py-3 text-gray-600 font-medium">{row.registration_date || '-'}</td>
+                                        <td className="px-2 py-3 text-gray-600 font-medium">{row.date_of_birth || '-'}</td>
+                                        <td className="px-2 py-3">
                                             <div className="flex flex-col gap-1 items-start">
                                                 {row.paymentMode === 'Old Student' || (row.fees_status && row.fees_status.toLowerCase() === 'old student') ? (
                                                     <span className="px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-700 border border-purple-200">
@@ -3126,7 +3301,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-2 py-3">
                                             {row.isDisabled ? (
                                                 <span className="px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">
                                                     DISABLED
@@ -3137,7 +3312,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-2 py-3 text-gray-500 font-medium text-[11px] whitespace-nowrap">
+                                            {row.updated_at ? dayjs(row.updated_at.toDate ? row.updated_at.toDate() : row.updated_at).fromNow() : row.created_at ? dayjs(row.created_at.toDate ? row.created_at.toDate() : row.created_at).fromNow() : '-'}
+                                        </td>
+                                        <td className="px-2 py-3">
                                             <div className="flex items-center gap-1">
                                                 <button 
                                                     onClick={(e) => { e.stopPropagation(); generatePDF(row); }}
@@ -3157,7 +3335,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="px-2 py-3 text-right">
                                             <div className="flex items-center justify-end gap-2 transition-all">
                                                 <button onClick={(e) => { e.stopPropagation(); setEditingRecord(row); setView('form'); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"><FiEdit2 className="w-4 h-4" /></button>
                                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(row); }} className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors"><FiTrash2 className="w-4 h-4" /></button>

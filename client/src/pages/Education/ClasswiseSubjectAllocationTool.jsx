@@ -63,12 +63,14 @@ const ClasswiseSubjectAllocationTool = () => {
     // Data lists from ERPNext
     const [programs, setPrograms] = useState([]);
     const [courses, setCourses] = useState([]);
+    const [companies, setCompanies] = useState([]);
     
     // UI state
     const [loadingData, setLoadingData] = useState(true);
     const [saving, setSaving] = useState(false);
     const [searchProgram, setSearchProgram] = useState('');
     const [searchCourse, setSearchCourse] = useState('');
+    const [filterBoard, setFilterBoard] = useState('All');
     const [newCourseName, setNewCourseName] = useState('');
     const [creatingCourse, setCreatingCourse] = useState(false);
 
@@ -96,12 +98,14 @@ const ClasswiseSubjectAllocationTool = () => {
     const fetchData = async () => {
         try {
             setLoadingData(true);
-            const [progRes, courseRes] = await Promise.all([
-                API.get('/api/resource/Program?fields=["name","program_abbreviation","department"]&limit_page_length=None&order_by=name asc'),
-                API.get('/api/resource/Course?fields=["name","course_name"]&limit_page_length=None&order_by=name asc')
+            const [progRes, courseRes, companyRes] = await Promise.all([
+                API.get('/api/resource/Program?fields=["name","program_abbreviation","department","custom_board"]&limit_page_length=None&order_by=name asc'),
+                API.get('/api/resource/Course?fields=["name","course_name"]&limit_page_length=None&order_by=name asc'),
+                API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc')
             ]);
             setPrograms(progRes.data.data || []);
             setCourses(courseRes.data.data || []);
+            setCompanies((companyRes.data.data || []).map(c => c.name));
         } catch (err) {
             console.error('Error fetching data:', err);
             notification.error({
@@ -441,7 +445,9 @@ const ClasswiseSubjectAllocationTool = () => {
     // Filter helpers
     const filteredPrograms = programs.filter(p => {
         const query = searchProgram.toLowerCase();
-        return (p.name || '').toLowerCase().includes(query) || (p.program_abbreviation || '').toLowerCase().includes(query);
+        const matchSearch = (p.name || '').toLowerCase().includes(query) || (p.program_abbreviation || '').toLowerCase().includes(query);
+        const matchBoard = filterBoard === 'All' || p.custom_board === filterBoard;
+        return matchSearch && matchBoard;
     });
 
     const filteredCourses = courses.filter(c => {
@@ -544,26 +550,36 @@ const ClasswiseSubjectAllocationTool = () => {
                                     </div>
                                 }
                             >
-                                <div className="mb-4 flex gap-2">
-                                    <Input
-                                        placeholder="Search classes..."
-                                        prefix={<SearchOutlined className="text-gray-400" />}
-                                        value={searchProgram}
-                                        onChange={e => setSearchProgram(e.target.value)}
-                                        className="rounded-lg h-9 border-gray-200"
-                                    />
-                                    <Button 
-                                        className="text-xs font-semibold h-9"
-                                        onClick={() => setSelectedPrograms(programs.map(p => p.name))}
+                                <div className="mb-4 flex flex-col gap-2">
+                                    <select 
+                                        value={filterBoard} 
+                                        onChange={e => setFilterBoard(e.target.value)} 
+                                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 h-9 text-sm focus:outline-none focus:border-blue-400 bg-white"
                                     >
-                                        All
-                                    </Button>
-                                    <Button 
-                                        className="text-xs font-semibold h-9"
-                                        onClick={() => { setSelectedPrograms([]); setActivePreset(null); }}
-                                    >
-                                        None
-                                    </Button>
+                                        <option value="All">All Boards</option>
+                                        {companies.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            placeholder="Search classes..."
+                                            prefix={<SearchOutlined className="text-gray-400" />}
+                                            value={searchProgram}
+                                            onChange={e => setSearchProgram(e.target.value)}
+                                            className="rounded-lg h-9 border-gray-200"
+                                        />
+                                        <Button 
+                                            className="text-xs font-semibold h-9"
+                                            onClick={() => setSelectedPrograms(filteredPrograms.map(p => p.name))}
+                                        >
+                                            All
+                                        </Button>
+                                        <Button 
+                                            className="text-xs font-semibold h-9"
+                                            onClick={() => { setSelectedPrograms([]); setActivePreset(null); }}
+                                        >
+                                            None
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50/50 space-y-2">
@@ -594,9 +610,12 @@ const ClasswiseSubjectAllocationTool = () => {
                                                 />
                                                 <div className="flex flex-col flex-1">
                                                     <span className="font-bold text-gray-800 text-[13px]">{p.name}</span>
-                                                    <span className="text-[11px] text-gray-400 truncate max-w-[150px]">{p.department || 'No Department'}</span>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        <span className="text-[10px] text-gray-400 truncate max-w-[100px]">{p.department || 'No Dept'}</span>
+                                                        {p.custom_board && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-sm font-bold truncate max-w-[80px]">{p.custom_board}</span>}
+                                                    </div>
                                                 </div>
-                                                <span className="text-[10px] uppercase font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ml-auto">
+                                                <span className="text-[10px] uppercase font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ml-auto shrink-0">
                                                     {p.program_abbreviation || '-'}
                                                 </span>
                                             </div>

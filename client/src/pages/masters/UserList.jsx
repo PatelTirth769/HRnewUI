@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { notification, Spin, Tabs, Dropdown, Button, Space, Popconfirm } from 'antd';
-import { FiChevronDown, FiChevronLeft, FiChevronRight, FiPrinter, FiMoreHorizontal, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiChevronDown, FiChevronLeft, FiChevronRight, FiPrinter, FiMoreHorizontal, FiEye, FiEyeOff, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import API from '../../services/api';
 
 // ERPNext-style searchable Link Field dropdown
@@ -239,11 +239,16 @@ const UserList = () => {
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = async (userName = null) => {
+        const targetUser = typeof userName === 'string' ? userName : editingRecord;
         try {
-            await API.delete(`/api/resource/User/${encodeURIComponent(editingRecord)}`);
+            await API.delete(`/api/resource/User/${encodeURIComponent(targetUser)}`);
             api.success({ message: 'User deleted.' });
-            setView('list');
+            if (view === 'list') {
+                fetchUsers();
+            } else {
+                setView('list');
+            }
         } catch (err) {
             api.error({ message: 'Delete Failed', description: err.message });
         }
@@ -331,6 +336,7 @@ const UserList = () => {
                                 <th className="px-5 py-3 font-semibold text-gray-600 text-[12px] uppercase">Full Name</th>
                                 <th className="px-5 py-3 font-semibold text-gray-600 text-[12px] uppercase">Status</th>
                                 <th className="px-5 py-3 font-semibold text-gray-600 text-[12px] uppercase">User Type</th>
+                                <th className="px-5 py-3 font-semibold text-gray-600 text-[12px] uppercase text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -353,6 +359,18 @@ const UserList = () => {
                                             </span>
                                         </td>
                                         <td className="px-5 py-4 text-gray-600 text-xs">{u.user_type}</td>
+                                        <td className="px-5 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-2 transition-all">
+                                                <button onClick={(e) => { e.stopPropagation(); setEditingRecord(u.name); setView('form'); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title="Edit">
+                                                    <FiEdit2 className="w-4 h-4" />
+                                                </button>
+                                                <Popconfirm title="Delete this user?" onConfirm={(e) => { e.stopPropagation(); handleDelete(u.name); }} onCancel={(e) => e.stopPropagation()}>
+                                                    <button className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors" title="Delete" onClick={(e) => e.stopPropagation()}>
+                                                        <FiTrash2 className="w-4 h-4" />
+                                                    </button>
+                                                </Popconfirm>
+                                            </div>
+                                        </td>
                                     </tr>
                                 ))
                             )}

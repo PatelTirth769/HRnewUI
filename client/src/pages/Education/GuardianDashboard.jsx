@@ -214,12 +214,26 @@ const GuardianDashboard = () => {
 
             if (!linkedFeeStructure && programToSearch) {
                 try {
+                    let filters = [["program", "=", programToSearch]];
+                    if (wardProf.custom_board) {
+                        filters.push(["company", "=", wardProf.custom_board]);
+                    }
+
                     const fsRes = await API.get('/api/resource/Fee Structure', {
-                        params: { filters: JSON.stringify([["program", "=", programToSearch]]), fields: JSON.stringify(["name"]) }
+                        params: { filters: JSON.stringify(filters), fields: JSON.stringify(["name"]) }
                     });
                     if (fsRes.data?.data?.length > 0) {
                         linkedFeeStructure = fsRes.data.data[0].name;
-                    } else {
+                    } else if (wardProf.custom_board) {
+                        const fsResFallback = await API.get('/api/resource/Fee Structure', {
+                            params: { filters: JSON.stringify([["program", "=", programToSearch]]), fields: JSON.stringify(["name"]) }
+                        });
+                        if (fsResFallback.data?.data?.length > 0) {
+                            linkedFeeStructure = fsResFallback.data.data[0].name;
+                        }
+                    }
+
+                    if (!linkedFeeStructure) {
                         try {
                             const fsExact = await API.get(`/api/resource/Fee Structure/${encodeURIComponent(programToSearch)}`);
                             if (fsExact.data?.data) linkedFeeStructure = fsExact.data.data.name;
@@ -356,16 +370,16 @@ const GuardianDashboard = () => {
             let feeDiscountsMap = {};
             try {
                 if (studentId) {
-                    const sdSnaps = await getDocs(collection(db, 'schooler', 'data', 'student_discounts'));
+                    const sdSnaps = await getDocs(collection(db, 'schooler_system', 'data', 'student_discounts'));
                     sdSnaps.forEach(doc => {
                         const data = doc.data();
-                        if (data.student_id === studentId) {
+                        if (childIds.includes(data.student_id)) {
                             if (!studentDiscountsMap[data.student_id]) studentDiscountsMap[data.student_id] = [];
                             studentDiscountsMap[data.student_id].push(data);
                         }
                     });
 
-                    const fdSnaps = await getDocs(collection(db, 'schooler', 'data', 'fees_discounts'));
+                    const fdSnaps = await getDocs(collection(db, 'schooler_system', 'data', 'fees_discounts'));
                     fdSnaps.forEach(doc => { feeDiscountsMap[doc.id] = doc.data(); });
                 }
             } catch (err) {
@@ -915,9 +929,15 @@ const GuardianDashboard = () => {
                             <span className="font-bold text-gray-800">{wardProfile.joining_date || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between border-b border-gray-50 pb-3">
-                            <span className="text-gray-400 font-medium">Program</span>
+                            <span className="text-gray-400 font-medium">Program (Class)</span>
                             <span className="bg-blue-50 text-blue-600 px-3 py-0.5 rounded-full text-xs font-bold border border-blue-100">
                                 {wardProfile.program || 'General'}
+                            </span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-50 pb-3">
+                            <span className="text-gray-400 font-medium">Board</span>
+                            <span className="bg-indigo-50 text-indigo-600 px-3 py-0.5 rounded-full text-xs font-bold border border-indigo-100">
+                                {wardProfile.custom_board || 'N/A'}
                             </span>
                         </div>
                         <div className="flex justify-between border-b border-gray-50 pb-3">

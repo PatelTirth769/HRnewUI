@@ -346,7 +346,7 @@ const Instructor = () => {
                                     <th className="px-3 py-2.5 text-left w-12">No.</th>
                                     <th className="px-3 py-2.5 text-left">Academic Year *</th>
                                     <th className="px-3 py-2.5 text-left">Academic Term</th>
-                                    <th className="px-3 py-2.5 text-left font-bold text-blue-600">Program *</th>
+                                    <th className="px-3 py-2.5 text-left font-bold text-blue-600">Program (Class) *</th>
                                     <th className="px-3 py-2.5 text-left">Course</th>
                                     <th className="px-3 py-2 text-center w-10"></th>
                                 </tr>

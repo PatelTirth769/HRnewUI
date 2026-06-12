@@ -83,6 +83,9 @@ const Header = ({ onModuleClick }) => {
                     <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/users'); onModuleClick('users'); }}>
                       Users
                     </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/companies'); onModuleClick('companies'); }}>
+                      Company
+                    </div>
                   </div>
                 </div>
                 <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Education</div>
