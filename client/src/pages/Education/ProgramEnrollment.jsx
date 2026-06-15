@@ -27,6 +27,7 @@ const emptyForm = () => ({
     student_category: '',
     school_house: '',
     student_batch: '',
+    custom_board: '',
     boarding_student: 0,
     docstatus: 0,
     
@@ -50,6 +51,9 @@ const ProgramEnrollment = () => {
     const [filterProgram, setFilterProgram] = useState('All');
     const [filterYear, setFilterYear] = useState('All');
     const [filterStatus, setFilterStatus] = useState('All');
+    const [filterBoard, setFilterBoard] = useState('All');
+    const [visibleCount, setVisibleCount] = useState(20);
+    const [pageSize, setPageSize] = useState(20);
 
     // Form states
     const [form, setForm] = useState(emptyForm());
@@ -73,9 +77,9 @@ const ProgramEnrollment = () => {
         academicTerms: [],
         studentCategories: [],
         schoolHouses: [],
-        studentBatches: [],
         courses: [],
         feeSchedules: [],
+        boards: [],
     });
 
     useEffect(() => {
@@ -95,9 +99,9 @@ const ProgramEnrollment = () => {
 
     const fetchDropdowns = async () => {
         try {
-            const [sRes, pRes, yRes, tRes, cRes, hRes, bRes, csRes, fsRes, peRes] = await Promise.all([
-                API.get('/api/resource/Student?fields=["name","first_name","last_name","program"]&limit_page_length=None'),
-                API.get('/api/resource/Program?limit_page_length=None'),
+            const [sRes, pRes, yRes, tRes, cRes, hRes, bRes, csRes, fsRes, peRes, bdRes] = await Promise.all([
+                API.get('/api/resource/Student?fields=["name","first_name","last_name","program","custom_board"]&limit_page_length=None'),
+                API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None'),
                 API.get('/api/resource/Academic Year?limit_page_length=None'),
                 API.get('/api/resource/Academic Term?limit_page_length=None'),
                 API.get('/api/resource/Student Category?limit_page_length=None'),
@@ -106,6 +110,7 @@ const ProgramEnrollment = () => {
                 API.get('/api/resource/Course?limit_page_length=None'),
                 API.get('/api/resource/Fee Schedule?limit_page_length=None'),
                 API.get('/api/resource/Program Enrollment?fields=["student","program","docstatus"]&limit_page_length=None'),
+                API.get('/api/resource/Company?limit_page_length=None').catch(() => ({ data: { data: [] } })),
             ]);
 
             const enrollmentsData = peRes.data.data || [];
@@ -121,9 +126,10 @@ const ProgramEnrollment = () => {
                     id: d.name,
                     name: `${d.first_name || ''} ${d.last_name || ''}`.trim(),
                     program: d.program || '',
+                    custom_board: d.custom_board || '',
                     allocatedProgram: allocatedMap[d.name] || null
                 })) || [],
-                programs: pRes.data.data?.map(d => d.name) || [],
+                programs: pRes.data.data || [],
                 academicYears: yRes.data.data?.map(d => d.name) || [],
                 academicTerms: tRes.data.data?.map(d => d.name) || [],
                 studentCategories: cRes.data.data?.map(d => d.name) || [],
@@ -131,6 +137,7 @@ const ProgramEnrollment = () => {
                 studentBatches: bRes.data.data?.map(d => d.name) || [],
                 courses: csRes.data.data || [],
                 feeSchedules: fsRes.data.data?.map(d => d.name) || [],
+                boards: bdRes.data?.data?.map(d => d.name) || [],
             });
         } catch (err) {
             console.error('Error fetching dropdowns', err);
@@ -140,7 +147,7 @@ const ProgramEnrollment = () => {
     const fetchEnrollments = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Program Enrollment?fields=["name","student","student_name","program","academic_year","enrollment_date","docstatus"]&limit_page_length=None&order_by=creation desc';
+            const url = '/api/resource/Program Enrollment?fields=["name","student","student_name","program","academic_year","enrollment_date","docstatus","custom_board"]&limit_page_length=None&order_by=creation desc';
             const response = await API.get(url);
             setEnrollments(response.data.data || []);
         } catch (err) {
@@ -165,6 +172,7 @@ const ProgramEnrollment = () => {
                 student_category: d.student_category || '',
                 school_house: d.school_house || '',
                 student_batch: d.student_batch || '',
+                custom_board: d.custom_board || '',
                 boarding_student: d.boarding_student || 0,
                 docstatus: d.docstatus ?? 0,
                 
@@ -380,7 +388,12 @@ const ProgramEnrollment = () => {
                 return false;
             }
 
-            // 3. Academic Year filter
+            // 3. Board filter
+            if (filterBoard !== 'All' && e.custom_board !== filterBoard) {
+                return false;
+            }
+
+            // 4. Academic Year filter
             if (filterYear !== 'All' && e.academic_year !== filterYear) {
                 return false;
             }
@@ -410,7 +423,7 @@ const ProgramEnrollment = () => {
 
                 {/* Filter Section */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                         <div className="flex flex-col gap-2">
                             <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Search Student / ID</label>
                             <input
@@ -430,7 +443,20 @@ const ProgramEnrollment = () => {
                             >
                                 <option value="All">All Programs</option>
                                 {dropdowns.programs.map((p) => (
-                                    <option key={p} value={p}>{p}</option>
+                                    <option key={p.name} value={p.name}>{p.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Board</label>
+                            <select
+                                value={filterBoard}
+                                onChange={(e) => setFilterBoard(e.target.value)}
+                                className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                            >
+                                <option value="All">All Boards</option>
+                                {dropdowns.boards.map((b) => (
+                                    <option key={b} value={b}>{b}</option>
                                 ))}
                             </select>
                         </div>
@@ -468,6 +494,7 @@ const ProgramEnrollment = () => {
                                 setFilterProgram('All');
                                 setFilterYear('All');
                                 setFilterStatus('All');
+                                setFilterBoard('All');
                             }}
                             className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all cursor-pointer"
                         >
@@ -476,6 +503,11 @@ const ProgramEnrollment = () => {
                     </div>
                 </div>
 
+                <div className="flex justify-between items-end mb-2">
+                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest shrink-0 ml-auto">
+                        {!loadingList && `${Math.min(visibleCount, filtered.length)} of ${filtered.length} TOTAL ENROLLMENTS`}
+                    </div>
+                </div>
                 <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 border-b">
@@ -483,6 +515,7 @@ const ProgramEnrollment = () => {
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">ID</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Student</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Program (Class)</th>
+                                <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Board</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Date</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Academic Year</th>
                                 <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Status</th>
@@ -491,7 +524,7 @@ const ProgramEnrollment = () => {
                         <tbody>
                             {loadingList ? (
                                 <tr><td colSpan="6" className="text-center py-10 text-gray-400 italic">Loading...</td></tr>
-                            ) : filtered.map((row) => (
+                            ) : filtered.slice(0, visibleCount).map((row) => (
                                 <tr key={row.name} className="border-b hover:bg-gray-50 transition-colors">
                                     <td className="px-4 py-3">
                                         <button className="text-blue-600 hover:underline font-semibold" onClick={() => { setEditingRecord(row.name); setView('form'); }}>{row.name}</button>
@@ -501,6 +534,7 @@ const ProgramEnrollment = () => {
                                         <div className="text-[10px] text-gray-400">{row.student}</div>
                                     </td>
                                     <td className="px-4 py-3 text-gray-600">{row.program}</td>
+                                    <td className="px-4 py-3 text-gray-600">{row.custom_board || '-'}</td>
                                     <td className="px-4 py-3 text-gray-600">{row.enrollment_date}</td>
                                     <td className="px-4 py-3 text-gray-600">{row.academic_year}</td>
                                     <td className="px-4 py-3">
@@ -512,6 +546,36 @@ const ProgramEnrollment = () => {
                             ))}
                         </tbody>
                     </table>
+
+                    {/* Pagination Controls */}
+                    {!loadingList && filtered.length > 0 && (
+                        <div className="flex justify-between items-center p-4 bg-gray-50/30 border-t border-gray-100">
+                            <div className="flex items-center border border-gray-200 rounded-xl bg-white overflow-hidden shadow-xs">
+                                {[20, 100, 500, 2500].map((size) => (
+                                    <button
+                                        key={size}
+                                        className={`px-4 py-1.5 text-xs font-bold border-r border-gray-200 last:border-r-0 hover:bg-gray-50 transition cursor-pointer ${
+                                            pageSize === size ? 'bg-gray-100 text-gray-800' : 'text-gray-500'
+                                        }`}
+                                        onClick={() => {
+                                            setPageSize(size);
+                                            setVisibleCount(size);
+                                        }}
+                                    >
+                                        {size}
+                                    </button>
+                                ))}
+                            </div>
+                            {visibleCount < filtered.length && (
+                                <button
+                                    className="px-5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl shadow-xs hover:bg-gray-50 transition active:scale-95 cursor-pointer"
+                                    onClick={() => setVisibleCount(prev => prev + pageSize)}
+                                >
+                                    Load More
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -640,14 +704,56 @@ const ProgramEnrollment = () => {
                             <div className="grid grid-cols-2 gap-x-12 gap-y-6">
                                 <div className="space-y-6">
                                     <div>
-                                        <label className={labelStyle}>Student *</label>
-                                        {editingRecord ? (
-                                            <select className={inputStyle} value={Array.isArray(form.student) ? '' : form.student} onChange={e => updateField('student', e.target.value)} disabled={!isEditable}>
+                                    {(() => {
+                                        const availableStudents = dropdowns.students.filter(s => {
+                                            const programMatch = !form.program || s.program === form.program;
+                                            const boardMatch = !form.custom_board || s.custom_board === form.custom_board;
+                                            return programMatch && boardMatch;
+                                        });
+                                        const total = availableStudents.length;
+                                        const allocated = availableStudents.filter(s => s.allocatedProgram).length;
+                                        const unallocated = total - allocated;
+
+                                        return (
+                                            <>
+                                                <div className="flex justify-between items-end mb-1">
+                                                    <label className="block text-[13px] text-gray-500 font-medium">Student *</label>
+                                                    {form.program && (
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="text-[11px] font-medium text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-200 shadow-sm flex items-center gap-2 mb-1">
+                                                                <span>Total: <b className="text-gray-900">{total}</b></span>
+                                                                <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                                                                <span>Unallocated: <b className="text-blue-600">{unallocated}</b></span>
+                                                                <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                                                                <span>Allocated: <b className="text-green-600">{allocated}</b></span>
+                                                            </div>
+                                                            {!editingRecord && unallocated > 0 && (
+                                                                <label className="flex items-center gap-1.5 mb-1 cursor-pointer group">
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded cursor-pointer focus:ring-blue-500" 
+                                                                        checked={availableStudents.filter(s => !s.allocatedProgram).every(s => (Array.isArray(form.student) ? form.student : []).includes(s.id))}
+                                                                        onChange={(e) => {
+                                                                            const unallocatedIds = availableStudents.filter(s => !s.allocatedProgram).map(s => s.id);
+                                                                            if (e.target.checked) {
+                                                                                const newSelection = Array.from(new Set([...(Array.isArray(form.student) ? form.student : []), ...unallocatedIds]));
+                                                                                updateField('student', newSelection);
+                                                                            } else {
+                                                                                const currentArr = Array.isArray(form.student) ? form.student : [];
+                                                                                updateField('student', currentArr.filter(id => !unallocatedIds.includes(id)));
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                    <span className="text-[11px] font-bold text-blue-600 group-hover:text-blue-800 transition">Select All Unallocated</span>
+                                                                </label>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {editingRecord ? (
+                                                    <select className={inputStyle} value={Array.isArray(form.student) ? '' : form.student} onChange={e => updateField('student', e.target.value)} disabled={!isEditable}>
                                                 <option value="">Select Student</option>
-                                                {dropdowns.students
-                                                    .filter(s => !form.program || s.program === form.program)
-                                                    .map(s => <option key={s.id} value={s.id}>{s.name || s.id}{s.allocatedProgram ? ` - Allocated - ${s.allocatedProgram}` : ''}</option>)
-                                                }
+                                                {availableStudents.map(s => <option key={s.id} value={s.id}>{s.name || s.id}{s.allocatedProgram ? ` - Allocated - ${s.allocatedProgram}` : ''}</option>)}
                                             </select>
                                         ) : (
                                             <Select
@@ -663,9 +769,7 @@ const ProgramEnrollment = () => {
                                                 filterOption={(input, option) =>
                                                     (option?.searchStr ?? '').toLowerCase().includes(input.toLowerCase())
                                                 }
-                                                options={dropdowns.students
-                                                    .filter(s => !form.program || s.program === form.program)
-                                                    .map(s => ({
+                                                options={availableStudents.map(s => ({
                                                         value: s.id,
                                                         label: s.allocatedProgram ? (
                                                             <span>
@@ -679,6 +783,13 @@ const ProgramEnrollment = () => {
                                                 }
                                             />
                                         )}
+                                        <div className="text-[11px] text-blue-600 font-medium mt-2 bg-blue-50 p-2.5 rounded-lg border border-blue-100 flex items-start gap-2 leading-relaxed">
+                                            <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                            Note: Please select a Program and Board first. The students in this dropdown will automatically filter based on your selection.
+                                        </div>
+                                            </>
+                                        );
+                                    })()}
                                     </div>
                                     <div>
                                         <label className={labelStyle}>Enrollment Date *</label>
@@ -704,7 +815,14 @@ const ProgramEnrollment = () => {
                                         <label className={labelStyle}>Program (Class) *</label>
                                         <select className={inputStyle} value={form.program} onChange={e => handleProgramChange(e.target.value)} disabled={!isEditable}>
                                             <option value="">Select Program</option>
-                                            {dropdowns.programs.map(p => <option key={p} value={p}>{p}</option>)}
+                                            {dropdowns.programs.filter(p => !form.custom_board || (p.custom_board || '') === form.custom_board).map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelStyle}>Board</label>
+                                        <select className={inputStyle} value={form.custom_board} onChange={e => setForm(prev => ({ ...prev, custom_board: e.target.value, student: [] }))} disabled={!isEditable}>
+                                            <option value="">Select Board</option>
+                                            {dropdowns.boards.map(b => <option key={b} value={b}>{b}</option>)}
                                         </select>
                                     </div>
                                     <div>

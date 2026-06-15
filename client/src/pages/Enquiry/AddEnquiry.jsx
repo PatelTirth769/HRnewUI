@@ -98,11 +98,10 @@ export default function AddEnquiry() {
     const [availableClasses, setAvailableClasses] = useState([]);
     const [academicYears, setAcademicYears] = useState([]);
     const [guardiansList, setGuardiansList] = useState([]);
-
-
-    const initFormData = {
+    const [boards, setBoards] = useState([]);    const initFormData = {
         // Student Detail
         academic_year: '2025-2026',
+        custom_board: '',
         program: '', // maps to Class
         enquiry_date: new Date().toISOString().split('T')[0],
         first_name: '',
@@ -176,15 +175,17 @@ export default function AddEnquiry() {
 
     const fetchERPNextData = async () => {
         try {
-            const [progRes, yearRes, guardianRes] = await Promise.all([
-                API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+            const [progRes, yearRes, guardianRes, companyRes] = await Promise.all([
+                API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
             ]);
-            const programs = progRes.data.data?.map(p => p.name) || [];
+            const programs = progRes.data.data || [];
             const years = yearRes.data.data?.map(y => y.name) || [];
             
             setAcademicYears(years);
+            setBoards((companyRes.data.data || []).map(c => c.name));
             setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '', mobile_number: g.mobile_number || '' })));
             await fetchRestrictions(programs);
         } catch (err) {
@@ -206,17 +207,44 @@ export default function AddEnquiry() {
     }, [view, editingRecord]);
 
     const fetchRestrictions = async (programs) => {
+        const sortPrograms = (arr) => {
+            const getRank = (name) => {
+                const n = (name || '').toUpperCase();
+                if (n.includes('NURSERY') || n.includes('NURSARY') || n.includes('NUR')) return 0;
+                if (n.includes('JR') || n.includes('JUNIOR')) return 1;
+                if (n.includes('SR') || n.includes('SENIOR')) return 2;
+                const match = n.match(/(?:STD|CLASS)\s*(\d+)/);
+                if (match) return parseInt(match[1]) + 2;
+                return 999;
+            };
+            return [...arr].sort((a, b) => {
+                const rA = getRank(a.name);
+                const rB = getRank(b.name);
+                if (rA !== rB) return rA - rB;
+                return (a.name || '').localeCompare(b.name || '');
+            });
+        };
+
         try {
             const snap = await getDocs(collection(db, 'schooler_system/enquiry_management/program_restrictions'));
             const restricted = snap.docs.filter(d => d.data().isDisabled).map(d => d.id);
-            setAvailableClasses(programs.filter(c => !restricted.includes(c)));
+            setAvailableClasses(sortPrograms(programs.filter(c => !restricted.includes(c.name))));
         } catch (err) { 
             console.error('Restriction fetch failed', err); 
-            setAvailableClasses(programs);
+            setAvailableClasses(sortPrograms(programs));
         }
     };
 
-
+    const filteredClasses = useMemo(() => {
+        if (!formData.custom_board) {
+            return [];
+        }
+        return availableClasses.filter(c => {
+            const pBoard = (c.custom_board || '').toString().trim().toLowerCase();
+            const fBoard = (formData.custom_board || '').toString().trim().toLowerCase();
+            return pBoard === fBoard;
+        });
+    }, [availableClasses, formData.custom_board]);
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -252,7 +280,7 @@ export default function AddEnquiry() {
             let erpNextStudentName = null;
             try {
                 // Check if program exists in ERPNext
-                if (formData.program && !availableClasses.includes(formData.program)) {
+                if (formData.program && !availableClasses.map(c => c.name).includes(formData.program)) {
                     throw new Error(`Program '${formData.program}' not found in ERPNext. Please select a valid program.`);
                 }
 
@@ -392,9 +420,27 @@ export default function AddEnquiry() {
             children: (
                 <div className="space-y-4">
                     <SectionHeader title="Academic Detail" color="red" />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <SelectField label="Academic Year" required value={formData.academic_year} options={academicYears} onChange={(v) => updateField('academic_year', v)} />
-                        <SelectField label="Program (Class)" required value={formData.program} options={availableClasses} onChange={(v) => updateField('program', v)} />
+                        <SelectField 
+                            label="Board" 
+                            value={formData.custom_board} 
+                            options={boards} 
+                            onChange={(v) => setFormData({
+                                ...formData, 
+                                custom_board: v,
+                                program: ''
+                            })} 
+                        />
+                        <SelectField 
+                            label="Program (Class)" 
+                            required 
+                            value={formData.program} 
+                            options={filteredClasses.map(c => c.name)} 
+                            onChange={(v) => updateField('program', v)} 
+                            placeholder={formData.custom_board ? "Select Program" : "Please Select Board First"}
+                            disabled={!formData.custom_board}
+                        />
 
                         <InputField label="Enquiry Date" type="date" value={formData.enquiry_date} onChange={(v) => updateField('enquiry_date', v)} />
                     </div>

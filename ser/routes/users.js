@@ -22,7 +22,8 @@ router.get('/get-role/:identifier', async (req, res) => {
                         accounts.push({
                             role: data.role,
                             system: data.system || 'schooler',
-                            email: data.email || data.username || identifier
+                            email: data.email || data.username || identifier,
+                            name: data.first_name || data.full_name || ''
                         });
                     }
                 });
@@ -72,13 +73,22 @@ router.get('/get-role/:identifier', async (req, res) => {
                 // Skip disabled students from being able to log in
                 if (data.isDisabled) return;
                 
-                if (data.student_email_id && !seenEmails.has(data.student_email_id)) {
-                    accounts.push({
-                        role: 'Student',
-                        system: 'schooler',
-                        email: data.student_email_id
-                    });
-                    seenEmails.add(data.student_email_id);
+                if (data.student_email_id) {
+                    if (!seenEmails.has(data.student_email_id)) {
+                        accounts.push({
+                            role: 'Student',
+                            system: 'schooler',
+                            email: data.student_email_id,
+                            name: data.first_name || data.student_full_name || ''
+                        });
+                        seenEmails.add(data.student_email_id);
+                    } else {
+                        // Enrich existing account if name is missing from users collection
+                        const existingAccount = accounts.find(a => a.email === data.student_email_id);
+                        if (existingAccount && !existingAccount.name) {
+                            existingAccount.name = data.first_name || data.student_full_name || '';
+                        }
+                    }
                 }
                 // Also eagerly check if any guardian in this document shares the same mobile number
                 if (Array.isArray(data.guardians)) {
@@ -88,9 +98,16 @@ router.get('/get-role/:identifier', async (req, res) => {
                                 accounts.push({
                                     role: 'Guardian',
                                     system: 'schooler',
-                                    email: g.email_address
+                                    email: g.email_address,
+                                    name: g.guardian_name || ''
                                 });
                                 seenEmails.add(g.email_address);
+                            } else {
+                                // Enrich existing account if name is missing from users collection
+                                const existingAccount = accounts.find(a => a.email === g.email_address);
+                                if (existingAccount && !existingAccount.name) {
+                                    existingAccount.name = g.guardian_name || '';
+                                }
                             }
                         }
                     });

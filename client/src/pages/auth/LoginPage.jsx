@@ -269,7 +269,7 @@ const LoginPage = () => {
                               onChange={() => setSelectedAccountIndex(index)}
                               style={{ accentColor: '#10b981', width: '16px', height: '16px', margin: 0 }}
                             />
-                            <span>Login as <strong>{acc.role}</strong></span>
+                            <span>Login as <strong>{acc.role}</strong> {acc.name ? <span style={{ color: '#64748b' }}>({acc.name})</span> : ''}</span>
                           </label>
                         ))}
                       </div>

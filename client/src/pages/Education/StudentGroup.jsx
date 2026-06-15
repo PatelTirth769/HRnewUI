@@ -48,9 +48,15 @@ const StudentGroup = () => {
     // List states
     const [groups, setGroups] = useState([]);
     const [studentCountMap, setStudentCountMap] = useState({}); // { groupName: count }
+    const [studentAllocations, setStudentAllocations] = useState({}); // { studentName: groupName }
     const [loadingList, setLoadingList] = useState(true);
     const [search, setSearch] = useState('');
-    const [filterBoard, setFilterBoard] = useState('');
+    const [filterProgram, setFilterProgram] = useState('All');
+    const [filterBoard, setFilterBoard] = useState('All');
+    const [filterYear, setFilterYear] = useState('All');
+    const [filterStatus, setFilterStatus] = useState('All');
+    const [visibleCount, setVisibleCount] = useState(20);
+    const [pageSize, setPageSize] = useState(20);
 
     // Form states
     const [activeTab, setActiveTab] = useState('Details');
@@ -181,16 +187,25 @@ const StudentGroup = () => {
             const groupsToFetch = groupData.slice(0, 100);
             const countPromises = groupsToFetch.map(g => 
                 API.get(`/api/resource/Student Group/${encodeURIComponent(g.name)}`)
-                   .then(res => ({ name: g.name, count: res.data.data?.students?.length || 0 }))
-                   .catch(() => ({ name: g.name, count: 0 }))
+                   .then(res => ({ name: g.name, count: res.data.data?.students?.length || 0, students: res.data.data?.students || [] }))
+                   .catch(() => ({ name: g.name, count: 0, students: [] }))
             );
             
             const results = await Promise.all(countPromises);
             const countMap = {};
+            const allocationMap = {};
             results.forEach(r => {
                 countMap[r.name] = r.count;
+                if (r.students && Array.isArray(r.students)) {
+                    r.students.forEach(s => {
+                        if (s.active !== 0) {
+                            allocationMap[s.student] = r.name;
+                        }
+                    });
+                }
             });
             setStudentCountMap(countMap);
+            setStudentAllocations(allocationMap);
         } catch (err) {
             console.error('Error fetching student counts:', err);
         }
@@ -205,7 +220,7 @@ const StudentGroup = () => {
             const [yearRes, termRes, programRes, batchRes, categoryRes, instructorRes, courseRes, studentRes, boardRes] = await Promise.all([
                 safeGet('/api/resource/Academic Year?fields=["name"]&limit_page_length=None&order_by=name desc'),
                 safeGet('/api/resource/Academic Term?fields=["name"]&limit_page_length=None&order_by=name asc'),
-                safeGet('/api/resource/Program?fields=["name"]&limit_page_length=None&order_by=name asc'),
+                safeGet('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None&order_by=name asc'),
                 safeGet('/api/resource/Batch?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 safeGet('/api/resource/Student Category?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 safeGet('/api/resource/Instructor?fields=["name","instructor_name"]&limit_page_length=None&order_by=name asc'),
@@ -215,7 +230,7 @@ const StudentGroup = () => {
             ]);
             setAcademicYears((yearRes.data.data || []).map(y => y.name));
             setAcademicTerms((termRes.data.data || []).map(t => t.name));
-            setPrograms((programRes.data.data || []).map(p => p.name));
+            setPrograms(programRes.data.data || []);
             setBatches((batchRes.data.data || []).map(b => b.name));
             setBoards((boardRes.data.data || []).map(b => b.name));
             setStudentCategories((categoryRes.data.data || []).map(c => c.name));
@@ -440,6 +455,13 @@ const StudentGroup = () => {
                 fetchedStudents = peStudents;
             }
 
+            // Apply Board Filter locally
+            if (form.custom_board) {
+                const boardMap = {};
+                studentsList.forEach(s => { boardMap[s.name] = s.custom_board; });
+                fetchedStudents = fetchedStudents.filter(s => boardMap[s.student] === form.custom_board);
+            }
+
             if (fetchedStudents.length === 0) {
                 notification.info({ message: 'No Students Found', description: 'No students found matching the selected criteria.' });
                 return;
@@ -477,7 +499,13 @@ const StudentGroup = () => {
 
     if (view === 'list') {
         const filtered = groups.filter(g => {
-            if (filterBoard && g.custom_board !== filterBoard) return false;
+            if (filterBoard !== 'All' && g.custom_board !== filterBoard) return false;
+            if (filterProgram !== 'All' && g.program !== filterProgram) return false;
+            if (filterYear !== 'All' && g.academic_year !== filterYear) return false;
+            if (filterStatus !== 'All') {
+                const itemStatus = g.disabled ? 'Disabled' : 'Enabled';
+                if (itemStatus !== filterStatus) return false;
+            }
             if (!search) return true;
             const q = search.toLowerCase();
             return (
@@ -490,12 +518,9 @@ const StudentGroup = () => {
             );
         });
 
-        const filterOptions = boards.length > 0 ? boards : [...new Set(groups.map(g => g.custom_board).filter(Boolean))];
-        const hasActiveFilters = !!search || !!filterBoard;
-        const clearFilters = () => {
-            setSearch('');
-            setFilterBoard('');
-        };
+        const programOptions = [...new Set(groups.map(g => g.program).filter(Boolean))].sort();
+        const yearOptions = [...new Set(groups.map(g => g.academic_year).filter(Boolean))].sort();
+        const boardOptions = boards.length > 0 ? boards : [...new Set(groups.map(g => g.custom_board).filter(Boolean))].sort();
 
         return (
             <div className="p-6">
@@ -511,21 +536,88 @@ const StudentGroup = () => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-64" placeholder="Search ID, Name, Year or Program..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                    <select className="border border-gray-300 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400" value={filterBoard} onChange={(e) => setFilterBoard(e.target.value)}>
-                        <option value="">All Boards</option>
-                        {filterOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                    </select>
-                    {hasActiveFilters && (
-                        <button className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1" onClick={clearFilters}>
-                            ✕ Clear Filters
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Search</label>
+                            <input
+                                type="text"
+                                className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none w-full"
+                                placeholder="ID, Name, Year..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Program (Class)</label>
+                            <select
+                                value={filterProgram}
+                                onChange={(e) => setFilterProgram(e.target.value)}
+                                className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                            >
+                                <option value="All">All Programs</option>
+                                {programOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Board</label>
+                            <select
+                                value={filterBoard}
+                                onChange={(e) => setFilterBoard(e.target.value)}
+                                className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                            >
+                                <option value="All">All Boards</option>
+                                {boardOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+                            </select>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Academic Year</label>
+                            <select
+                                value={filterYear}
+                                onChange={(e) => setFilterYear(e.target.value)}
+                                className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                            >
+                                <option value="All">All Years</option>
+                                {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Status</label>
+                            <select
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value)}
+                                className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
+                            >
+                                <option value="All">All Status</option>
+                                <option value="Enabled">Enabled</option>
+                                <option value="Disabled">Disabled</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div className="flex justify-end mt-6">
+                        <button
+                            onClick={() => {
+                                setSearch('');
+                                setFilterProgram('All');
+                                setFilterYear('All');
+                                setFilterStatus('All');
+                                setFilterBoard('All');
+                            }}
+                            className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all cursor-pointer"
+                        >
+                            Reset Filters
                         </button>
-                    )}
-                    <div className="ml-auto text-xs text-gray-400">{filtered.length} of {groups.length}</div>
+                    </div>
                 </div>
 
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <div className="flex justify-between items-end mb-2">
+                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest shrink-0 ml-auto">
+                        {!loadingList && `${Math.min(visibleCount, filtered.length)} of ${filtered.length} TOTAL GROUPS`}
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 border-b">
                             <tr>
@@ -551,7 +643,7 @@ const StudentGroup = () => {
                                     </td>
                                 </tr>
                             ) : (
-                                filtered.map((row) => (
+                                filtered.slice(0, visibleCount).map((row) => (
                                     <tr key={row.name} className="border-b hover:bg-gray-50 transition-colors">
                                         <td className="px-4 py-3">
                                             <button className="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-left" onClick={() => { setEditingRecord(row.name); setView('form'); }}>
@@ -582,6 +674,36 @@ const StudentGroup = () => {
                             )}
                         </tbody>
                     </table>
+
+                    {/* Pagination Controls */}
+                    {!loadingList && filtered.length > 0 && (
+                        <div className="flex justify-between items-center p-4 bg-gray-50/30 border-t border-gray-100">
+                            <div className="flex items-center border border-gray-200 rounded-xl bg-white overflow-hidden shadow-xs">
+                                {[20, 100, 500, 2500].map((size) => (
+                                    <button
+                                        key={size}
+                                        className={`px-4 py-1.5 text-xs font-bold border-r border-gray-200 last:border-r-0 hover:bg-gray-50 transition cursor-pointer ${
+                                            pageSize === size ? 'bg-gray-100 text-gray-800' : 'text-gray-500'
+                                        }`}
+                                        onClick={() => {
+                                            setPageSize(size);
+                                            setVisibleCount(size);
+                                        }}
+                                    >
+                                        {size}
+                                    </button>
+                                ))}
+                            </div>
+                            {visibleCount < filtered.length && (
+                                <button
+                                    className="px-5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl shadow-xs hover:bg-gray-50 transition active:scale-95 cursor-pointer"
+                                    onClick={() => setVisibleCount(prev => prev + pageSize)}
+                                >
+                                    Load More
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -676,7 +798,7 @@ const StudentGroup = () => {
                                     <label className={labelStyle}>Program (Class)</label>
                                     <select className={inputStyle} value={form.program} onChange={e => updateField('program', e.target.value)}>
                                         <option value="">Select Program...</option>
-                                        {programs.map(p => <option key={p} value={p}>{p}</option>)}
+                                        {programs.filter(p => !form.custom_board || (p.custom_board || '') === form.custom_board).map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
                                     </select>
                                 </div>
                                 <div>
@@ -805,7 +927,58 @@ const StudentGroup = () => {
                                     <button type="button" className="px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-700 text-[13px] font-medium rounded hover:bg-gray-100 transition shadow-sm" onClick={addStudentRow}>
                                         Add Row
                                     </button>
-                                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 py-1 text-sm text-gray-600 shadow-sm">
+                                    {(() => {
+                                        const total = filteredStudentsList.length;
+                                        const allocated = filteredStudentsList.filter(s => studentAllocations[s.name]).length;
+                                        const unallocated = total - allocated;
+                                        return (
+                                            <>
+                                                <div className="flex items-center gap-4 border border-gray-200 rounded-lg bg-white px-2 py-1 shadow-sm text-[11px] font-medium text-gray-500">
+                                                    <span>Total: <b className="text-gray-900">{total}</b></span>
+                                                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                                                    <span>Unallocated: <b className="text-blue-600">{unallocated}</b></span>
+                                                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                                                    <span>Allocated: <b className="text-green-600">{allocated}</b></span>
+                                                </div>
+                                                {unallocated > 0 && (
+                                                    <label className="flex items-center gap-1.5 cursor-pointer group">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
+                                                            checked={filteredStudentsList.filter(s => !studentAllocations[s.name]).every(s => form.students.some(fs => fs.student === s.name))}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    const unalloc = filteredStudentsList.filter(s => !studentAllocations[s.name]);
+                                                                    setForm(prev => {
+                                                                        const newStudents = [...prev.students];
+                                                                        unalloc.forEach(s => {
+                                                                            if (!newStudents.some(st => st.student === s.name)) {
+                                                                                newStudents.push({
+                                                                                    student: s.name,
+                                                                                    student_name: s.student_name,
+                                                                                    group_roll_number: String(newStudents.length + 1),
+                                                                                    active: 1
+                                                                                });
+                                                                            }
+                                                                        });
+                                                                        return { ...prev, students: newStudents };
+                                                                    });
+                                                                } else {
+                                                                    const unallocIds = filteredStudentsList.filter(s => !studentAllocations[s.name]).map(s => s.name);
+                                                                    setForm(prev => ({
+                                                                        ...prev,
+                                                                        students: prev.students.filter(s => !unallocIds.includes(s.student))
+                                                                    }));
+                                                                }
+                                                            }}
+                                                        />
+                                                        <span className="text-[11px] font-bold text-blue-600 group-hover:text-blue-800 transition">Select All Unallocated</span>
+                                                    </label>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
+                                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 py-1 text-sm text-gray-600 shadow-sm ml-auto">
                                         <span className="font-semibold text-xs text-gray-500 uppercase tracking-wide">Add Multiple Students:</span>
                                         <Select
                                             mode="multiple"
@@ -831,13 +1004,28 @@ const StudentGroup = () => {
                                                     });
                                                 }
                                             }}
+                                            showSearch
                                             optionFilterProp="children"
+                                            filterOption={(input, option) => (option?.searchStr ?? '').toLowerCase().includes(input.toLowerCase())}
                                         >
-                                            {filteredStudentsList.map(sl => (
-                                                <Option key={sl.name} value={sl.name}>{sl.student_name || sl.name}</Option>
-                                            ))}
+                                            {filteredStudentsList.map(sl => {
+                                                const allocatedTo = studentAllocations[sl.name];
+                                                return (
+                                                    <Option key={sl.name} value={sl.name} searchStr={`${sl.student_name || sl.name} ${sl.name} ${allocatedTo ? `Allocated ${allocatedTo}` : ''}`}>
+                                                        {allocatedTo ? (
+                                                            <span>{sl.student_name || sl.name} <span className="text-green-600 font-semibold ml-1">- Allocated - {allocatedTo}</span></span>
+                                                        ) : (
+                                                            <span>{sl.student_name || sl.name}</span>
+                                                        )}
+                                                    </Option>
+                                                );
+                                            })}
                                         </Select>
                                     </div>
+                                </div>
+                                <div className="text-[11px] text-blue-600 font-medium mt-2 bg-blue-50 p-2.5 rounded-lg border border-blue-100 flex items-start gap-2">
+                                    <span className="shrink-0 mt-0.5">ℹ️</span>
+                                    <span><b>Note:</b> Please select an Academic Year, Program, and Board first. The students in this dropdown will automatically filter based on your selection.</span>
                                 </div>
                             </div>
                         </div>

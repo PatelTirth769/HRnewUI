@@ -866,7 +866,7 @@ const StudentAttendance = () => {
             const [sRes, csRes, pRes, sgRes, bRes] = await Promise.all([
                 safeGet('/api/resource/Student?fields=["name","first_name","last_name","custom_board"]&limit_page_length=None'),
                 safeGet('/api/resource/Course Schedule?limit_page_length=None'),
-                safeGet('/api/resource/Program?limit_page_length=None'),
+                safeGet('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None'),
                 safeGet('/api/resource/Student Group?fields=["name","program","custom_board"]&limit_page_length=None'),
                 safeGet('/api/resource/Company?limit_page_length=None'),
             ]);
@@ -891,7 +891,7 @@ const StudentAttendance = () => {
                 students: studentsList,
                 masterStudents: studentsList,
                 courseSchedules: csRes.data.data?.map(d => ({ value: d.name, label: d.name })) || [],
-                programs: pRes.data.data?.map(d => ({ value: d.name, label: d.name })) || [],
+                programs: pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || [],
                 studentGroups: studentGroupsList,
                 masterStudentGroups: studentGroupsList,
                 boards: allBoards,
@@ -1741,7 +1741,7 @@ const StudentAttendance = () => {
                                 onChange={e => setFilters(prev => ({ ...prev, program: e.target.value, student_group: '', student: '' }))}
                             >
                                 <option value="">Program (Class)</option>
-                                {dropdowns.programs?.map(p => (
+                                {dropdowns.programs?.filter(p => filters.board === 'All' || p.custom_board === filters.board).map(p => (
                                     <option key={p.value} value={p.value}>{p.label}</option>
                                 ))}
                             </select>
@@ -2026,7 +2026,7 @@ const StudentAttendance = () => {
                             });
                         }} disabled={isDocDisabled}>
                             <option value="">Select Program</option>
-                            {dropdowns.programs.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                            {dropdowns.programs.filter(p => !form.custom_board || (p.custom_board || '') === form.custom_board).map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                         </select>
                     </div>
                     <div>

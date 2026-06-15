@@ -40,12 +40,12 @@ const FeesReport = () => {
         try {
             const [yRes, pRes, tRes] = await Promise.all([
                 API.get('/api/resource/Academic Year?limit_page_length=None').catch(() => ({ data: { data: [] } })),
-                API.get('/api/resource/Program?limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Term?limit_page_length=None').catch(() => ({ data: { data: [] } })),
             ]);
             setDropdowns({
                 academicYears: yRes.data.data?.map(d => d.name) || [],
-                programs: pRes.data.data?.map(d => d.name) || [],
+                programs: pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || [],
                 terms: tRes.data.data?.map(d => d.name) || [],
             });
             await fetchData();
@@ -494,9 +494,12 @@ const FeesReport = () => {
 
     const dataPrograms = useMemo(() => {
         const progs = new Set();
-        allData.forEach(r => { if (r.program && r.program !== '-') progs.add(r.program); });
+        allData.forEach(r => { 
+            if (filters.board && r.board !== filters.board) return;
+            if (r.program && r.program !== '-') progs.add(r.program); 
+        });
         return Array.from(progs).sort();
-    }, [allData]);
+    }, [allData, filters.board]);
 
     const dataStudents = useMemo(() => {
         let source = allData;
@@ -546,6 +549,22 @@ const FeesReport = () => {
             >
                 {showFilters && (
                     <Row gutter={[16, 16]}>
+                        <Col xs={24} sm={12} lg={4}>
+                            <label style={labelStyle}>Board</label>
+                            <Select style={{ width: '100%' }} placeholder="All Boards" allowClear value={filters.board || undefined} onChange={v => setFilters(p => ({ ...p, board: v || '', program: '', student_search: '' }))}>
+                                {dataBoards.map(b => <Option key={b} value={b}>{b}</Option>)}
+                            </Select>
+                        </Col>
+                        <Col xs={24} sm={12} lg={4}>
+                            <label style={labelStyle}>Program (Class)</label>
+                            <Select style={{ width: '100%' }} placeholder="All Programs" allowClear value={filters.program || undefined} onChange={v => setFilters(p => ({ ...p, program: v || '', student_search: '' }))}>
+                                {(dropdowns.programs.length > 0 ? dropdowns.programs.filter(p => !filters.board || p.custom_board === filters.board) : dataPrograms).map(p => {
+                                    const val = typeof p === 'string' ? p : p.value;
+                                    const label = typeof p === 'string' ? p : p.label;
+                                    return <Option key={val} value={val}>{label}</Option>;
+                                })}
+                            </Select>
+                        </Col>
                         <Col xs={24} sm={12} lg={5}>
                             <label style={labelStyle}>Student</label>
                             <Select
@@ -563,18 +582,6 @@ const FeesReport = () => {
                                 {dataStudents.map(([id, name]) => (
                                     <Option key={id} value={name}>{name} ({id})</Option>
                                 ))}
-                            </Select>
-                        </Col>
-                        <Col xs={24} sm={12} lg={4}>
-                            <label style={labelStyle}>Program (Class)</label>
-                            <Select style={{ width: '100%' }} placeholder="All Programs" allowClear value={filters.program || undefined} onChange={v => setFilters(p => ({ ...p, program: v || '', student_search: '' }))}>
-                                {(dropdowns.programs.length > 0 ? dropdowns.programs : dataPrograms).map(p => <Option key={p} value={p}>{p}</Option>)}
-                            </Select>
-                        </Col>
-                        <Col xs={24} sm={12} lg={4}>
-                            <label style={labelStyle}>Board</label>
-                            <Select style={{ width: '100%' }} placeholder="All Boards" allowClear value={filters.board || undefined} onChange={v => setFilters(p => ({ ...p, board: v || '', student_search: '' }))}>
-                                {dataBoards.map(b => <Option key={b} value={b}>{b}</Option>)}
                             </Select>
                         </Col>
                         <Col xs={24} sm={12} lg={3}>

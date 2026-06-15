@@ -105,7 +105,7 @@ export default function HomeworkAssignment() {
         setLoadingMasters(true);
         try {
             const [pRes, sgRes, cRes, bRes] = await Promise.all([
-                API.get('/api/resource/Program?limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Student Group?fields=["name","program"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Course?limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Company?limit_page_length=None').catch(() => ({ data: { data: [] } }))
@@ -242,6 +242,59 @@ export default function HomeworkAssignment() {
             return matchesBoard && matchesProgram && matchesGroup && matchesSubject && matchesStatus && matchesSearch;
         });
     }, [assignments, filterBoard, filterProgram, filterGroup, filterSubject, filterStatus, searchQuery]);
+
+    const selectedBoard = Form.useWatch('board', form);
+
+    const filteredPrograms = useMemo(() => {
+        if (!selectedBoard) return [];
+        return programs.filter(p => {
+            const pBoard = (p.custom_board || '').toString().trim().toLowerCase();
+            const fBoard = (selectedBoard || '').toString().trim().toLowerCase();
+            return pBoard === fBoard;
+        });
+    }, [programs, selectedBoard]);
+
+    const filterProgramsList = useMemo(() => {
+        if (!filterBoard) return programs;
+        return programs.filter(p => {
+            const pBoard = (p.custom_board || '').toString().trim().toLowerCase();
+            const fBoard = (filterBoard || '').toString().trim().toLowerCase();
+            return pBoard === fBoard;
+        });
+    }, [programs, filterBoard]);
+
+    const selectedProgram = Form.useWatch('program', form);
+
+    const filteredStudentGroups = useMemo(() => {
+        let groups = studentGroups;
+        if (selectedProgram) {
+            groups = groups.filter(sg => sg.program === selectedProgram);
+        } else if (selectedBoard) {
+            groups = groups.filter(sg => {
+                const prog = programs.find(p => p.name === sg.program);
+                const pBoard = (prog?.custom_board || '').toString().trim().toLowerCase();
+                const fBoard = (selectedBoard || '').toString().trim().toLowerCase();
+                return pBoard === fBoard;
+            });
+        }
+        return groups;
+    }, [studentGroups, programs, selectedBoard, selectedProgram]);
+
+    const filterStudentGroupsList = useMemo(() => {
+        let groups = studentGroups;
+        if (filterProgram) {
+            groups = groups.filter(sg => sg.program === filterProgram);
+        } else if (filterBoard) {
+            groups = groups.filter(sg => {
+                const prog = programs.find(p => p.name === sg.program);
+                const pBoard = (prog?.custom_board || '').toString().trim().toLowerCase();
+                const fBoard = (filterBoard || '').toString().trim().toLowerCase();
+                return pBoard === fBoard;
+            });
+        }
+        return groups;
+    }, [studentGroups, programs, filterBoard, filterProgram]);
+
 
     // Reset all filters
     const handleClearFilters = () => {
@@ -478,7 +531,11 @@ export default function HomeworkAssignment() {
                             placeholder="Filter Board"
                             className="w-full"
                             value={filterBoard || undefined}
-                            onChange={val => setFilterBoard(val || '')}
+                            onChange={val => {
+                                setFilterBoard(val || '');
+                                setFilterProgram('');
+                                setFilterGroup('');
+                            }}
                             allowClear
                             showSearch
                             optionFilterProp="children"
@@ -501,8 +558,9 @@ export default function HomeworkAssignment() {
                             allowClear
                             showSearch
                             optionFilterProp="children"
+                            disabled={!filterBoard}
                         >
-                            {programs.map(p => (
+                            {filterProgramsList.map(p => (
                                 <Select.Option key={p.name} value={p.name}>{p.name}</Select.Option>
                             ))}
                         </Select>
@@ -516,14 +574,11 @@ export default function HomeworkAssignment() {
                             allowClear
                             showSearch
                             optionFilterProp="children"
-                            disabled={!filterProgram}
+                            disabled={!filterBoard && !filterProgram}
                         >
-                            {studentGroups
-                                .filter(sg => !filterProgram || sg.program === filterProgram)
-                                .map(sg => (
-                                    <Select.Option key={sg.name} value={sg.name}>{sg.name}</Select.Option>
-                                ))
-                            }
+                            {filterStudentGroupsList.map(sg => (
+                                <Select.Option key={sg.name} value={sg.name}>{sg.name}</Select.Option>
+                            ))}
                         </Select>
                     </div>
                     <div>
@@ -620,6 +675,7 @@ export default function HomeworkAssignment() {
                                 showSearch
                                 optionFilterProp="children"
                                 allowClear
+                                onChange={() => form.setFieldsValue({ program: undefined, studentGroup: undefined })}
                             >
                                 {boards.map(b => (
                                     <Select.Option key={b.name} value={b.name}>{b.name}</Select.Option>
@@ -632,11 +688,13 @@ export default function HomeworkAssignment() {
                             rules={[{ required: true, message: 'Please select Program' }]}
                         >
                             <Select 
-                                placeholder="Select Program" 
+                                placeholder={selectedBoard ? "Select Program" : "Please Select Board First"}
                                 showSearch
                                 optionFilterProp="children"
+                                disabled={!selectedBoard}
+                                onChange={() => form.setFieldsValue({ studentGroup: undefined })}
                             >
-                                {programs.map(p => (
+                                {filteredPrograms.map(p => (
                                     <Select.Option key={p.name} value={p.name}>{p.name}</Select.Option>
                                 ))}
                             </Select>
@@ -648,11 +706,12 @@ export default function HomeworkAssignment() {
                             rules={[{ required: true, message: 'Please select Student Group' }]}
                         >
                             <Select 
-                                placeholder="Select Student Group"
+                                placeholder={selectedBoard || selectedProgram ? "Select Student Group" : "Please Select Board/Program First"}
                                 showSearch
                                 optionFilterProp="children"
+                                disabled={!selectedBoard && !selectedProgram}
                             >
-                                {studentGroups.map(sg => (
+                                {filteredStudentGroups.map(sg => (
                                     <Select.Option key={sg.name} value={sg.name}>{sg.name}</Select.Option>
                                 ))}
                             </Select>

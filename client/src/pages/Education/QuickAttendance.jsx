@@ -46,11 +46,11 @@ const QuickAttendance = () => {
             setLoadingMasters(true);
             try {
                 const [pRes, sgRes, bRes] = await Promise.all([
-                    API.get('/api/resource/Program?limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                    API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                     API.get('/api/resource/Student Group?fields=["name","program","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                     API.get('/api/resource/Company?limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 ]);
-                setPrograms(pRes.data.data?.map(d => ({ value: d.name, label: d.name })) || []);
+                setPrograms(pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || []);
                 const groups = sgRes.data.data?.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board })) || [];
                 setAllStudentGroups(groups);
                 setFilteredGroups(groups);
@@ -437,7 +437,7 @@ const QuickAttendance = () => {
                             disabled={loadingMasters}
                         >
                             <option value="">All Programs</option>
-                            {programs.map(p => (
+                            {programs.filter(p => !selectedBoard || p.custom_board === selectedBoard).map(p => (
                                 <option key={p.value} value={p.value}>{p.label}</option>
                             ))}
                         </select>

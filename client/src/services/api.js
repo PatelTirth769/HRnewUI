@@ -8,6 +8,30 @@ const API = axios.create({
     }
 });
 
+// Add a global interceptor to automatically pause and retry when hitting Frappe rate limits (417/429)
+API.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const status = error.response?.status;
+        const errStr = JSON.stringify(error.response?.data || {});
+        
+        // Check if Frappe rate-limited us
+        if (status === 417 || status === 429 || errStr.includes('Throttled') || errStr.includes('Too Many Requests')) {
+            const config = error.config;
+            if (config) {
+                config.retryCount = config.retryCount || 0;
+                // Retry up to 12 times for throttled requests with a longer delay to outlast Frappe 60-second lockout windows
+                if (config.retryCount < 12) {
+                    config.retryCount += 1;
+                    console.warn(`[API Rate Limit] Request throttled. Retrying (${config.retryCount}/12) in 5.5 seconds...`);
+                    await new Promise(r => setTimeout(r, 5500));
+                    return API(config);
+                }
+            }
+        }
+        return Promise.reject(error);
+    }
+);
 /**
  * Set the active system for all subsequent API calls.
  * Hardcoded to Schooler.

@@ -29,9 +29,12 @@ export default function BonafideCertificate() {
     
     // Masters and Group States
     const [loadingMasters, setLoadingMasters] = useState(false);
+    const [boards, setBoards] = useState([]);
     const [programs, setPrograms] = useState([]);
     const [allStudentGroups, setAllStudentGroups] = useState([]);
+    const [filteredPrograms, setFilteredPrograms] = useState([]);
     const [filteredGroups, setFilteredGroups] = useState([]);
+    const [selectedBoard, setSelectedBoard] = useState('');
     const [selectedProgram, setSelectedProgram] = useState('');
     const [selectedGroup, setSelectedGroup] = useState('');
     const [studentsInGroup, setStudentsInGroup] = useState([]);
@@ -63,14 +66,20 @@ export default function BonafideCertificate() {
         const fetchMasters = async () => {
             setLoadingMasters(true);
             try {
-                const [pRes, sgRes] = await Promise.all([
-                    API.get('/api/resource/Program?limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                const [pRes, sgRes, bRes] = await Promise.all([
+                    API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                     API.get('/api/resource/Student Group?fields=["name","program"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                    API.get('/api/resource/Company?limit_page_length=None').catch(() => ({ data: { data: [] } }))
                 ]);
-                setPrograms(pRes.data.data?.map(d => ({ value: d.name })) || []);
-                const groups = sgRes.data.data?.map(d => ({ value: d.name, program: d.program })) || [];
+                const fetchedPrograms = pRes.data.data || [];
+                setPrograms(fetchedPrograms);
+                setFilteredPrograms(fetchedPrograms);
+                
+                const groups = sgRes.data.data || [];
                 setAllStudentGroups(groups);
                 setFilteredGroups(groups);
+                
+                setBoards(bRes.data.data || []);
             } catch (err) {
                 console.error('Error fetching programs or student groups:', err);
             } finally {
@@ -136,22 +145,63 @@ export default function BonafideCertificate() {
         }
     };
 
+    // Handle board change
+    const handleBoardChange = (value) => {
+        setSelectedBoard(value);
+        if (value) {
+            const fProgs = programs.filter(p => {
+                const pBoard = (p.custom_board || '').toString().trim().toLowerCase();
+                const fBoard = (value || '').toString().trim().toLowerCase();
+                return pBoard === fBoard;
+            });
+            setFilteredPrograms(fProgs);
+            
+            const fGroups = allStudentGroups.filter(sg => {
+                const prog = programs.find(p => p.name === sg.program);
+                const pBoard = (prog?.custom_board || '').toString().trim().toLowerCase();
+                const fBoard = (value || '').toString().trim().toLowerCase();
+                return pBoard === fBoard;
+            });
+            setFilteredGroups(fGroups);
+        } else {
+            setFilteredPrograms(programs);
+            setFilteredGroups(allStudentGroups);
+        }
+        setSelectedProgram('');
+        setSelectedGroup('');
+        form.setFieldsValue({ board: value, program: undefined, studentGroup: undefined, studentSearch: undefined, studentName: '', grNo: '', rollNo: '' });
+        setStudentsInProgram([]);
+        setStudentsInGroup([]);
+        setStudents([]);
+    };
+
     // Filter student groups when program changes
     const handleProgramChange = (value) => {
         setSelectedProgram(value);
         if (value) {
             setFilteredGroups(allStudentGroups.filter(g => g.program === value));
-            form.setFieldsValue({ std: value });
+            form.setFieldsValue({ std: value, program: value });
             setPreviewData(prev => ({ ...prev, std: value }));
             fetchStudentsForProgram(value);
         } else {
-            setFilteredGroups(allStudentGroups);
+            if (selectedBoard) {
+                const fGroups = allStudentGroups.filter(sg => {
+                    const prog = programs.find(p => p.name === sg.program);
+                    const pBoard = (prog?.custom_board || '').toString().trim().toLowerCase();
+                    const fBoard = (selectedBoard || '').toString().trim().toLowerCase();
+                    return pBoard === fBoard;
+                });
+                setFilteredGroups(fGroups);
+            } else {
+                setFilteredGroups(allStudentGroups);
+            }
+            form.setFieldsValue({ program: undefined });
             setStudentsInProgram([]);
             setStudents([]);
         }
         // Clear dependent fields
         setSelectedGroup('');
-        form.setFieldsValue({ studentGroup: '', studentSearch: undefined, studentName: '', grNo: '', rollNo: '' });
+        form.setFieldsValue({ studentGroup: undefined, studentSearch: undefined, studentName: '', grNo: '', rollNo: '' });
         setStudentsInGroup([]);
     };
 
@@ -251,8 +301,24 @@ export default function BonafideCertificate() {
 
         setSearching(true);
         try {
+            let additionalFilters = [];
+            if (selectedBoard) {
+                const validPrograms = programs.filter(p => {
+                    const pBoard = (p.custom_board || '').toString().trim().toLowerCase();
+                    const fBoard = (selectedBoard || '').toString().trim().toLowerCase();
+                    return pBoard === fBoard;
+                }).map(p => p.name);
+                if (validPrograms.length > 0) {
+                    additionalFilters.push(["program", "in", validPrograms]);
+                }
+            }
+            
+            const filters = [
+                ["student_name", "like", `%${value}%`],
+                ...additionalFilters
+            ];
             const res = await API.get(
-                `/api/resource/Student?filters=[["student_name","like","%${value}%"]]&fields=["name","student_name","first_name","middle_name","last_name","gender","date_of_birth","program","roll_number","gr_number"]&limit_page_length=20`
+                `/api/resource/Student?filters=${JSON.stringify(filters)}&fields=["name","student_name","first_name","middle_name","last_name","gender","date_of_birth","program","roll_number","gr_number"]&limit_page_length=20`
             );
             setStudents(res.data.data || []);
         } catch (err) {
@@ -502,30 +568,51 @@ export default function BonafideCertificate() {
                         <Divider orientation="left" className="m-0 text-red-800 font-bold text-xs uppercase tracking-wide">1. Student Lookup</Divider>
                         
                         <Row gutter={12} className="mt-3">
-                            <Col span={12}>
-                                <Form.Item label="Program (Class)" name="program">
-                                    <AutoComplete
-                                        options={programs}
-                                        placeholder="Select or type program..."
-                                        onChange={handleProgramChange}
+                            <Col span={8}>
+                                <Form.Item label="Board" name="board">
+                                    <Select 
+                                        placeholder="Select Board" 
+                                        showSearch
+                                        allowClear
+                                        onChange={handleBoardChange}
                                         disabled={loadingMasters}
-                                        filterOption={(inputValue, option) =>
-                                            option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
-                                        }
-                                    />
+                                    >
+                                        {boards.map(b => (
+                                            <Select.Option key={b.name} value={b.name}>{b.name}</Select.Option>
+                                        ))}
+                                    </Select>
                                 </Form.Item>
                             </Col>
-                            <Col span={12}>
+                            <Col span={8}>
+                                <Form.Item label="Program (Class)" name="program">
+                                    <Select
+                                        showSearch
+                                        allowClear
+                                        placeholder="Select program..."
+                                        onChange={handleProgramChange}
+                                        disabled={loadingMasters}
+                                        optionFilterProp="children"
+                                    >
+                                        {filteredPrograms.map(p => (
+                                            <Select.Option key={p.name} value={p.name}>{p.name}</Select.Option>
+                                        ))}
+                                    </Select>
+                                </Form.Item>
+                            </Col>
+                            <Col span={8}>
                                 <Form.Item label="Student Group" name="studentGroup">
-                                    <AutoComplete
-                                        options={filteredGroups.map(g => ({ value: g.value }))}
-                                        placeholder="Select or type student group..."
+                                    <Select
+                                        showSearch
+                                        allowClear
+                                        placeholder="Select student group..."
                                         onChange={handleGroupChange}
                                         disabled={loadingMasters}
-                                        filterOption={(inputValue, option) =>
-                                            option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
-                                        }
-                                    />
+                                        optionFilterProp="children"
+                                    >
+                                        {filteredGroups.map(g => (
+                                            <Select.Option key={g.name} value={g.name}>{g.name}</Select.Option>
+                                        ))}
+                                    </Select>
                                 </Form.Item>
                             </Col>
                         </Row>

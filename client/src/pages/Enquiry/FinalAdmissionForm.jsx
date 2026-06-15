@@ -241,6 +241,10 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
     const [filterImportedOnly, setFilterImportedOnly] = useState(false);
     const [filterImportedDate, setFilterImportedDate] = useState('');
 
+    // Bulk selection state
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [bulkProgress, setBulkProgress] = useState(null); // null = closed, { total, done, errors, log } = open
+
 
     const initFormData = {
         admissionNo: '',
@@ -272,11 +276,11 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
     const fetchERPNextData = async () => {
         try {
             const [progRes, yearRes, companyRes] = await Promise.all([
-                API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
             ]);
-            const programs = progRes.data.data?.map(p => p.name) || [];
+            const programs = progRes.data.data || [];
             const years = yearRes.data.data?.map(y => y.name) || [];
             setAcademicYears(years);
             setBoards((companyRes.data.data || []).map(c => c.name));
@@ -294,7 +298,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
     const fetchRestrictions = async (programs) => {
         const sortPrograms = (arr) => {
             const getRank = (name) => {
-                const n = name.toUpperCase();
+                const n = (name || '').toUpperCase();
                 if (n.includes('NURSERY') || n.includes('NURSARY') || n.includes('NUR')) return 0;
                 if (n.includes('JR') || n.includes('JUNIOR')) return 1;
                 if (n.includes('SR') || n.includes('SENIOR')) return 2;
@@ -303,22 +307,33 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                 return 999;
             };
             return [...arr].sort((a, b) => {
-                const rA = getRank(a);
-                const rB = getRank(b);
+                const rA = getRank(a.name);
+                const rB = getRank(b.name);
                 if (rA !== rB) return rA - rB;
-                return a.localeCompare(b);
+                return (a.name || '').localeCompare(b.name || '');
             });
         };
 
         try {
             const snap = await getDocs(collection(db, 'schooler_system/enquiry_management/program_restrictions'));
             const restricted = snap.docs.filter(d => d.data().isDisabled).map(d => d.id);
-            setAvailableClasses(sortPrograms(programs.filter(c => !restricted.includes(c))));
+            setAvailableClasses(sortPrograms(programs.filter(c => !restricted.includes(c.name))));
         } catch (err) { 
             console.error('Restriction fetch failed', err);
             setAvailableClasses(sortPrograms(programs));
         }
     };
+
+    const filteredClasses = useMemo(() => {
+        if (!formData.custom_board) {
+            return [];
+        }
+        return availableClasses.filter(c => {
+            const pBoard = (c.custom_board || '').toString().trim().toLowerCase();
+            const fBoard = (formData.custom_board || '').toString().trim().toLowerCase();
+            return pBoard === fBoard;
+        });
+    }, [availableClasses, formData.custom_board]);
 
 
     const fetchRegistrations = async () => {
@@ -392,7 +407,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                     const baseGEmail = g.email_address || g.user;
                     const gEmail = baseGEmail ? baseGEmail.trim() : `${cleanGName}.${Date.now().toString().slice(-4)}${i}@guardian.ssvschool.edu.in`;
 
-                    let finalGuardianName = g.guardian;
+                    let finalGuardianName = g.guardian || g.existing_id;
                     let finalGuardianDisplayName = g.guardian_name || `Parent of ${formData.first_name || 'Student'}`;
 
                     if (g.is_new && !finalGuardianName) {
@@ -565,6 +580,28 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                                 guardians: linkedGuardians
                             }).catch(childErr => console.warn('[ERPNext Guardian Link Sync] Warning during explicit PUT linkage:', childErr.message));
                             console.log('[ERPNext Guardian Link Sync] Successfully applied child table guardians linking to Student record.');
+                            
+                            // Bidirectionally update Guardian's students child table
+                            for (const lg of linkedGuardians) {
+                                try {
+                                    const guardianName = lg.guardian;
+                                    const gDocRes = await API.get(`/api/resource/Guardian/${encodeURIComponent(guardianName)}`);
+                                    const existingStudents = gDocRes.data.data.students || [];
+                                    const isAlreadyLinked = existingStudents.some(s => s.student === erpNextStudentName);
+                                    if (!isAlreadyLinked) {
+                                        existingStudents.push({
+                                            student: erpNextStudentName,
+                                            student_name: currentPayload.first_name || 'Student'
+                                        });
+                                        await API.put(`/api/resource/Guardian/${encodeURIComponent(guardianName)}`, {
+                                            students: existingStudents
+                                        });
+                                        console.log(`[ERPNext Guardian Student Sync] Bidirectionally appended student ${erpNextStudentName} to Guardian ${guardianName}`);
+                                    }
+                                } catch (gSyncErr) {
+                                    console.warn('Failed to bidirectionally append student to guardian:', gSyncErr.message);
+                                }
+                            }
                         }
 
                         // Instantly map Student profile settings to the corresponding ERPNext User account
@@ -633,7 +670,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
             } catch (erpErr) {
                 console.error('ERPNext Admission sync failed:', erpErr);
                 const errMsg = erpErr.response?.data?.exception || erpErr.response?.data?._server_messages || erpErr.message;
-                notification.warning({ message: 'ERPNext Sync Partial', description: `Student creation skipped/failed: ${typeof errMsg === 'string' ? errMsg.slice(0, 100) : 'Check server logs'}` });
+                throw new Error(`ERPNext Sync Failed: ${typeof errMsg === 'string' ? errMsg.slice(0, 100) : 'Check server logs'}. Admission aborted.`);
             }
 
             // 2. Save to Firebase Final Admissions
@@ -662,6 +699,288 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
         } finally { 
             setSaving(false); 
         }
+    };
+
+    // ─── Single-registration confirm helper (reusable by bulk process) ─────────
+    const confirmSingleRegistration = async (reg) => {
+        let erpNextStudentName = null;
+        try {
+            let linkedGuardians = [];
+            const baseGuardiansList = reg?.guardians?.length > 0 ? reg.guardians : [
+                {
+                    is_new: true,
+                    guardian_name: reg?.parent_name || reg?.father_name || `Parent of ${reg.first_name || 'Student'}`,
+                    relation: 'Others',
+                    mobile_number: reg.student_mobile_number || reg.mobile || null,
+                    email_address: ''
+                }
+            ];
+            const guardiansArray = baseGuardiansList;
+            for (let i = 0; i < guardiansArray.length; i++) {
+                const g = guardiansArray[i];
+                const cleanGName = (g.guardian_name || 'guardian').replace(/\s+/g, '').toLowerCase();
+                const baseGEmail = g.email_address || g.user;
+                const gEmail = baseGEmail ? baseGEmail.trim() : `${cleanGName}.${Date.now().toString().slice(-4)}${i}@guardian.ssvschool.edu.in`;
+                let finalGuardianName = g.guardian || g.existing_id;
+                let finalGuardianDisplayName = g.guardian_name || `Parent of ${reg.first_name || 'Student'}`;
+
+                if (!finalGuardianName) {
+                    const guardianPayload = {
+                        guardian_name: g.guardian_name || finalGuardianDisplayName,
+                        email_address: gEmail,
+                        mobile_number: g.mobile_number || null,
+                        occupation: g.occupation || null,
+                        designation: g.designation || null,
+                        education: g.education || null,
+                        alternate_number: g.alternate_number || null,
+                        work_address: g.work_address || null,
+                        date_of_birth: g.date_of_birth || null
+                    };
+                    let gAttempts = 0;
+                    while (gAttempts < 15 && !finalGuardianName) {
+                        gAttempts++;
+                        try {
+                            const gRes = await API.post('/api/resource/Guardian', guardianPayload);
+                            finalGuardianName = gRes.data.data.name;
+                            finalGuardianDisplayName = gRes.data.data.guardian_name;
+                            break;
+                        } catch (gErr) {
+                            const status = gErr.response?.status;
+                            const errStr = JSON.stringify(gErr.response?.data || {});
+                            if (status === 409 || errStr.includes('DuplicateEntryError')) {
+                                if (gAttempts < 15) { await new Promise(r => setTimeout(r, 150)); continue; }
+                            }
+                            try {
+                                const safeFilters = encodeURIComponent(JSON.stringify([["guardian_name", "like", `%${guardianPayload.guardian_name}%`]]));
+                                const sq = await API.get(`/api/resource/Guardian?filters=${safeFilters}&limit_page_length=1`);
+                                if (sq.data.data?.length > 0) { finalGuardianName = sq.data.data[0].name; break; }
+                            } catch (_) {}
+                            break;
+                        }
+                    }
+                }
+
+                // Synchronize and auto-create the Guardian User account mapped with the correct role profiles
+                const shouldCreateUser = guardiansArray.length === 1 || g.create_user_account;
+                if (finalGuardianDisplayName && shouldCreateUser) {
+                    try {
+                        const cleanPhone = g.mobile_number ? String(g.mobile_number).replace(/[\s+-]/g, '') : '';
+                        const cleanGUsername = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+                        const gUserPayload = {
+                            mobile_no: g.mobile_number || null,
+                            role_profile_name: 'Guardian',
+                            module_profile: 'Guardian',
+                            new_password: DEFAULT_USER_PASSWORD,
+                            enabled: 1,
+                            roles: [{ role: 'Guardian' }]
+                        };
+                        if (cleanGUsername) {
+                            gUserPayload.username = cleanGUsername;
+                        }
+                        try {
+                            await API.put(`/api/resource/User/${encodeURIComponent(gEmail)}`, gUserPayload);
+                        } catch (guErr) {
+                            if (guErr.response?.status === 404) {
+                                await API.post('/api/resource/User', {
+                                    email: gEmail,
+                                    first_name: finalGuardianDisplayName,
+                                    send_welcome_email: 0,
+                                    ...gUserPayload
+                                });
+                                await API.put(`/api/resource/User/${encodeURIComponent(gEmail)}`, {
+                                    new_password: DEFAULT_USER_PASSWORD
+                                }).catch(() => {});
+                            }
+                        }
+                        if (finalGuardianName) {
+                            await API.put(`/api/resource/Guardian/${encodeURIComponent(finalGuardianName)}`, {
+                                user: gEmail,
+                                email_address: gEmail
+                            }).catch(() => {});
+                        }
+                    } catch (gUserSyncErr) {
+                        console.warn('[Bulk Guardian User Sync Error]', gUserSyncErr.message);
+                    }
+                }
+
+                if (finalGuardianName) {
+                    linkedGuardians.push({ guardian: finalGuardianName, guardian_name: finalGuardianDisplayName || g.guardian_name, relation: g.relation || 'Others' });
+                }
+            }
+
+            const cleanFirstName = (reg.first_name || 'student').replace(/\s+/g, '').toLowerCase();
+            const safeEmail = reg.student_email_id || reg.email || `${cleanFirstName}.${Date.now().toString().slice(-5)}@ssvschool.edu.in`;
+
+            const studentPayload = {
+                first_name: reg.first_name,
+                middle_name: reg.middle_name || null,
+                last_name: reg.last_name || null,
+                student_email_id: safeEmail,
+                student_mobile_number: reg.student_mobile_number || reg.mobile || null,
+                gender: reg.gender || null,
+                date_of_birth: reg.date_of_birth || null,
+                blood_group: reg.blood_group || null,
+                address_line_1: reg.address_line_1 || reg.perm_address || null,
+                city: reg.city || reg.perm_city || null,
+                state: reg.state || reg.perm_state || null,
+                pincode: reg.pincode || reg.perm_pincode || null,
+                country: reg.country || 'India',
+                academic_year: reg.academic_year,
+                program: reg.program,
+                custom_board: reg.custom_board || null,
+                status: 'Admitted',
+                roll_number: reg.roll_number || null,
+                gr_number: reg.gr_number || null,
+                guardians: linkedGuardians
+            };
+
+            let attempts = 0;
+            let lastSyncErr = null;
+            while (attempts < 40 && !erpNextStudentName) {
+                attempts++;
+                try {
+                    const sRes = await API.post('/api/resource/Student', { ...studentPayload, student_email_id: safeEmail });
+                    erpNextStudentName = sRes.data.data.name;
+                    if (linkedGuardians.length > 0) {
+                        await API.put(`/api/resource/Student/${encodeURIComponent(erpNextStudentName)}`, { guardians: linkedGuardians }).catch(() => {});
+                        // Bidirectionally update Guardian's students child table
+                        for (const lg of linkedGuardians) {
+                            try {
+                                const guardianName = lg.guardian;
+                                const gDocRes = await API.get(`/api/resource/Guardian/${encodeURIComponent(guardianName)}`);
+                                const existingStudents = gDocRes.data.data.students || [];
+                                if (!existingStudents.some(s => s.student === erpNextStudentName)) {
+                                    existingStudents.push({
+                                        student: erpNextStudentName,
+                                        student_name: reg.first_name || 'Student'
+                                    });
+                                    await API.put(`/api/resource/Guardian/${encodeURIComponent(guardianName)}`, { students: existingStudents });
+                                }
+                            } catch (gSyncErr) {
+                                console.error('[Bulk Guardian Sync Error]', gSyncErr.response?.data || gSyncErr.message);
+                            }
+                        }
+                    }
+
+                    // Instantly map Student profile settings to the corresponding ERPNext User account
+                    try {
+                        const sMobile = reg.student_mobile_number || reg.mobile || null;
+                        const cleanPhone = sMobile ? String(sMobile).replace(/[\s+-]/g, '') : '';
+                        const cleanStudentUsername = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
+                        const userPayload = {
+                            mobile_no: sMobile,
+                            role_profile_name: 'Student',
+                            module_profile: 'Student',
+                            new_password: DEFAULT_USER_PASSWORD,
+                            enabled: 1,
+                            roles: [{ role: 'Student' }]
+                        };
+                        if (cleanStudentUsername) {
+                            userPayload.username = cleanStudentUsername;
+                        }
+                        try {
+                            await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, userPayload);
+                        } catch (uErr) {
+                            if (uErr.response?.status === 404) {
+                                await API.post('/api/resource/User', {
+                                    email: safeEmail,
+                                    first_name: reg.first_name || 'Student',
+                                    last_name: reg.last_name || null,
+                                    send_welcome_email: 0,
+                                    ...userPayload
+                                });
+                                await API.put(`/api/resource/User/${encodeURIComponent(safeEmail)}`, {
+                                    new_password: DEFAULT_USER_PASSWORD
+                                }).catch(() => {});
+                            }
+                        }
+                    } catch (profileSyncErr) {
+                        console.warn('[Bulk Student User Sync Error]', profileSyncErr.message);
+                    }
+                } catch (err) {
+                    lastSyncErr = err;
+                    const status = err.response?.status;
+                    const errStr = JSON.stringify(err.response?.data || {});
+                    if (status === 409 || errStr.includes('DuplicateEntryError') || errStr.includes('Duplicate entry')) {
+                        if (attempts < 40) { await new Promise(r => setTimeout(r, 120)); continue; }
+                    }
+                    break;
+                }
+            }
+            if (!erpNextStudentName && lastSyncErr) throw lastSyncErr;
+        } catch (erpErr) {
+            console.error('[Bulk Confirm ERPNext Failed]', erpErr);
+            throw new Error(`ERPNext Sync Failed: ${erpErr.message}. Admission aborted.`);
+        }
+
+        // Save to Firebase Final Admissions
+        await addDoc(collection(db, ADMISSIONS_PATH), {
+            admissionNo: `ADM-${Date.now().toString().slice(-6)}`,
+            admission_date: new Date().toISOString().split('T')[0],
+            academic_year: reg.academic_year || '2025-2026',
+            program: reg.program,
+            custom_board: reg.custom_board || '',
+            first_name: reg.first_name,
+            last_name: reg.last_name || '',
+            gender: reg.gender || '',
+            date_of_birth: reg.date_of_birth || '',
+            mobile: reg.student_mobile_number || reg.mobile || '',
+            enquiryCode: reg.enquiryCode || '-',
+            registrationCode: reg.registrationNo || reg.id,
+            erp_student_id: erpNextStudentName,
+            registrationId: reg.id,
+            status: 'Confirmed',
+            created_at: serverTimestamp(),
+            updated_at: serverTimestamp()
+        });
+
+        // Mark registration as Admitted
+        await updateDoc(doc(db, REGISTRATIONS_PATH, reg.id), {
+            status: 'Converted',
+            admissionStatus: 'Admitted',
+            updated_at: serverTimestamp()
+        });
+    };
+
+    // ─── Bulk Confirm Handler ──────────────────────────────────────────────────
+    const handleBulkConfirm = async () => {
+        const pendingSelected = registrations.filter(r =>
+            selectedIds.includes(r.id) && r.admissionStatus !== 'Admitted' && !r.isDisabled
+        );
+        if (pendingSelected.length === 0) {
+            notification.warning({ message: 'No pending admissions selected.' });
+            return;
+        }
+        setBulkProgress({ total: pendingSelected.length, done: 0, errors: 0, log: [] });
+        setSelectedIds([]);
+
+        let done = 0;
+        let errors = 0;
+        const log = [];
+
+        for (const reg of pendingSelected) {
+            try {
+                await confirmSingleRegistration(reg);
+                done++;
+                log.push({ name: `${reg.first_name} ${reg.last_name || ''}`.trim(), status: 'success' });
+            } catch (err) {
+                errors++;
+                log.push({ name: `${reg.first_name} ${reg.last_name || ''}`.trim(), status: 'error', msg: err.message });
+                console.error('[Bulk Confirm] Failed for', reg.first_name, err);
+            }
+            setBulkProgress(prev => ({ ...prev, done: done, errors: errors, log: [...log] }));
+            // Generous delay between students to proactively avoid Frappe server rate limits (417/429)
+            await new Promise(r => setTimeout(r, 2000));
+        }
+
+        // Refresh after all done
+        await fetchRegistrations();
+        notification.success({
+            message: `✅ Bulk Admission Complete`,
+            description: `${done} student${done !== 1 ? 's' : ''} confirmed successfully${errors > 0 ? `, ${errors} failed` : ''}.`,
+            duration: 7
+        });
     };
 
     const filteredData = useMemo(() => {
@@ -769,8 +1088,25 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                             <InputField label="Admission No" disabled value={formData.admissionNo} />
                             <InputField label="Admission Date" type="date" value={formData.admission_date} onChange={(v) => setFormData({...formData, admission_date: v})} />
                             <SelectField label="Academic Year" value={formData.academic_year} options={academicYears} onChange={(v) => setFormData({...formData, academic_year: v})} />
-                            <SelectField label="Final Admission Program (Class)" required value={formData.program} options={availableClasses} onChange={(v) => setFormData({...formData, program: v})} />
-                            <SelectField label="Board" value={formData.custom_board} options={boards} onChange={(v) => setFormData({...formData, custom_board: v})} />
+                            <SelectField 
+                                label="Board" 
+                                value={formData.custom_board} 
+                                options={boards} 
+                                onChange={(v) => setFormData({
+                                    ...formData, 
+                                    custom_board: v,
+                                    program: '' // Clear program when board changes
+                                })} 
+                            />
+                            <SelectField 
+                                label="Final Admission Program (Class)" 
+                                required 
+                                value={formData.program} 
+                                options={filteredClasses.map(c => c.name)} 
+                                onChange={(v) => setFormData({...formData, program: v})} 
+                                placeholder={formData.custom_board ? "Select Program" : "Please Select Board First"}
+                                disabled={!formData.custom_board}
+                            />
 
                             <InputField label="Roll Number" value={formData.roll_number} onChange={(v) => setFormData({...formData, roll_number: v})} placeholder="Enter Roll Number" />
                             <InputField label="GR Number" value={formData.gr_number} onChange={(v) => setFormData({...formData, gr_number: v})} placeholder="Enter GR Number" />
@@ -858,8 +1194,10 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                             className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
                         >
                             <option value="All">All Programs</option>
-                            {availableClasses.map((p) => (
-                                <option key={p} value={p}>{p}</option>
+                            {availableClasses
+                                .filter(p => filterBoard === 'All' || !p.custom_board || p.custom_board.toString().trim().toLowerCase() === filterBoard.toString().trim().toLowerCase())
+                                .map((p) => (
+                                <option key={p.name} value={p.name}>{p.name}</option>
                             ))}
                         </select>
                     </div>
@@ -963,15 +1301,47 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                         />
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{!loading && `${Math.min(visibleCount, filteredData.length)} of ${filteredData.length} TOTAL ADMISSIONS`}</span>
-                    </div>
+                        {selectedIds.length > 0 && (
+                            <button
+                                onClick={handleBulkConfirm}
+                                className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-[12px] font-black uppercase tracking-wider rounded-lg shadow-md transition-all active:scale-95"
+                            >
+                                <FiCheckCircle className="w-4 h-4" />
+                                Confirm Selected ({selectedIds.filter(id => registrations.find(r => r.id === id && r.admissionStatus !== 'Admitted' && !r.isDisabled)).length})
+                            </button>
+                        )}
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{!loading && `${Math.min(visibleCount, filteredData.length)} of ${filteredData.length} TOTAL ADMISSIONS`}</span>
+                </div>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
+                    <table className="w-full text-left text-[11px] whitespace-nowrap">
                         <thead>
                             <tr className="bg-gray-50/80 border-b border-gray-100">
+                                <th className="px-4 py-3.5 w-10">
+                                    {/* Select all pending rows on current page */}
+                                    {(() => {
+                                        const visiblePending = filteredData.slice(0, visibleCount).filter(r => r.admissionStatus !== 'Admitted' && !r.isDisabled);
+                                        const allChecked = visiblePending.length > 0 && visiblePending.every(r => selectedIds.includes(r.id));
+                                        return (
+                                            <input
+                                                type="checkbox"
+                                                className="w-4 h-4 accent-green-600 cursor-pointer rounded"
+                                                checked={allChecked}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedIds(prev => [...new Set([...prev, ...visiblePending.map(r => r.id)])]);
+                                                    } else {
+                                                        setSelectedIds(prev => prev.filter(id => !visiblePending.some(r => r.id === id)));
+                                                    }
+                                                }}
+                                                title="Select All Pending"
+                                            />
+                                        );
+                                    })()}
+                                </th>
                                 <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Student Details</th>
                                 <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Program (Class)</th>
+                                <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Board</th>
                                 <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Academic Year</th>
                                 <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Reference Codes</th>
                                 <th className="px-4 py-3.5 font-bold text-gray-500 uppercase tracking-wider text-[11px]">Date of Birth</th>
@@ -980,17 +1350,34 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {loading ? (
-                                <tr><td colSpan={6} className="px-4 py-12 text-center"><Spin /></td></tr>
+                                <tr><td colSpan={7} className="px-4 py-12 text-center"><Spin /></td></tr>
                             ) : filteredData.length === 0 ? (
-                                <tr><td colSpan={6} className="px-4 py-16 text-center text-gray-400 font-medium italic">No matching records found</td></tr>
+                                <tr><td colSpan={7} className="px-4 py-16 text-center text-gray-400 font-medium italic">No matching records found</td></tr>
                             ) : (
                                 filteredData.slice(0, visibleCount).map((row) => (
-                                    <tr key={row.id} className="hover:bg-blue-50/40 transition-all group">
+                                    <tr key={row.id} className={`hover:bg-blue-50/40 transition-all group ${selectedIds.includes(row.id) ? 'bg-green-50/60' : ''}`}>
+                                        <td className="px-4 py-3.5">
+                                            {(row.admissionStatus !== 'Admitted' && !row.isDisabled) ? (
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-4 h-4 accent-green-600 cursor-pointer rounded"
+                                                    checked={selectedIds.includes(row.id)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedIds(prev => [...prev, row.id]);
+                                                        } else {
+                                                            setSelectedIds(prev => prev.filter(id => id !== row.id));
+                                                        }
+                                                    }}
+                                                />
+                                            ) : null}
+                                        </td>
                                         <td className="px-4 py-3.5">
                                             <div className="font-bold text-gray-900">{row.first_name} {row.last_name}</div>
                                             <div className="text-[11px] text-gray-400 font-medium mt-0.5">{row.student_mobile_number || row.mobile || 'No mobile'}</div>
                                         </td>
                                         <td className="px-4 py-3.5 font-black text-blue-600 uppercase text-[11px]">{row.program}</td>
+                                        <td className="px-4 py-3.5 font-medium text-gray-600 text-xs">{row.custom_board || '-'}</td>
                                         <td className="px-4 py-3.5 font-medium text-gray-600 text-xs">{row.academic_year}</td>
                                         <td className="px-4 py-3.5">
                                             <div className="flex flex-col gap-1">
@@ -1075,6 +1462,89 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                     </div>
                 )}
             </div>
+
+            {/* ─── Bulk Progress Modal ───────────────────────────────────────────────────── */}
+            {bulkProgress !== null && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-green-600 to-emerald-500 px-6 py-5 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-white text-lg font-black tracking-tight">Confirming Admissions</h2>
+                                <p className="text-green-100 text-[11px] font-medium mt-0.5">Processing students one by one...</p>
+                            </div>
+                            {bulkProgress.done + bulkProgress.errors >= bulkProgress.total && (
+                                <button
+                                    onClick={() => setBulkProgress(null)}
+                                    className="text-white hover:text-green-200 transition p-1.5 rounded-lg hover:bg-white/20"
+                                    title="Close"
+                                >
+                                    <FiX className="w-5 h-5" />
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="px-6 py-5">
+                            {/* Progress counts */}
+                            <div className="flex justify-between items-center mb-3">
+                                <span className="text-sm font-bold text-gray-700">
+                                    {bulkProgress.done + bulkProgress.errors} of {bulkProgress.total} processed
+                                </span>
+                                <div className="flex items-center gap-3 text-xs font-bold">
+                                    <span className="text-green-600">{bulkProgress.done} ✓</span>
+                                    {bulkProgress.errors > 0 && <span className="text-red-500">{bulkProgress.errors} ✗</span>}
+                                </div>
+                            </div>
+
+                            {/* Animated progress bar */}
+                            <div className="w-full bg-gray-100 rounded-full h-4 mb-4 overflow-hidden">
+                                <div
+                                    className="h-4 rounded-full transition-all duration-500 ease-out relative overflow-hidden"
+                                    style={{
+                                        width: `${bulkProgress.total > 0 ? ((bulkProgress.done + bulkProgress.errors) / bulkProgress.total) * 100 : 0}%`,
+                                        background: 'linear-gradient(90deg, #16a34a, #22c55e)'
+                                    }}
+                                >
+                                    {/* Shimmer animation */}
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
+                                </div>
+                            </div>
+
+                            {/* Live log */}
+                            <div className="bg-gray-50 rounded-xl border border-gray-200 h-40 overflow-y-auto p-3 space-y-1.5">
+                                {bulkProgress.log.length === 0 ? (
+                                    <div className="flex items-center justify-center h-full text-gray-400 text-xs font-medium italic">Starting...</div>
+                                ) : (
+                                    [...bulkProgress.log].reverse().map((entry, i) => (
+                                        <div key={i} className={`flex items-center gap-2 text-[11px] font-medium px-2 py-1 rounded-lg ${
+                                            entry.status === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
+                                        }`}>
+                                            <span>{entry.status === 'success' ? '✅' : '❌'}</span>
+                                            <span className="font-bold truncate">{entry.name}</span>
+                                            {entry.msg && <span className="text-[10px] opacity-70 truncate">— {entry.msg}</span>}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* Done message */}
+                            {bulkProgress.done + bulkProgress.errors >= bulkProgress.total && (
+                                <div className="mt-4 text-center">
+                                    <div className="text-2xl font-black text-green-600">{bulkProgress.done}</div>
+                                    <div className="text-sm text-gray-600 font-medium">student{bulkProgress.done !== 1 ? 's' : ''} confirmed successfully!</div>
+                                    {bulkProgress.errors > 0 && <div className="text-xs text-red-500 font-medium mt-1">{bulkProgress.errors} failed — check console for details</div>}
+                                    <button
+                                        onClick={() => setBulkProgress(null)}
+                                        className="mt-3 px-6 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition-all active:scale-95"
+                                    >
+                                        Done
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

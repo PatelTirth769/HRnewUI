@@ -273,17 +273,19 @@ const generateUniqueEmail = (firstName, lastName, existingList, extraExclusions 
         base = cleanLast;
     }
     
-    let suffix = 1;
-    let email = `${base}${suffix}@ssvschool.edu.in`;
-    
     const existingEmails = new Set([
         ...existingList.map(s => (s.student_email_id || '').trim().toLowerCase()),
-        ...extraExclusions.map(e => e.trim().toLowerCase())
+        ...extraExclusions.map(e => (typeof e === 'string' ? e : '').trim().toLowerCase())
     ]);
-    
-    while (existingEmails.has(email)) {
-        suffix++;
-        email = `${base}${suffix}@ssvschool.edu.in`;
+
+    // Generate a random 3-digit number and keep retrying until unique
+    let rand3 = Math.floor(Math.random() * 900) + 100; // 100–999
+    let email = `${base}${rand3}@ssvschool.edu.in`;
+    let attempts = 0;
+    while (existingEmails.has(email.toLowerCase()) && attempts < 1000) {
+        rand3 = Math.floor(Math.random() * 900) + 100;
+        email = `${base}${rand3}@ssvschool.edu.in`;
+        attempts++;
     }
     
     return email;
@@ -306,17 +308,19 @@ const generateUniqueGuardianEmail = (guardianName, existingGuardiansList, extraE
         base = cleanLast;
     }
     
-    let suffix = 1;
-    let email = `${base}${suffix}@guardian.ssvschool.edu.in`;
-    
     const existingEmails = new Set([
         ...existingGuardiansList.map(g => (g.email_address || '').trim().toLowerCase()),
-        ...extraExclusions.map(e => e.trim().toLowerCase())
+        ...extraExclusions.map(e => (typeof e === 'string' ? e : '').trim().toLowerCase())
     ]);
-    
-    while (existingEmails.has(email)) {
-        suffix++;
-        email = `${base}${suffix}@guardian.ssvschool.edu.in`;
+
+    // Generate a random 3-digit number and keep retrying until unique
+    let rand3 = Math.floor(Math.random() * 900) + 100; // 100–999
+    let email = `${base}${rand3}@guardian.ssvschool.edu.in`;
+    let attempts = 0;
+    while (existingEmails.has(email.toLowerCase()) && attempts < 1000) {
+        rand3 = Math.floor(Math.random() * 900) + 100;
+        email = `${base}${rand3}@guardian.ssvschool.edu.in`;
+        attempts++;
     }
     
     return email;
@@ -453,6 +457,17 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const [paymentProcessing, setPaymentProcessing] = useState(false);
     const [previewModal, setPreviewModal] = useState({ visible: false, url: '', name: '', type: '' });
 
+    const filteredClasses = useMemo(() => {
+        if (!formData.custom_board) {
+            return [];
+        }
+        return availableClasses.filter(c => {
+            const pBoard = (c.custom_board || '').toString().trim().toLowerCase();
+            const fBoard = (formData.custom_board || '').toString().trim().toLowerCase();
+            return pBoard === fBoard;
+        });
+    }, [availableClasses, formData.custom_board]);
+
     // Filters state
     const [filterDateFrom, setFilterDateFrom] = useState('');
     const [filterDateTo, setFilterDateTo] = useState('');
@@ -477,6 +492,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const [importing, setImporting] = useState(false);
     const [importLogs, setImportLogs] = useState([]);
     const [previewRows, setPreviewRows] = useState([]);
+    const [parsing, setParsing] = useState(false);
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [templateFormat, setTemplateFormat] = useState('Excel');
     const [templateType, setTemplateType] = useState('Blank Template');
@@ -712,14 +728,14 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const fetchERPNextData = async () => {
         try {
             const [progRes, yearRes, guardianRes, casteRes, companyRes] = await Promise.all([
-                API.get('/api/resource/Program?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Student Category?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
             ]);
             
-            const programs = progRes.data.data?.map(p => p.name) || [];
+            const programs = progRes.data.data || [];
             const years = yearRes.data.data?.map(y => y.name) || [];
             const castes = casteRes.data.data?.map(c => c.name) || [];
             
@@ -762,7 +778,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const fetchRestrictions = async (programs) => {
         const sortPrograms = (arr) => {
             const getRank = (name) => {
-                const n = name.toUpperCase();
+                const n = (name || '').toUpperCase();
                 if (n.includes('NURSERY') || n.includes('NURSARY') || n.includes('NUR')) return 0;
                 if (n.includes('JR') || n.includes('JUNIOR')) return 1;
                 if (n.includes('SR') || n.includes('SENIOR')) return 2;
@@ -771,17 +787,17 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 return 999;
             };
             return [...arr].sort((a, b) => {
-                const rA = getRank(a);
-                const rB = getRank(b);
+                const rA = getRank(a.name);
+                const rB = getRank(b.name);
                 if (rA !== rB) return rA - rB;
-                return a.localeCompare(b);
+                return (a.name || '').localeCompare(b.name || '');
             });
         };
 
         try {
             const snap = await getDocs(collection(db, 'schooler_system/enquiry_management/program_restrictions'));
             const restricted = snap.docs.filter(d => d.data().isDisabled).map(d => d.id);
-            setAvailableClasses(sortPrograms(programs.filter(c => !restricted.includes(c))));
+            setAvailableClasses(sortPrograms(programs.filter(c => !restricted.includes(c.name))));
         } catch (err) { 
             console.error('Restriction fetch failed', err);
             setAvailableClasses(sortPrograms(programs));
@@ -871,8 +887,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
             return;
         }
         if (!formData.student_email_id || !formData.student_email_id.trim()) {
-            api.warning({ message: 'Required Field Missing', description: 'Student Email Address is required.' });
-            return;
+            const autoEmail = generateUniqueEmail(formData.first_name, formData.last_name, data);
+            formData.student_email_id = autoEmail;
+            setFormData(prev => ({ ...prev, student_email_id: autoEmail }));
         }
         if (!formData.status) {
             api.warning({ message: 'Required Field Missing', description: 'Status is required.' });
@@ -900,8 +917,18 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     return;
                 }
                 if (!g.email_address || !g.email_address.trim()) {
-                    api.warning({ message: 'Required Field Missing', description: `Email Address is required for Guardian #${i + 1}.` });
-                    return;
+                    const otherNewEmails = formData.guardians
+                        .filter((item, idx2) => idx2 !== i && item.is_new && item.email_address)
+                        .map(item => item.email_address);
+                    const autoGEmail = generateUniqueGuardianEmail(g.guardian_name, guardiansList, otherNewEmails);
+                    g.email_address = autoGEmail;
+                    setFormData(prev => {
+                        const nextGuardians = [...(prev.guardians || [])];
+                        if (nextGuardians[i]) {
+                            nextGuardians[i] = { ...nextGuardians[i], email_address: autoGEmail };
+                        }
+                        return { ...prev, guardians: nextGuardians };
+                    });
                 }
                 if (!g.mobile_number || !g.mobile_number.trim()) {
             api.warning({ message: 'Required Field Missing', description: `Mobile Number is required for Guardian #${i + 1}.` });
@@ -952,7 +979,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             let erpNextStudentName = null;
             try {
                 // Check if program exists in ERPNext
-                if (formData.program && !availableClasses.includes(formData.program)) {
+                if (formData.program && !availableClasses.some(c => c.name === formData.program)) {
                     throw new Error(`Program '${formData.program}' not found in ERPNext. Please select a valid program.`);
                 }
             } catch (erpErr) {
@@ -1554,27 +1581,157 @@ export default function RegistrationForm({ initialView = 'list' }) {
         const file = e.target.files[0];
         if (!file) return;
         setSelectedFile(file);
+        setPreviewRows([]);
+        setParsing(true);
 
         const reader = new FileReader();
         reader.onload = (evt) => {
             try {
                 const fileData = new Uint8Array(evt.target.result);
-                const workbook = XLSX.read(fileData, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-
-                if (jsonData.length === 0) {
-                    api.error({ message: 'Error', description: 'The file is empty.' });
+                let workbook;
+                try {
+                    workbook = XLSX.read(fileData, { type: 'array' });
+                } catch (xlsxErr) {
+                    setParsing(false);
+                    api.error({
+                        message: 'Parser Failed ❌',
+                        description: `File could not be read. Reason: ${xlsxErr.message || 'Invalid or corrupted file format. Please use .xlsx, .xls or .csv'}`,
+                        duration: 6
+                    });
                     return;
                 }
 
-                setPreviewRows(jsonData);
-                api.success({ message: 'File parsed successfully.', description: `Found ${jsonData.length} rows.` });
+                if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+                    setParsing(false);
+                    api.error({ message: 'Parser Failed ❌', description: 'No sheets found in the uploaded file.', duration: 5 });
+                    return;
+                }
+
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+
+                let jsonData;
+                try {
+                    jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+                } catch (parseErr) {
+                    setParsing(false);
+                    api.error({
+                        message: 'Parser Failed ❌',
+                        description: `Failed to read sheet data. Reason: ${parseErr.message || 'Unknown parsing error'}`,
+                        duration: 6
+                    });
+                    return;
+                }
+
+                if (jsonData.length === 0) {
+                    setParsing(false);
+                    api.error({ message: 'Parser Failed ❌', description: 'The file has no data rows. Please check the file and try again.', duration: 5 });
+                    return;
+                }
+
+                // --- Strip __EMPTY artifact columns (blank Excel columns) ---
+                const cleanedJsonData = jsonData.map(row => {
+                    const cleaned = {};
+                    Object.keys(row).forEach(k => {
+                        if (!k.startsWith('__EMPTY')) cleaned[k] = row[k];
+                    });
+                    return cleaned;
+                });
+
+                // --- Validate headers ---
+                const fileHeaders = Object.keys(cleanedJsonData[0] || {});
+                const issueRows = [];
+                cleanedJsonData.forEach((row, idx) => {
+                    const academicYear = String(row['Academic Year'] || row['academic_year'] || '').trim();
+                    const program = String(row['Program (Class)'] || row['Program'] || row['program'] || '').trim();
+                    const firstName = String(row['First Name'] || row['first_name'] || '').trim();
+                    const gender = String(row['Gender'] || row['gender'] || '').trim();
+                    const mobile = String(row['Student Mobile Number'] || row['student_mobile_number'] || '').trim();
+                    const gRelation = String(row['Guardian Relation'] || row['guardian_relation'] || '').trim();
+                    const gName = String(row['Guardian Name'] || row['guardian_name'] || '').trim();
+                    const gMobile = String(row['Guardian Mobile'] || row['guardian_mobile'] || '').trim();
+
+                    if (!academicYear || !program || !firstName || !gender || !mobile || !gRelation || !gName || !gMobile) {
+                        issueRows.push(idx + 2); // +2 for header row + 1-index
+                    }
+                });
+
+                // --- Auto-generate emails for missing student & guardian emails ---
+                const tempStudentEmails = [];
+                const tempGuardianEmails = [];
+                const enrichedData = cleanedJsonData.map((row) => {
+                    const enriched = { ...row };
+
+                    // Student email
+                    const studentEmailKey = fileHeaders.find(h => h === 'Student Email Address' || h === 'student_email_id');
+                    const existingStudentEmail = studentEmailKey ? String(row[studentEmailKey] || '').trim() : '';
+                    if (!existingStudentEmail) {
+                        const firstName = String(row['First Name'] || row['first_name'] || '').trim();
+                        const lastName = String(row['Last Name'] || row['last_name'] || '').trim();
+                        if (firstName) {
+                            const autoEmail = generateUniqueEmail(firstName, lastName, data, tempStudentEmails);
+                            tempStudentEmails.push(autoEmail);
+                            if (studentEmailKey) {
+                                enriched[studentEmailKey] = autoEmail + ' (auto)';
+                            } else {
+                                enriched['Student Email Address'] = autoEmail + ' (auto)';
+                            }
+                        }
+                    } else {
+                        tempStudentEmails.push(existingStudentEmail.toLowerCase());
+                    }
+
+                    // Guardian email
+                    const guardianEmailKey = fileHeaders.find(h => h === 'Guardian Email' || h === 'guardian_email');
+                    const existingGuardianEmail = guardianEmailKey ? String(row[guardianEmailKey] || '').trim() : '';
+                    const guardianName = String(row['Guardian Name'] || row['guardian_name'] || '').trim();
+                    if (!existingGuardianEmail && guardianName) {
+                        const autoGEmail = generateUniqueGuardianEmail(guardianName, guardiansList, tempGuardianEmails);
+                        tempGuardianEmails.push(autoGEmail);
+                        if (guardianEmailKey) {
+                            enriched[guardianEmailKey] = autoGEmail + ' (auto)';
+                        } else {
+                            enriched['Guardian Email'] = autoGEmail + ' (auto)';
+                        }
+                    } else if (existingGuardianEmail) {
+                        tempGuardianEmails.push(existingGuardianEmail.toLowerCase());
+                    }
+
+                    return enriched;
+                });
+
+                setParsing(false);
+                setPreviewRows(enrichedData);
+
+                const rowCount = cleanedJsonData.length;
+                const colCount = fileHeaders.length;
+
+                if (issueRows.length > 0) {
+                    api.warning({
+                        message: `⚠️ Parse Success with Issues`,
+                        description: `${rowCount} rows · ${colCount} columns detected. ${issueRows.length} row(s) missing required fields (Academic Year / Program / First Name / Gender / Mobile / Guardian Details). Row(s) ${issueRows.slice(0, 5).join(', ')}${issueRows.length > 5 ? '...' : ''}. These will fail on import.`,
+                        duration: 8
+                    });
+                } else {
+                    api.success({
+                        message: `✅ File Parsed Successfully`,
+                        description: `${rowCount} rows · ${colCount} columns detected. Emails auto-generated where missing.`,
+                        duration: 5
+                    });
+                }
             } catch (err) {
                 console.error(err);
-                api.error({ message: 'Parsing Failed', description: 'Failed to read spreadsheet file.' });
+                setParsing(false);
+                api.error({
+                    message: 'Parser Failed ❌',
+                    description: `Unexpected error: ${err.message || 'Failed to process the file.'}`,
+                    duration: 6
+                });
             }
+        };
+        reader.onerror = () => {
+            setParsing(false);
+            api.error({ message: 'File Read Error ❌', description: 'Could not read the selected file. Please try again.', duration: 5 });
         };
         reader.readAsArrayBuffer(file);
     };
@@ -1627,8 +1784,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
         try {
             api.info({ message: 'Deleting import log...', duration: 1.5 });
             if (firestoreId) {
-                const { doc: fsDoc, deleteDoc: fsDelete } = require('firebase/firestore');
-                await fsDelete(fsDoc(db, "schooler_system", "registration_imports", "logs", firestoreId));
+                await deleteDoc(doc(db, "schooler_system", "registration_imports", "logs", firestoreId));
             }
             const stored = localStorage.getItem('registration_imports');
             if (stored) {
@@ -1658,6 +1814,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
         let failCount = 0;
         const errorMessages = [];
         const allocatedGuardianEmails = [];
+        const allocatedStudentEmails = [];
 
         try {
             for (let i = 0; i < previewRows.length; i++) {
@@ -1688,7 +1845,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     const studentFullName = String(getField(row, 'Student Full Name', 'student_full_name')).trim() || [firstName, middleName, lastName].filter(Boolean).join(' ');
                     const gender = String(getField(row, 'Gender', 'gender')).trim();
                     const mobile = String(getField(row, 'Student Mobile Number', 'student_mobile_number')).trim();
-                    const email = String(getField(row, 'Student Email Address', 'student_email_id')).trim();
+                    let email = String(getField(row, 'Student Email Address', 'student_email_id')).trim().replace(' (auto)', '').replace('(auto)', '').trim();
                     const academicYear = String(getField(row, 'Academic Year', 'academic_year')).trim();
                     const program = String(getField(row, 'Program (Class)', 'Program', 'program')).trim();
                     const customBoard = String(getField(row, 'Board', 'custom_board')).trim();
@@ -1744,7 +1901,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     // Guardian fields
                     const guardianRelation = String(getField(row, 'Guardian Relation', 'guardian_relation')).trim();
                     const guardianName = String(getField(row, 'Guardian Name', 'guardian_name')).trim();
-                    const guardianEmail = String(getField(row, 'Guardian Email', 'guardian_email')).trim();
+                    const guardianEmail = String(getField(row, 'Guardian Email', 'guardian_email')).trim().replace(' (auto)', '').replace('(auto)', '').trim();
                     const guardianMobile = String(getField(row, 'Guardian Mobile', 'guardian_mobile')).trim();
                     const guardianAltNum = String(getField(row, 'Guardian Alternate Number', 'guardian_alternate_number')).trim();
                     const rawGuardianDob = getField(row, 'Guardian Date of Birth', 'guardian_date_of_birth');
@@ -1754,10 +1911,16 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     const guardianWorkAddr = String(getField(row, 'Guardian Work Address', 'guardian_work_address')).trim();
 
                     // --- Validations ---
+                    if (!academicYear) throw new Error("Missing required field 'Academic Year'");
+                    if (!program) throw new Error("Missing required field 'Program (Class)'");
                     if (!firstName) throw new Error("Missing required field 'First Name'");
                     if (!gender) throw new Error("Missing required field 'Gender'");
                     if (!mobile) throw new Error("Missing required field 'Student Mobile Number'");
-                    if (!email) throw new Error("Missing required field 'Student Email Address'");
+
+                    if (!email) {
+                        email = generateUniqueEmail(firstName, lastName, data, allocatedStudentEmails);
+                    }
+                    allocatedStudentEmails.push(email);
 
                     // Mobile number validation
                     const cleanMobile = mobile.replace(/\D/g, '');
@@ -1808,19 +1971,16 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     }
 
                     // Guardian validation
-                    const hasGuardianDetails = !!(guardianName || guardianMobile || guardianEmail || guardianOccupation || guardianEducation);
-                    if (hasGuardianDetails) {
-                        if (!guardianRelation) throw new Error("Guardian Relation is required when providing Guardian details.");
-                        if (!guardianName) throw new Error("Guardian Name is required when providing Guardian details.");
-                        if (!guardianMobile) throw new Error("Guardian Mobile is required when providing Guardian details.");
+                    if (!guardianRelation) throw new Error("Missing required field 'Guardian Relation'");
+                    if (!guardianName) throw new Error("Missing required field 'Guardian Name'");
+                    if (!guardianMobile) throw new Error("Missing required field 'Guardian Mobile'");
 
-                        const validRelations = ['Father', 'Mother', 'Others'];
-                        const relMatch = validRelations.find(r => r.toLowerCase() === guardianRelation.toLowerCase());
-                        if (!relMatch) throw new Error(`Invalid Guardian Relation: '${guardianRelation}'. Allowed: Father, Mother, Others`);
+                    const validRelations = ['Father', 'Mother', 'Others'];
+                    const relMatch = validRelations.find(r => r.toLowerCase() === guardianRelation.toLowerCase());
+                    if (!relMatch) throw new Error(`Invalid Guardian Relation: '${guardianRelation}'. Allowed: Father, Mother, Others`);
 
-                        if (guardianMobile.replace(/\D/g, '').length !== 10) {
-                            throw new Error(`Guardian Mobile must be exactly 10 digits. Got: '${guardianMobile}'`);
-                        }
+                    if (guardianMobile.replace(/\D/g, '').length !== 10) {
+                        throw new Error(`Guardian Mobile must be exactly 10 digits. Got: '${guardianMobile}'`);
                     }
 
                     // Parse dates
@@ -1832,40 +1992,38 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
                     // --- Build Guardian ---
                     let finalGuardians = [];
-                    if (hasGuardianDetails) {
-                        const relMatch = ['Father', 'Mother', 'Others'].find(r => r.toLowerCase() === guardianRelation.toLowerCase()) || 'Others';
-                        let gEmail = guardianEmail || '';
-                        if (!gEmail) {
-                            gEmail = generateUniqueGuardianEmail(guardianName, guardiansList, allocatedGuardianEmails);
-                        }
-                        allocatedGuardianEmails.push(gEmail);
-
-                        // Try to find Guardian in ERPNext
-                        let resolvedGuardianId = null;
-                        try {
-                            const found = guardiansList.find(g => g.guardian_name?.toLowerCase() === guardianName.toLowerCase());
-                            if (found) {
-                                resolvedGuardianId = found.name;
-                            }
-                        } catch (gSyncErr) {
-                            console.warn('[Guardian Lookup] Gracefully caught:', gSyncErr.message);
-                        }
-
-                        finalGuardians.push({
-                            is_new: true,
-                            guardian: resolvedGuardianId || '',
-                            guardian_name: guardianName,
-                            relation: relMatch,
-                            email_address: gEmail,
-                            mobile_number: guardianMobile,
-                            alternate_number: guardianAltNum,
-                            date_of_birth: guardianDob,
-                            education: guardianEducation,
-                            occupation: guardianOccupation,
-                            designation: guardianDesignation,
-                            work_address: guardianWorkAddr
-                        });
+                    const relMatchGuard = ['Father', 'Mother', 'Others'].find(r => r.toLowerCase() === guardianRelation.toLowerCase()) || 'Others';
+                    let gEmail = guardianEmail || '';
+                    if (!gEmail) {
+                        gEmail = generateUniqueGuardianEmail(guardianName, guardiansList, allocatedGuardianEmails);
                     }
+                    allocatedGuardianEmails.push(gEmail);
+
+                    // Try to find Guardian in ERPNext
+                    let resolvedGuardianId = null;
+                    try {
+                        const found = guardiansList.find(g => g.guardian_name?.toLowerCase() === guardianName.toLowerCase());
+                        if (found) {
+                            resolvedGuardianId = found.name;
+                        }
+                    } catch (gSyncErr) {
+                        console.warn('[Guardian Lookup] Gracefully caught:', gSyncErr.message);
+                    }
+
+                    finalGuardians.push({
+                        relation: relMatchGuard,
+                        guardian_name: guardianName,
+                        email_address: gEmail,
+                        mobile_number: guardianMobile,
+                        alternate_number: guardianAltNum,
+                        date_of_birth: guardianDob,
+                        education: guardianEducation,
+                        occupation: guardianOccupation,
+                        designation: guardianDesignation,
+                        work_address: guardianWorkAddr,
+                        is_new: !resolvedGuardianId,
+                        existing_id: resolvedGuardianId
+                    });
 
                     let isFeePaid = false;
                     let feePaymentMode = 'Cash';
@@ -2067,9 +2225,47 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 <div className="space-y-4">
                     <SectionHeader title="Academic Detail" color="red" />
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <SelectField label="Academic Year" required value={formData.academic_year} options={academicYears} onChange={(v) => updateField('academic_year', v)} />
-                        <SelectField label="Program (Class)" required value={formData.program} options={availableClasses} onChange={(v) => updateField('program', v)} />
-                        <SelectField label="Board" value={formData.custom_board} options={boards} onChange={(v) => updateField('custom_board', v)} />
+                        <SelectField 
+                            label="Academic Year" 
+                            required 
+                            value={formData.academic_year} 
+                            options={academicYears} 
+                            onChange={(v) => {
+                                setFormData(prev => {
+                                    const next = { ...prev, academic_year: v };
+                                    if (v === '2025-2026' || v === '2025-26') {
+                                        next.fees_status = 'old student';
+                                        next.isFeePaid = true;
+                                        next.paymentMode = 'Old Student';
+                                        if (!next.receiptNo) {
+                                            next.receiptNo = `OLD-${Date.now().toString().slice(-6)}`;
+                                        }
+                                    }
+                                    return next;
+                                });
+                            }} 
+                        />
+                        <SelectField 
+                            label="Board" 
+                            value={formData.custom_board} 
+                            options={boards} 
+                            onChange={(v) => {
+                                setFormData(prev => ({
+                                    ...prev,
+                                    custom_board: v,
+                                    program: '' // Clear program when board changes
+                                }));
+                            }} 
+                        />
+                        <SelectField 
+                            label="Program (Class)" 
+                            required 
+                            value={formData.program} 
+                            options={filteredClasses.map(c => c.name)} 
+                            onChange={(v) => updateField('program', v)} 
+                            placeholder={formData.custom_board ? "Select Program (Class)" : "Please Select Board First"}
+                            disabled={!formData.custom_board}
+                        />
                         <SelectField label="RTE Student" value={formData.rte_student} options={['Yes', 'No']} onChange={(v) => updateField('rte_student', v)} />
                         <InputField label="Roll Number" value={formData.roll_number} onChange={(v) => updateField('roll_number', v)} placeholder="Enter Roll Number" />
                         <InputField label="GR Number" value={formData.gr_number} onChange={(v) => updateField('gr_number', v)} placeholder="Enter GR Number" />
@@ -2478,6 +2674,45 @@ export default function RegistrationForm({ initialView = 'list' }) {
             children: (
                 <div className="space-y-6">
                     <SectionHeader title="Registration Fee Payment" color="green" />
+                    
+                    <div className="max-w-xs">
+                        <SelectField 
+                            label="Fees Status" 
+                            value={formData.fees_status || (formData.isFeePaid ? (formData.paymentMode === 'Old Student' ? 'old student' : 'paid') : 'unpaid')}
+                            options={[
+                                { label: '⏳ UNPAID', value: 'unpaid' },
+                                { label: '✅ PAID', value: 'paid' },
+                                { label: '🎓 OLD STUDENT', value: 'old student' }
+                            ]}
+                            onChange={(v) => {
+                                setFormData(prev => {
+                                    const next = { ...prev, fees_status: v };
+                                    if (v === 'old student') {
+                                        next.isFeePaid = true;
+                                        next.paymentMode = 'Old Student';
+                                        if (!next.receiptNo) {
+                                            next.receiptNo = `OLD-${Date.now().toString().slice(-6)}`;
+                                        }
+                                    } else if (v === 'paid') {
+                                        next.isFeePaid = true;
+                                        if (next.paymentMode === 'Old Student') {
+                                            next.paymentMode = 'Cash';
+                                        }
+                                        if (!next.receiptNo) {
+                                            next.receiptNo = `RCPT-${Date.now().toString().slice(-6)}`;
+                                        }
+                                    } else { // unpaid
+                                        next.isFeePaid = false;
+                                        next.receiptNo = '';
+                                        next.paymentId = '';
+                                        next.paymentDate = '';
+                                    }
+                                    return next;
+                                });
+                            }}
+                        />
+                    </div>
+
                     {/* Fee Amount Banner */}
                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 flex items-center justify-between">
                         <div>
@@ -2589,7 +2824,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
     // --- IMPORT VIEW ---
     if (view === 'import') {
-        const REQUIRED_FIELDS = ['first_name', 'gender', 'student_mobile_number', 'student_email_id'];
+        const REQUIRED_FIELDS = ['academic_year', 'program', 'first_name', 'gender', 'student_mobile_number', 'student_email_id', 'guardian_relation', 'guardian_name', 'guardian_email', 'guardian_mobile'];
         return (
             <div className="p-6 max-w-[1400px] mx-auto pb-24 text-gray-800 font-inter animate-fade-in">
                 {contextHolder}
@@ -2646,38 +2881,65 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                 {selectedFile && <div className="mt-3 text-sm text-gray-600">📎 Selected: <span className="font-bold">{selectedFile.name}</span></div>}
                             </div>
 
+                            {/* Parse Loading */}
+                            {parsing && (
+                                <div className="bg-white rounded-xl border border-blue-100 p-6 shadow-sm">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                        <h3 className="font-bold text-blue-700">Parsing file &amp; generating emails...</h3>
+                                    </div>
+                                    <div className="w-full bg-blue-50 rounded-full h-2 overflow-hidden">
+                                        <div className="bg-blue-400 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-2">Reading records · Validating headers · Auto-generating missing emails</p>
+                                </div>
+                            )}
+
                             {/* Preview Table */}
-                            {previewRows.length > 0 && !importing && (
+                            {previewRows.length > 0 && !importing && !parsing && (
                                 <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
                                     <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-                                        <h3 className="font-bold text-gray-800">Data Preview ({previewRows.length} rows)</h3>
+                                        <div>
+                                            <h3 className="font-bold text-gray-800">Data Preview</h3>
+                                            <p className="text-xs text-gray-400 mt-0.5">{previewRows.length} record(s) — Scroll to see all rows &amp; columns</p>
+                                        </div>
                                         <button onClick={handleStartImport} className="px-6 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-all shadow-sm flex items-center gap-2 cursor-pointer">
                                             🚀 Start Import
                                         </button>
                                     </div>
-                                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                                        <table className="w-full text-xs text-left">
-                                            <thead className="bg-gray-50 sticky top-0">
+                                    <div className="overflow-x-auto" style={{ maxHeight: '420px', overflowY: 'auto' }}>
+                                        <table className="w-full text-xs text-left" style={{ minWidth: 'max-content' }}>
+                                            <thead className="bg-gray-50 sticky top-0 z-10">
                                                 <tr>
-                                                    <th className="px-3 py-2 font-bold text-gray-500">#</th>
-                                                    {Object.keys(previewRows[0]).map((key, idx) => (
-                                                        <th key={idx} className="px-3 py-2 font-bold text-gray-500 whitespace-nowrap">{key}</th>
-                                                    ))}
+                                                    <th className="px-3 py-2 font-bold text-gray-500 whitespace-nowrap border-b border-gray-200">#</th>
+                                                    {Object.keys(previewRows[0]).map((key, idx) => {
+                                                        const isAutoEmail = key === 'Student Email Address' || key === 'Guardian Email' || key === 'student_email_id' || key === 'guardian_email';
+                                                        return (
+                                                            <th key={idx} className={`px-3 py-2 font-bold whitespace-nowrap border-b border-gray-200 ${isAutoEmail ? 'text-blue-600 bg-blue-50/60' : 'text-gray-500'}`}>
+                                                                {key}{isAutoEmail ? ' 📧' : ''}
+                                                            </th>
+                                                        );
+                                                    })}
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
-                                                {previewRows.slice(0, 10).map((row, i) => (
-                                                    <tr key={i} className="hover:bg-gray-50/50">
-                                                        <td className="px-3 py-2 font-bold text-gray-400">{i + 1}</td>
-                                                        {Object.values(row).map((val, j) => (
-                                                            <td key={j} className="px-3 py-2 text-gray-700 whitespace-nowrap max-w-[150px] truncate">{String(val)}</td>
-                                                        ))}
+                                                {previewRows.map((row, i) => (
+                                                    <tr key={i} className="hover:bg-gray-50/70">
+                                                        <td className="px-3 py-2 font-bold text-gray-400 whitespace-nowrap">{i + 1}</td>
+                                                        {Object.entries(row).map(([key, val], j) => {
+                                                            const strVal = String(val);
+                                                            const isAuto = strVal.includes('(auto)');
+                                                            return (
+                                                                <td key={j} title={strVal} className={`px-3 py-2 whitespace-nowrap max-w-[200px] truncate ${isAuto ? 'text-blue-600 font-medium italic' : 'text-gray-700'}`}>
+                                                                    {strVal}
+                                                                </td>
+                                                            );
+                                                        })}
                                                     </tr>
                                                 ))}
                                             </tbody>
                                         </table>
                                     </div>
-                                    {previewRows.length > 10 && <div className="p-3 text-center text-xs text-gray-400 border-t border-gray-50">Showing first 10 of {previewRows.length} rows</div>}
                                 </div>
                             )}
 
@@ -2713,7 +2975,6 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                             <li>First Name</li>
                                             <li>Gender</li>
                                             <li>Student Mobile Number (10 digits)</li>
-                                            <li>Student Email Address</li>
                                         </ul>
                                     </div>
                                     <div className="bg-white/60 rounded-lg p-3 border border-blue-100/50">
@@ -2951,6 +3212,11 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             <div className="grid grid-cols-3 gap-2">{['registrationNo'].map(f => <CheckboxField key={f} name={f} label={IMPORT_FIELD_MAP[f].label} isRed={REQUIRED_FIELDS.includes(f)} />)}</div></div>
                         </div>
 
+                        {/* Note */}
+                        <div className="bg-red-50 text-red-700 text-xs p-3 rounded-lg border border-red-100 font-medium">
+                            <span className="font-bold text-red-800">Note:</span> Academic year, program, first name, gender, student mobile, student email, guardian relation with student, guardian name, guardian email, guardian mobile (These fields are mandatory).
+                        </div>
+
                         {/* Download Button */}
                         <div className="flex justify-end pt-2">
                             <button onClick={handleDownloadTemplate} className="px-8 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all shadow-md flex items-center gap-2 cursor-pointer">
@@ -3137,9 +3403,11 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
                         >
                             <option value="All">All Programs</option>
-                            {availableClasses.map((p) => (
-                                <option key={p} value={p}>{p}</option>
-                            ))}
+                            {availableClasses
+                                .filter(p => filterBoard === 'All' || !p.custom_board || p.custom_board.toString().trim().toLowerCase() === filterBoard.toString().trim().toLowerCase())
+                                .map((p) => (
+                                    <option key={p.name || p} value={p.name || p}>{p.name || p}</option>
+                                ))}
                         </select>
                     </div>
                     <div className="flex flex-col gap-2">
@@ -3250,10 +3518,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                 <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Registration Code</th>
                                 <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Student Name</th>
                                 <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Program (Class)</th>
+                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Board</th>
                                 <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Academic Year</th>
                                 <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Mobile No.</th>
                                 <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Date of Registration</th>
-                                <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Date of Birth</th>
                                 <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Fee Status</th>
                                 <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Status</th>
                                 <th className="px-2 py-3 font-bold text-gray-500 uppercase tracking-widest text-[9px]">Last Updated On</th>
@@ -3264,7 +3532,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         <tbody className="divide-y divide-gray-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={10} className="px-6 py-20 text-center">
+                                    <td colSpan={12} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center gap-3">
                                             <div className="w-10 h-10 border-4 border-gray-100 border-t-blue-600 rounded-full animate-spin"></div>
                                             <span className="text-sm font-medium text-gray-400 font-inter">Loading records...</span>
@@ -3273,7 +3541,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                 </tr>
                             ) : filteredData.length === 0 ? (
                                 <tr>
-                                    <td colSpan={10} className="px-6 py-12 text-center text-gray-400 font-medium font-inter italic">No matching records found</td>
+                                    <td colSpan={12} className="px-6 py-12 text-center text-gray-400 font-medium font-inter italic">No matching records found</td>
                                 </tr>
                             ) : (
                                 filteredData.slice(0, visibleCount).map((row, index) => (
@@ -3281,10 +3549,10 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                         <td className="px-2 py-3 font-bold text-blue-600 tracking-tight">{row.registrationNo}</td>
                                         <td className="px-2 py-3 font-bold text-gray-900 tracking-tight">{row.first_name} {row.last_name}</td>
                                         <td className="px-2 py-3 text-gray-600 font-medium">{row.program || '-'}</td>
+                                        <td className="px-2 py-3 text-gray-600 font-medium">{row.custom_board || '-'}</td>
                                         <td className="px-2 py-3 text-gray-600 font-medium">{row.academic_year || '-'}</td>
                                         <td className="px-2 py-3 text-gray-600 font-bold">{row.student_mobile_number || '-'}</td>
                                         <td className="px-2 py-3 text-gray-600 font-medium">{row.registration_date || '-'}</td>
-                                        <td className="px-2 py-3 text-gray-600 font-medium">{row.date_of_birth || '-'}</td>
                                         <td className="px-2 py-3">
                                             <div className="flex flex-col gap-1 items-start">
                                                 {row.paymentMode === 'Old Student' || (row.fees_status && row.fees_status.toLowerCase() === 'old student') ? (
