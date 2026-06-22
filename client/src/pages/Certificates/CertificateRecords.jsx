@@ -11,7 +11,7 @@ import {
 import dayjs from 'dayjs';
 import html2pdf from 'html2pdf.js';
 import ssvLogo from '../../assets/images/SSVLOGO.png';
-import schoolHeader from '../../assets/images/school_header.jpg';
+import schoolHeader from '../../assets/images/newheader.jpeg';
 
 const { Title } = Typography;
 const RECORDS_PATH = 'schooler_system/certificates/records';

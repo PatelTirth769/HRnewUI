@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const emptyForm = () => ({
     fee_structure: '',
@@ -30,6 +32,8 @@ const emptyForm = () => ({
 });
 
 const FeeSchedule = () => {
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -58,6 +62,7 @@ const FeeSchedule = () => {
     });
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchSchedules();
         } else {
@@ -68,27 +73,43 @@ const FeeSchedule = () => {
                 setForm(emptyForm());
             }
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     const fetchDropdowns = async () => {
         try {
             const safeGet = (url) => API.get(url).catch(err => { console.error(`Error fetching ${url}:`, err); return { data: { data: [] } }; });
             const [fsRes, yRes, tRes, sgRes, fcRes, lhRes, aRes, iRes, ccRes] = await Promise.all([
-                safeGet('/api/resource/Fee Structure?limit_page_length=None'),
+                safeGet('/api/resource/Fee Structure?fields=["name","program","company"]&limit_page_length=None'),
                 safeGet('/api/resource/Academic Year?limit_page_length=None'),
                 safeGet('/api/resource/Academic Term?limit_page_length=None'),
-                safeGet('/api/resource/Student Group?limit_page_length=None'),
+                safeGet('/api/resource/Student Group?fields=["name","program","custom_board"]&limit_page_length=None'),
                 safeGet('/api/resource/Fee Category?limit_page_length=None'),
                 safeGet('/api/resource/Letter Head?limit_page_length=None'),
                 safeGet('/api/resource/Account?limit_page_length=None'),
                 safeGet('/api/resource/Company?limit_page_length=None'),
                 safeGet('/api/resource/Cost Center?limit_page_length=None'),
             ]);
+
+            let feeStructuresList = fsRes.data.data || [];
+            let studentGroupsList = sgRes.data.data || [];
+
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    feeStructuresList = feeStructuresList.filter(fs => ctPrograms.includes(fs.program));
+                    studentGroupsList = studentGroupsList.filter(sg => ctPrograms.includes(sg.program));
+                } else if (ctBoards.length > 0) {
+                    feeStructuresList = feeStructuresList.filter(fs => ctBoards.includes(fs.company));
+                    studentGroupsList = studentGroupsList.filter(sg => ctBoards.includes(sg.custom_board));
+                }
+            }
+
             setDropdowns({
-                feeStructures: fsRes.data.data?.map(d => d.name) || [],
+                feeStructures: feeStructuresList.map(d => d.name) || [],
                 academicYears: yRes.data.data?.map(d => d.name) || [],
                 academicTerms: tRes.data.data?.map(d => d.name) || [],
-                studentGroups: sgRes.data.data?.map(d => d.name) || [],
+                studentGroups: studentGroupsList.map(d => d.name) || [],
                 feesCategories: fcRes.data.data?.map(d => d.name) || [],
                 letterHeads: lhRes.data.data?.map(d => d.name) || [],
                 accounts: aRes.data.data?.map(d => d.name) || [],
@@ -105,7 +126,27 @@ const FeeSchedule = () => {
             setLoadingList(true);
             const url = '/api/resource/Fee Schedule?fields=["name","fee_structure","academic_year","posting_date","due_date"]&limit_page_length=None&order_by=creation desc';
             const response = await API.get(url);
-            setSchedules(response.data.data || []);
+            let schedulesData = response.data.data || [];
+            
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0 || ctBoards.length > 0) {
+                     // Need to filter fee schedules by fee structure's program/board
+                     const safeGet = (u) => API.get(u).catch(() => ({ data: { data: [] } }));
+                     const fsRes = await safeGet('/api/resource/Fee Structure?fields=["name","program","company"]&limit_page_length=None');
+                     const allFs = fsRes.data.data || [];
+                     let allowedFs = [];
+                     if (ctPrograms.length > 0) {
+                         allowedFs = allFs.filter(fs => ctPrograms.includes(fs.program)).map(fs => fs.name);
+                     } else if (ctBoards.length > 0) {
+                         allowedFs = allFs.filter(fs => ctBoards.includes(fs.company)).map(fs => fs.name);
+                     }
+                     schedulesData = schedulesData.filter(s => allowedFs.includes(s.fee_structure));
+                }
+            }
+
+            setSchedules(schedulesData);
         } catch (err) {
             console.error('Error fetching fee schedules:', err);
         } finally {

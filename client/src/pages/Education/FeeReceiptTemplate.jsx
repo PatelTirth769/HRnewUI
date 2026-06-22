@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import schoolHeader from '../../assets/images/school_header.jpg';
+import schoolHeader from '../../assets/images/newheader.jpeg';
 
 // Convert number to words
 export const numberToWords = (num) => {
@@ -9,16 +9,25 @@ export const numberToWords = (num) => {
     ];
     const b = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
 
-    if ((num = num.toString()).length > 9) return 'overflow';
-    const n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-    if (!n) return;
+    num = num.toString().split('.');
+    let wholePart = num[0];
+    let decimalPart = num[1] ? num[1].padEnd(2, '0').substr(0, 2) : '';
+    
+    if (wholePart.length > 9) return 'overflow';
+    const n = ('000000000' + wholePart).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+    if (!n) return '';
     let str = '';
     str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + ' CRORE ' : '';
     str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + ' LAKH ' : '';
     str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + ' THOUSAND ' : '';
     str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + ' HUNDRED ' : '';
     str += (n[5] != 0) ? ((str != '') ? 'AND ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
-    return str.trim() + ' RUPEES ONLY';
+    
+    let result = str.trim() + ' RUPEES';
+    if (decimalPart && Number(decimalPart) > 0) {
+        result += ` AND ${Number(decimalPart)} PAISE`;
+    }
+    return result + ' ONLY';
 };
 
 const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
@@ -38,7 +47,8 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
         original_fee = 0,
         discount_amount = 0,
         discount_name = '',
-        discount_percentage = 0
+        discount_percentage = 0,
+        studentGroup = ''
     } = receiptData;
 
     const {
@@ -63,13 +73,19 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
             </div>
 
             {/* Content Table */}
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px', tableLayout: 'fixed' }}>
+                <colgroup>
+                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '40%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '30%' }} />
+                </colgroup>
                 <tbody>
                     <tr>
-                        <td style={{ padding: '8px 0', width: '20%', fontWeight: 'bold', color: '#4b5563' }}>Receipt No:</td>
-                        <td style={{ padding: '8px 0', width: '30%', fontWeight: 'bold' }}>{receiptNo}</td>
-                        <td style={{ padding: '8px 0', width: '20%', fontWeight: 'bold', color: '#4b5563' }}>Date:</td>
-                        <td style={{ padding: '8px 0', width: '30%', fontWeight: 'bold' }}>{receiptDate}</td>
+                        <td style={{ padding: '8px 0', fontWeight: 'bold', color: '#4b5563' }}>Receipt No:</td>
+                        <td style={{ padding: '8px 0', fontWeight: 'bold' }}>{receiptNo}</td>
+                        <td style={{ padding: '8px 0', fontWeight: 'bold', color: '#4b5563' }}>Date:</td>
+                        <td style={{ padding: '8px 0', fontWeight: 'bold' }}>{receiptDate}</td>
                     </tr>
                     <tr>
                         <td style={{ padding: '8px 0', fontWeight: 'bold', color: '#4b5563' }}>Student ID:</td>
@@ -79,10 +95,12 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
                     </tr>
                     <tr>
                         <td style={{ padding: '8px 0', fontWeight: 'bold', color: '#4b5563' }}>Student Name:</td>
-                        <td colSpan="3" style={{ padding: '8px 0', fontWeight: 'bold', textTransform: 'uppercase' }}>{studentName}</td>
+                        <td style={{ padding: '8px 0', fontWeight: 'bold', textTransform: 'uppercase' }}>{studentName}</td>
+                        <td style={{ padding: '8px 0', fontWeight: 'bold', color: '#4b5563' }}>Section:</td>
+                        <td style={{ padding: '8px 0', fontWeight: 'bold' }}>{studentGroup || '-'}</td>
                     </tr>
                     <tr>
-                        <td style={{ padding: '8px 0', fontWeight: 'bold', color: '#4b5563' }}>Semester/Year:</td>
+                        <td style={{ padding: '8px 0', fontWeight: 'bold', color: '#4b5563' }}>Year:</td>
                         <td colSpan="3" style={{ padding: '8px 0', fontWeight: 'bold' }}>{semester}</td>
                     </tr>
                 </tbody>
@@ -148,7 +166,6 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
                 <div style={{ textAlign: 'center', width: '200px' }}>
                     <div style={{ borderBottom: '1px solid #000000', marginBottom: '5px' }}></div>
                     <p style={{ margin: '0', fontSize: '14px', fontWeight: 'bold' }}>Authorized Signatory</p>
-                    <p style={{ margin: '0', fontSize: '12px', color: '#64748b' }}>{schoolName}</p>
                 </div>
             </div>
 

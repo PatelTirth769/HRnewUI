@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const LOG_TYPES = ['General', 'Academic', 'Behavioral', 'Medical', 'Attendance', 'Other'];
 
@@ -16,6 +18,8 @@ const emptyForm = () => ({
 });
 
 const StudentLog = () => {
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -38,6 +42,7 @@ const StudentLog = () => {
     const [batches, setBatches] = useState([]);
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchLogs();
         } else {
@@ -48,14 +53,30 @@ const StudentLog = () => {
                 setForm(emptyForm());
             }
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     const fetchLogs = async () => {
         try {
             setLoadingList(true);
             const url = '/api/resource/Student Log?fields=["name","student","type","date","academic_year","academic_term","program","student_batch"]&limit_page_length=None&order_by=modified desc';
             const response = await API.get(url);
-            setLogs(response.data.data || []);
+            let logsData = response.data.data || [];
+            
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                     logsData = logsData.filter(l => ctPrograms.includes(l.program));
+                } else if (ctBoards.length > 0) {
+                     const safeGet = (u) => API.get(u).catch(() => ({ data: { data: [] } }));
+                     const prgRes = await safeGet('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None');
+                     const allPrg = prgRes.data.data || [];
+                     const allowedPrg = allPrg.filter(p => ctBoards.includes(p.custom_board)).map(p => p.name);
+                     logsData = logsData.filter(l => allowedPrg.includes(l.program));
+                }
+            }
+
+            setLogs(logsData);
         } catch (err) {
             console.error('Error fetching student logs:', err);
         } finally {
@@ -66,16 +87,32 @@ const StudentLog = () => {
     const fetchDropdownData = async () => {
         try {
             const [studentRes, yearRes, termRes, programRes, batchRes] = await Promise.all([
-                API.get('/api/resource/Student?fields=["name","title"]&limit_page_length=None&order_by=title asc'),
+                API.get('/api/resource/Student?fields=["name","title","program","custom_board"]&limit_page_length=None&order_by=title asc'),
                 API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None&order_by=name desc'),
                 API.get('/api/resource/Academic Term?fields=["name"]&limit_page_length=None&order_by=name asc'),
-                API.get('/api/resource/Program?fields=["name"]&limit_page_length=None&order_by=name asc'),
-                API.get('/api/resource/Batch?fields=["name"]&limit_page_length=None&order_by=name asc'),
+                API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None&order_by=name asc'),
+                API.get('/api/resource/Batch?limit_page_length=None&order_by=name asc'), // Assuming student_batch doesn't have program directly, filtering student & program should suffice
             ]);
-            setStudents((studentRes.data.data || []).map(s => ({ name: s.name, title: s.title || s.name })));
+            
+            let studentsList = studentRes.data.data || [];
+            let programsList = programRes.data.data || [];
+            
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    studentsList = studentsList.filter(s => ctPrograms.includes(s.program));
+                    programsList = programsList.filter(p => ctPrograms.includes(p.name));
+                } else if (ctBoards.length > 0) {
+                    studentsList = studentsList.filter(s => ctBoards.includes(s.custom_board));
+                    programsList = programsList.filter(p => ctBoards.includes(p.custom_board));
+                }
+            }
+
+            setStudents(studentsList.map(s => ({ name: s.name, title: s.title || s.name })));
             setAcademicYears((yearRes.data.data || []).map(y => y.name));
             setAcademicTerms((termRes.data.data || []).map(t => t.name));
-            setPrograms((programRes.data.data || []).map(p => p.name));
+            setPrograms(programsList.map(p => p.name));
             setBatches((batchRes.data.data || []).map(b => b.name));
         } catch (err) {
             console.error('Error fetching dropdown data:', err);

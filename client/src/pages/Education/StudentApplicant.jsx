@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const STATUS_OPTIONS = ['Applied', 'Approved', 'Rejected', 'Admitted'];
 const GENDER_OPTIONS = ['Male', 'Female', 'Other'];
@@ -43,6 +45,8 @@ const emptyForm = () => ({
 });
 
 const StudentApplicant = () => {
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -68,6 +72,7 @@ const StudentApplicant = () => {
     });
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchApplicants();
         } else {
@@ -78,19 +83,32 @@ const StudentApplicant = () => {
                 setForm(emptyForm());
             }
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     const fetchDropdowns = async () => {
         try {
             const [pRes, yRes, tRes, cRes, aRes] = await Promise.all([
-                API.get('/api/resource/Program?limit_page_length=None'),
+                API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None'),
                 API.get('/api/resource/Academic Year?limit_page_length=None'),
                 API.get('/api/resource/Academic Term?limit_page_length=None'),
                 API.get('/api/resource/Student Category?limit_page_length=None'),
                 API.get('/api/resource/Student Admission?limit_page_length=None'),
             ]);
+            
+            let programsList = pRes.data.data || [];
+            
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    programsList = programsList.filter(p => ctPrograms.includes(p.name));
+                } else if (ctBoards.length > 0) {
+                    programsList = programsList.filter(p => ctBoards.includes(p.custom_board));
+                }
+            }
+
             setDropdowns({
-                programs: pRes.data.data?.map(d => d.name) || [],
+                programs: programsList.map(d => d.name) || [],
                 academicYears: yRes.data.data?.map(d => d.name) || [],
                 academicTerms: tRes.data.data?.map(d => d.name) || [],
                 studentCategories: cRes.data.data?.map(d => d.name) || [],
@@ -106,7 +124,23 @@ const StudentApplicant = () => {
             setLoadingList(true);
             const url = '/api/resource/Student Applicant?fields=["name","first_name","last_name","application_status","program","application_date"]&limit_page_length=None&order_by=creation desc';
             const response = await API.get(url);
-            setApplicants(response.data.data || []);
+            let applicantsData = response.data.data || [];
+
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    applicantsData = applicantsData.filter(a => ctPrograms.includes(a.program));
+                } else if (ctBoards.length > 0) {
+                    const safeGet = (u) => API.get(u).catch(() => ({ data: { data: [] } }));
+                    const prgRes = await safeGet('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None');
+                    const allPrg = prgRes.data.data || [];
+                    const allowedPrg = allPrg.filter(p => ctBoards.includes(p.custom_board)).map(p => p.name);
+                    applicantsData = applicantsData.filter(a => allowedPrg.includes(a.program));
+                }
+            }
+
+            setApplicants(applicantsData);
         } catch (err) {
             console.error('Error fetching student applicants:', err);
         } finally {

@@ -15,7 +15,8 @@ const razorpay = new Razorpay({
 // Helper to get ERPNext URL (similar to erpProxy.js)
 async function getSystemUrl(code) {
     try {
-        const snapshot = await db.collection('systems').where('code', '==', code).get();
+        const lookupCode = (code === 'schooler_system' || code === 'schooler') ? 'schooler' : code;
+        const snapshot = await db.collection('systems').where('code', '==', lookupCode).get();
         if (snapshot.empty) return null;
         return snapshot.docs[0].data().erpNextUrl;
     } catch (err) {
@@ -30,6 +31,81 @@ async function getSystemUrl(code) {
  */
 function feePaymentsCol(systemCode) {
     return getCollection(db, systemCode || 'schooler', 'fee_payments');
+}
+
+/**
+ * Middleware to verify administrative privileges via ERPNext Session
+ */
+async function requireAdminAuth(req, res, next) {
+    const cookies = req.headers.cookie || '';
+    if (!cookies.includes('sid=')) {
+        console.warn(`🚨 [SECURITY] Blocked unauthorized admin access attempt to ${req.path}`);
+        return res.status(401).json({ success: false, message: 'Unauthorized: Missing session cookie' });
+    }
+    
+    try {
+        const targetBase = await getSystemUrl(req.body.systemCode || 'schooler');
+        if (!targetBase) throw new Error("System not found");
+        
+        const authRes = await axios.get(`${targetBase}/api/method/frappe.auth.get_logged_user`, {
+            headers: { 'Cookie': req.headers.cookie }
+        });
+        
+        if (authRes.data && authRes.data.message) {
+            next();
+        } else {
+            return res.status(401).json({ success: false, message: 'Unauthorized: Invalid session' });
+        }
+    } catch (err) {
+        console.error('Admin Auth Error:', err.message);
+        return res.status(401).json({ success: false, message: 'Unauthorized: Session verification failed' });
+    }
+}
+
+/**
+ * Helper: Securely resolve a student's discount from Firebase to prevent frontend spoofing.
+ */
+async function getSecureDiscount(student_id, category, systemCode) {
+    try {
+        const sysCode = systemCode || 'schooler_system';
+        const studentDiscountsSnap = await db.collection(sysCode).doc('data').collection('student_discounts')
+            .where('student_id', '==', student_id)
+            .get();
+
+        if (studentDiscountsSnap.empty) return { amount: 0, percentage: 0, name: '' };
+
+        let activeDiscount = null;
+        for (const doc of studentDiscountsSnap.docs) {
+            const sd = doc.data();
+            const terms = Array.isArray(sd.terms) ? sd.terms : (sd.terms ? [sd.terms] : []);
+            if (terms.length === 0 || terms.includes('All Terms') || terms.includes(category)) {
+                activeDiscount = sd;
+                break; // Take first matching discount
+            }
+        }
+
+        if (!activeDiscount) return { amount: 0, percentage: 0, name: '' };
+
+        // Fetch the discount definition to get the real percentage
+        const feesDiscountsSnap = await db.collection(sysCode).doc('data').collection('fees_discounts').get();
+        let fd = null;
+        feesDiscountsSnap.forEach(doc => {
+            const data = doc.data();
+            if (data.name === activeDiscount.discount_id || data.name === activeDiscount.discount_name || doc.id === activeDiscount.discount_id) {
+                fd = data;
+            }
+        });
+
+        if (!fd) return { amount: 0, percentage: 0, name: '' };
+
+        return {
+            percentage: parseFloat(fd.percentage) || 0,
+            name: fd.name || fd.discount_name || activeDiscount.discount_name
+        };
+    } catch (e) {
+        console.error('[SECURITY] Error resolving discount:', e);
+        return { amount: 0, percentage: 0, name: '' };
+    }
 }
 
 /**
@@ -151,15 +227,41 @@ router.post('/verify-payment', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid payment signature' });
         }
 
-        // 2. Check existing payment doc
-        const paymentDoc = await col.doc(razorpay_order_id).get();
-        if (!paymentDoc.exists) {
-            return res.status(404).json({ success: false, message: 'Order not found in logs' });
+        // 2. Lock and Check existing payment doc (Concurrency Prevention)
+        let orderData;
+        try {
+            await db.runTransaction(async (t) => {
+                const docRef = col.doc(razorpay_order_id);
+                const doc = await t.get(docRef);
+                if (!doc.exists) throw new Error("Order not found in logs");
+                
+                orderData = doc.data();
+                if (orderData.status === 'verified' || orderData.status === 'processing') {
+                    throw new Error("Payment already processed");
+                }
+                
+                // Mark as processing to lock it
+                t.update(docRef, { status: 'processing', updated_at: new Date().toISOString() });
+            });
+        } catch (err) {
+            if (err.message === "Payment already processed") {
+                return res.json({ success: true, message: 'Payment already processed' });
+            }
+            return res.status(404).json({ success: false, message: err.message });
         }
 
-        // Check if already processed (Idempotency)
-        if (paymentDoc.data().status === 'verified') {
-            return res.json({ success: true, message: 'Payment already processed' });
+        // 3. Fetch true amount from Razorpay (Security Validation)
+        let trueAmount = amount;
+        try {
+            const rzpPayment = await razorpay.payments.fetch(razorpay_payment_id);
+            trueAmount = rzpPayment.amount / 100; // Razorpay returns amount in paise
+            if (trueAmount != amount) {
+                console.warn(`🚨 [SECURITY WARNING] Client amount (₹${amount}) spoofed! True amount collected: ₹${trueAmount}`);
+            }
+        } catch (rzpErr) {
+            console.error('Razorpay Fetch Error:', rzpErr);
+            await col.doc(razorpay_order_id).update({ status: 'failed', error: 'Could not verify true amount from Razorpay' });
+            return res.status(500).json({ success: false, message: 'Could not securely verify payment amount with gateway' });
         }
 
         // 3. Create Payment in ERPNext
@@ -174,28 +276,47 @@ router.post('/verify-payment', async (req, res) => {
                 ["docstatus", "=", 1]
             ]);
             
-            const feeRes = await axios.get(`${targetBase}/api/resource/Fees?filters=${feeFilter}`, {
+            const feeFields = JSON.stringify(["name", "outstanding_amount", "grand_total"]);
+            const feeRes = await axios.get(`${targetBase}/api/resource/Fees?filters=${feeFilter}&fields=${feeFields}`, {
                 headers: { 'Authorization': `token ${erpApiKey}:${erpApiSecret}` }
             });
 
             let targetFeeId = null;
+            let erpOutstanding = 0;
+            let erpGrandTotal = 0;
             if (feeRes.data.data && feeRes.data.data.length > 0) {
                 targetFeeId = feeRes.data.data[0].name;
+                erpOutstanding = parseFloat(feeRes.data.data[0].outstanding_amount) || 0;
+                erpGrandTotal = parseFloat(feeRes.data.data[0].grand_total) || 0;
+            }
+
+            // Secure Visual Status: Prevent frontend from marking it PAID if underpaid
+            const realDiscount = await getSecureDiscount(student_id, fees_category, systemCode);
+            // Real discount is a percentage of the grand total
+            const realDiscountAmount = (erpGrandTotal * realDiscount.percentage) / 100;
+            const expectedPayment = Math.max(0, erpOutstanding - realDiscountAmount);
+            
+            // Allow ₹10 variance for rounding issues
+            const isFullPayment = trueAmount >= (expectedPayment - 10);
+            const receiptStatus = isFullPayment ? 'verified' : 'partial';
+
+            if (!isFullPayment) {
+                console.warn(`🚨 [SECURITY] Student underpaid! Expected: ₹${expectedPayment}, Paid: ₹${trueAmount}. Marking receipt as partial.`);
             }
 
             if (targetFeeId) {
-                // Create Payment Entry
+                // Create Payment Entry with securely verified trueAmount
                 const paymentEntryPayload = {
                     payment_type: "Receive",
                     party_type: "Student",
                     party: student_id,
-                    paid_amount: amount,
-                    received_amount: amount,
+                    paid_amount: trueAmount,
+                    received_amount: trueAmount,
                     target_exchange_rate: 1,
                     references: [{
                         reference_doctype: "Fees",
                         reference_name: targetFeeId,
-                        allocated_amount: amount
+                        allocated_amount: trueAmount
                     }]
                 };
 
@@ -205,7 +326,7 @@ router.post('/verify-payment', async (req, res) => {
 
                 // 4. Finalize Receipt Data in Firebase
                 const receiptRecord = {
-                    status: 'verified',
+                    status: receiptStatus,
                     payment_id: razorpay_payment_id,
                     order_id: razorpay_order_id,
                     student_id: student_id,
@@ -213,7 +334,7 @@ router.post('/verify-payment', async (req, res) => {
                     guardian_email: guardian_email || '',
                     fees_category: fees_category || '',
                     fee_structure: fee_structure || '',
-                    amount: amount,
+                    amount: trueAmount,
                     payment_mode: 'ONLINE',
                     receipt_no: razorpay_payment_id,
                     receipt_date: new Date().toISOString(),
@@ -222,10 +343,10 @@ router.post('/verify-payment', async (req, res) => {
                     erp_sync: targetFeeId ? 'success' : 'manual_required',
                     verified_at: new Date().toISOString(),
                     school_name: 'SSV CAMPUS - CBSE',
-                    original_fee: parseFloat(original_fee) || 0,
-                    discount_amount: parseFloat(discount_amount) || 0,
-                    discount_name: discount_name || '',
-                    discount_percentage: parseFloat(discount_percentage) || 0
+                    original_fee: erpGrandTotal || parseFloat(original_fee) || 0,
+                    discount_amount: realDiscountAmount || parseFloat(discount_amount) || 0,
+                    discount_name: realDiscount.name || discount_name || '',
+                    discount_percentage: realDiscount.percentage || parseFloat(discount_percentage) || 0
                 };
 
                 await col.doc(razorpay_order_id).update(receiptRecord);
@@ -237,11 +358,11 @@ router.post('/verify-payment', async (req, res) => {
                     created_at: new Date().toISOString()
                 });
 
-                console.log(`✅ Payment verified & Receipt stored: ${razorpay_payment_id}`);
+                console.log(`✅ Payment ${receiptStatus} & Receipt stored: ${razorpay_payment_id}`);
             } else {
                 // No matching ERP Fee record — mark as manual but still store receipt
                 const receiptRecord = {
-                    status: 'verified',
+                    status: receiptStatus,
                     payment_id: razorpay_payment_id,
                     order_id: razorpay_order_id,
                     student_id: student_id,
@@ -249,7 +370,7 @@ router.post('/verify-payment', async (req, res) => {
                     guardian_email: guardian_email || '',
                     fees_category: fees_category || '',
                     fee_structure: fee_structure || '',
-                    amount: amount,
+                    amount: trueAmount,
                     payment_mode: 'ONLINE',
                     receipt_no: razorpay_payment_id,
                     receipt_date: new Date().toISOString(),
@@ -286,7 +407,7 @@ router.post('/verify-payment', async (req, res) => {
                 guardian_email: guardian_email || '',
                 fees_category: fees_category || '',
                 fee_structure: fee_structure || '',
-                amount: amount,
+                amount: trueAmount,
                 payment_mode: 'ONLINE',
                 receipt_no: razorpay_payment_id,
                 receipt_date: new Date().toISOString(),
@@ -403,7 +524,7 @@ async function generateOfflineReceiptNo(systemCode) {
  * For Cash/offline payments collected by admin
  * Payload: { student_id, student_name, fee_structure, fees_category, amount, payment_mode, manual_receipt_no, fee_id, systemCode }
  */
-router.post('/record-offline-payment', async (req, res) => {
+router.post('/record-offline-payment', requireAdminAuth, async (req, res) => {
     try {
         const {
             student_id,
@@ -412,6 +533,7 @@ router.post('/record-offline-payment', async (req, res) => {
             fees_category,
             amount,
             payment_mode,
+            receipt_date,
             manual_receipt_no,
             fee_id,
             systemCode,
@@ -430,7 +552,10 @@ router.post('/record-offline-payment', async (req, res) => {
         const docId = `manual_off_${Date.now()}`;
         const numAmount = parseFloat(amount) || 0;
 
-        console.log(`[Offline Payment] Recording: Student=${student_id}, Category=${fees_category}, Amount=₹${numAmount}, Mode=${resolvedPaymentMode}`);
+        const finalReceiptDate = receipt_date ? new Date(receipt_date).toISOString() : new Date().toISOString();
+        const postingDate = receipt_date ? receipt_date.split('T')[0] : new Date().toISOString().split('T')[0];
+
+        console.log(`[Offline Payment] Recording: Student=${student_id}, Category=${fees_category}, Amount=₹${numAmount}, Mode=${resolvedPaymentMode}, Date=${postingDate}`);
 
         // Try to sync with ERPNext
         const targetBase = await getSystemUrl(systemCode);
@@ -461,6 +586,37 @@ router.post('/record-offline-payment', async (req, res) => {
                 }
 
                 if (targetFeeId) {
+                    // NEW: Add discount component to ERPNext Fee before creating Payment Entry
+                    if (discount_amount > 0) {
+                        try {
+                            const feeDetailsRes = await axios.get(`${targetBase}/api/resource/Fees/${encodeURIComponent(targetFeeId)}`, {
+                                headers: { 'Authorization': `token ${erpApiKey}:${erpApiSecret}` }
+                            });
+                            const feeDoc = feeDetailsRes.data.data;
+                            const newComponents = [];
+                            let subtotal = 0;
+                            for (const comp of feeDoc.components || []) {
+                                if (comp.fees_category !== 'Discount') {
+                                    subtotal += parseFloat(comp.amount) || 0;
+                                    newComponents.push(comp);
+                                }
+                            }
+                            newComponents.push({
+                                fees_category: 'Discount',
+                                amount: -Math.abs(discount_amount),
+                                description: discount_name || 'Manual Discount'
+                            });
+                            await axios.put(`${targetBase}/api/resource/Fees/${encodeURIComponent(targetFeeId)}`, {
+                                components: newComponents
+                            }, {
+                                headers: { 'Authorization': `token ${erpApiKey}:${erpApiSecret}` }
+                            });
+                            console.log(`[Offline Payment] Applied discount to Fee ${targetFeeId}`);
+                        } catch(err) {
+                            console.error('[Offline Payment] Failed to apply discount to ERP Fee:', err.response?.data || err.message);
+                        }
+                    }
+
                     // Create Payment Entry in ERPNext
                     const paymentEntryPayload = {
                         payment_type: "Receive",
@@ -469,7 +625,11 @@ router.post('/record-offline-payment', async (req, res) => {
                         paid_amount: numAmount,
                         received_amount: numAmount,
                         target_exchange_rate: 1,
-                        mode_of_payment: resolvedPaymentMode === 'CASH' ? 'Cash' : (resolvedPaymentMode === 'CHEQUE' ? 'Cheque' : 'Cash'),
+                        posting_date: postingDate,
+                        mode_of_payment: resolvedPaymentMode === 'CASH' ? 'Cash' : 
+                                         (resolvedPaymentMode === 'CHEQUE' ? 'Cheque' : 
+                                         (resolvedPaymentMode === 'BANK_TRANSFER' ? 'Bank Transfer' :
+                                         (resolvedPaymentMode === 'ONLINE' ? 'Online' : 'Cash'))),
                         references: [{
                             reference_doctype: "Fees",
                             reference_name: targetFeeId,
@@ -504,11 +664,11 @@ router.post('/record-offline-payment', async (req, res) => {
             payment_mode: resolvedPaymentMode,
             receipt_no: receiptNo,
             manual_receipt_ref: manual_receipt_no || '',
-            receipt_date: new Date().toISOString(),
+            receipt_date: finalReceiptDate,
             erp_payment_entry_id: erpPaymentEntryId,
             erp_fees_id: targetFeeId || 'N/A',
             erp_sync: erpSyncStatus,
-            verified_at: new Date().toISOString(),
+            verified_at: finalReceiptDate,
             school_name: 'SSV CAMPUS - CBSE',
             created_at: new Date().toISOString(),
             original_fee: parseFloat(original_fee) || 0,
@@ -545,7 +705,7 @@ router.post('/record-offline-payment', async (req, res) => {
  * POST /assign-discount
  * Assigns a discount to a student for a specific term and attempts to update ERPNext Fee record.
  */
-router.post('/assign-discount', async (req, res) => {
+router.post('/assign-discount', requireAdminAuth, async (req, res) => {
     try {
         const { systemCode, discount_id, student_id, academic_year, terms = [] } = req.body;
         if (!discount_id || !student_id || !academic_year) {
@@ -675,7 +835,7 @@ module.exports = router;
  * POST /remove-discount
  * Removes a discount assignment and strips the discount component from ERPNext Fee records.
  */
-router.post('/remove-discount', async (req, res) => {
+router.post('/remove-discount', requireAdminAuth, async (req, res) => {
     try {
         const { systemCode, assignment_id } = req.body;
         if (!assignment_id) {

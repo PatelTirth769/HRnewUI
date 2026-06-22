@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
+const axios = require('axios');
 const { db } = require('../firebase');
 
 // Initialize Razorpay
@@ -13,6 +14,36 @@ const razorpay = new Razorpay({
 // Firebase collection paths under enquiry_management
 const PAYMENTS_PATH = 'schooler_system/enquiry_management/admission_fee_payments';
 const RECEIPTS_PATH = 'schooler_system/enquiry_management/admission_fee_receipts';
+
+/**
+ * Middleware to verify administrative privileges via ERPNext Session
+ */
+async function requireAdminAuth(req, res, next) {
+    const cookies = req.headers.cookie || '';
+    if (!cookies.includes('sid=')) {
+        console.warn(`🚨 [SECURITY] Blocked unauthorized admin access attempt to ${req.path}`);
+        return res.status(401).json({ success: false, message: 'Unauthorized: Missing session cookie' });
+    }
+    
+    try {
+        const targetBase = process.env.SCHOOLER_ERP_URL || 'https://3iinfotech.hrhovercraft.in';
+        const axiosConfig = {
+            headers: { 'Cookie': req.headers.cookie },
+            // Pass the host header so proxying doesn't fail on Frappe
+            ...(targetBase.includes('http') ? { host: new URL(targetBase).host } : {})
+        };
+        const authRes = await axios.get(`${targetBase}/api/method/frappe.auth.get_logged_user`, axiosConfig);
+        
+        if (authRes.data && authRes.data.message) {
+            next();
+        } else {
+            return res.status(401).json({ success: false, message: 'Unauthorized: Invalid session' });
+        }
+    } catch (err) {
+        console.error('Admin Auth Error:', err.message);
+        return res.status(401).json({ success: false, message: 'Unauthorized: Session verification failed' });
+    }
+}
 
 /**
  * Generate sequential receipt number: ADM-RCPT-YYYYMM-XXX
@@ -60,6 +91,23 @@ router.post('/create-order', async (req, res) => {
         }
 
         // Create Razorpay Order
+        // 1. Secure Validation: Fetch the expected registration fee from settings
+        let expectedFee = 500; // fallback
+        try {
+            const settingsRef = db.collection('schooler_system').doc('enquiry_management').collection('settings').doc('general');
+            const settingsSnap = await settingsRef.get();
+            if (settingsSnap.exists && settingsSnap.data().registrationFee) {
+                expectedFee = parseFloat(settingsSnap.data().registrationFee);
+            }
+        } catch (e) {
+            console.error('Error fetching settings for fee validation', e);
+        }
+
+        if (parseFloat(amount) < expectedFee) {
+            console.warn(`🚨 [SECURITY WARNING] Client tried to spoof admission fee! Expected: ₹${expectedFee}, Received: ₹${amount}`);
+            return res.status(400).json({ success: false, message: `Security Validation Failed: Amount must be at least ₹${expectedFee}` });
+        }
+
         const amountInPaise = Math.round(numAmount * 100);
         const options = {
             amount: amountInPaise,
@@ -158,18 +206,46 @@ router.post('/verify-payment', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid payment signature' });
         }
 
-        // 2. Check existing payment doc
-        const paymentDoc = await db.collection(PAYMENTS_PATH).doc(razorpay_order_id).get();
-        if (!paymentDoc.exists) {
-            return res.status(404).json({ success: false, message: 'Order not found in logs' });
+        // 2. Lock and Check existing payment doc (Concurrency Prevention)
+        let orderData;
+        try {
+            await db.runTransaction(async (t) => {
+                const docRef = db.collection(PAYMENTS_PATH).doc(razorpay_order_id);
+                const doc = await t.get(docRef);
+                if (!doc.exists) throw new Error("Order not found in logs");
+                
+                orderData = doc.data();
+                if (orderData.status === 'verified' || orderData.status === 'processing') {
+                    throw new Error("Payment already processed");
+                }
+                
+                // Mark as processing to lock it
+                t.update(docRef, { status: 'processing', updated_at: new Date().toISOString() });
+            });
+        } catch (err) {
+            if (err.message === "Payment already processed") {
+                // If it was already verified, we need to return the existing receipt_no
+                const existingDoc = await db.collection(PAYMENTS_PATH).doc(razorpay_order_id).get();
+                return res.json({ success: true, message: 'Payment already processed', receipt_no: existingDoc.data()?.receipt_no });
+            }
+            return res.status(404).json({ success: false, message: err.message });
         }
 
-        // Check if already processed (Idempotency)
-        if (paymentDoc.data().status === 'verified') {
-            return res.json({ success: true, message: 'Payment already processed', receipt_no: paymentDoc.data().receipt_no });
+        // 3. Fetch true amount from Razorpay (Security Validation)
+        let trueAmount = parseFloat(amount) || 0;
+        try {
+            const rzpPayment = await razorpay.payments.fetch(razorpay_payment_id);
+            trueAmount = rzpPayment.amount / 100; // Razorpay returns amount in paise
+            if (trueAmount != amount) {
+                console.warn(`🚨 [SECURITY WARNING] Client admission amount (₹${amount}) spoofed! True amount collected: ₹${trueAmount}`);
+            }
+        } catch (rzpErr) {
+            console.error('Razorpay Fetch Error:', rzpErr);
+            await db.collection(PAYMENTS_PATH).doc(razorpay_order_id).update({ status: 'failed', error: 'Could not verify true amount from Razorpay' });
+            return res.status(500).json({ success: false, message: 'Could not securely verify payment amount with gateway' });
         }
 
-        // 3. Generate Receipt Number
+        // 4. Generate Receipt Number
         const receiptNo = await generateReceiptNo();
 
         // 4. Build receipt record
@@ -184,7 +260,7 @@ router.post('/verify-payment', async (req, res) => {
             academic_year: academic_year || '',
             fee_type: fee_type || '',
             fee_name: fee_name || fee_type || '',
-            amount: parseFloat(amount) || 0,
+            amount: trueAmount,
             payment_mode: 'ONLINE',
             receipt_no: receiptNo,
             receipt_date: new Date().toISOString(),
@@ -226,7 +302,7 @@ router.post('/verify-payment', async (req, res) => {
  * Payload: { student_name, registration_no, admission_no, program, academic_year,
  *            fee_type, fee_name, amount, payment_mode, manual_receipt_no, parent_name, parent_mobile }
  */
-router.post('/record-manual', async (req, res) => {
+router.post('/record-manual', requireAdminAuth, async (req, res) => {
     try {
         const {
             student_name, registration_no, admission_no, program, academic_year,

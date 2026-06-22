@@ -14,11 +14,16 @@ import html2pdf from 'html2pdf.js';
 import { db } from '../../config/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import FeeReceiptTemplate from './FeeReceiptTemplate';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
 const StudentFeeCollection = () => {
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
+    
     const [loading, setLoading] = useState(false);
     const [allData, setAllData] = useState([]);
     const [filters, setFilters] = useState({
@@ -43,14 +48,84 @@ const StudentFeeCollection = () => {
     const [selectedRow, setSelectedRow] = useState(null);
     const [paymentAmount, setPaymentAmount] = useState(0);
     const [paymentMode, setPaymentMode] = useState('CASH');
+    const [paymentDate, setPaymentDate] = useState(dayjs());
     const [manualReceiptRef, setManualReceiptRef] = useState('');
     const [processingPayment, setProcessingPayment] = useState(false);
+    const [discountCategories, setDiscountCategories] = useState([]);
+    const [selectedDiscountId, setSelectedDiscountId] = useState(null);
 
-    // Receipt download states
+    // Multi-payment selection states
+    const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+    const [selectedRows, setSelectedRows] = useState([]);
+    const [isMultiPayment, setIsMultiPayment] = useState(false);
+
+    // Handlers for selection and modal
     const [selectedReceipt, setSelectedReceipt] = useState(null);
     const receiptRef = useRef(null);
 
-    useEffect(() => { fetchInitialData(); }, []);
+    // Receipt download logic
+    const handleDownloadReceipt = (record) => {
+        const dateObj = new Date(record.paid_date || record.receipt_date || new Date());
+        const formattedDate = dateObj.toLocaleDateString('en-GB') + ' ' + dateObj.toLocaleTimeString('en-US');
+        
+        const receiptData = {
+            enrollmentNo: record.student_id,
+            studentName: record.student_name,
+            courseName: record.program,
+            semester: record.academic_term || 'N/A',
+            receiptDate: formattedDate,
+            receiptNo: record.receipt_no || record.payment_id || record.order_id || 'N/A',
+            amount: record.paid_amount || record.amount || 0,
+            feeName: record.academic_term || 'TUITION FEES',
+            paymentMode: (record.payment_mode || 'CASH') + ' PAYMENT',
+            transactionNo: record.receipt_no || record.payment_id || 'N/A',
+            original_fee: record.original_fee || record.total_fee || 0,
+            discount_amount: record.discount_amount || 0,
+            discount_name: record.discount_name || '',
+            discount_percentage: record.discount_percentage || 0,
+            studentGroup: record.student_group || record.section || ''
+        };
+
+        setSelectedReceipt(receiptData);
+
+        setTimeout(() => {
+            if (receiptRef.current) {
+                console.log('Starting PDF generation for receipt:', receiptData.receiptNo);
+                const safeFileName = `Receipt_${String(receiptData.receiptNo).replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+                const opt = {
+                    margin: 0.3,
+                    filename: safeFileName,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, windowWidth: 700, width: 700 },
+                    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+                };
+
+                try {
+                    html2pdf().from(receiptRef.current).set(opt).save().then(() => {
+                        notification.success({ message: `Receipt Downloaded Successfully` });
+                        setSelectedReceipt(null);
+                    }).catch(err => {
+                        console.error('PDF download promise error:', err);
+                        notification.error({ message: 'PDF Error', description: err.message || 'Failed to generate PDF' });
+                        setSelectedReceipt(null);
+                    });
+                } catch (err) {
+                    console.error('PDF generation synchronous error:', err);
+                    notification.error({ message: 'Generation Error', description: err.message || 'Failed to start PDF' });
+                    setSelectedReceipt(null);
+                }
+            } else {
+                console.error('Print area element is null. Cannot download receipt.');
+                notification.error({ message: 'Error', description: 'Receipt template is not ready. Try again.' });
+                setSelectedReceipt(null);
+            }
+        }, 500);
+    };
+
+    useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
+        fetchInitialData();
+    }, [isCoordinator, coordinatorScope.loading]);
 
     const fetchInitialData = async () => {
         setLoading(true);
@@ -60,9 +135,13 @@ const StudentFeeCollection = () => {
                 API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Term?limit_page_length=None').catch(() => ({ data: { data: [] } })),
             ]);
+            let pData = pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || [];
+            if (isCoordinator && !coordinatorScope.loading) {
+                pData = pData.filter(p => coordinatorScope.programs.includes(p.value) || coordinatorScope.boards.includes(p.custom_board));
+            }
             setDropdowns({
                 academicYears: yRes.data.data?.map(d => d.name) || [],
-                programs: pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || [],
+                programs: pData,
                 terms: tRes.data.data?.map(d => d.name) || [],
             });
             await fetchData();
@@ -75,6 +154,9 @@ const StudentFeeCollection = () => {
 
     const fetchData = async () => {
         setLoading(true);
+        setSelectedRowKeys([]);
+        setSelectedRows([]);
+        setIsMultiPayment(false);
         try {
             // 1. Fetch Firebase payments (only students who initiated/completed payment)
             const payRes = await axios.get('/local-api/payment/history-all');
@@ -193,7 +275,12 @@ const StudentFeeCollection = () => {
                 });
 
                 const fdSnaps = await getDocs(collection(db, sysCode, 'data', 'fees_discounts'));
-                fdSnaps.forEach(doc => { feeDiscountsMap[doc.id] = doc.data(); });
+                const cats = [];
+                fdSnaps.forEach(doc => { 
+                    feeDiscountsMap[doc.id] = doc.data(); 
+                    cats.push({ id: doc.id, ...doc.data() });
+                });
+                setDiscountCategories(cats);
                 
                 // Fallback fetch from 'schooler' removed as data is migrated
                 
@@ -461,6 +548,9 @@ const StudentFeeCollection = () => {
 
     const filteredData = useMemo(() => {
         let data = [...allData];
+        if (isCoordinator && !coordinatorScope.loading) {
+            data = data.filter(s => coordinatorScope.programs.includes(s.program) || coordinatorScope.boards.includes(s.board));
+        }
         if (filters.student_search) {
             const q = filters.student_search.toLowerCase();
             data = data.filter(s => s.student_name.toLowerCase().includes(q) || s.student_id.toLowerCase().includes(q));
@@ -487,11 +577,14 @@ const StudentFeeCollection = () => {
             });
         }
         return data;
-    }, [allData, filters]);
+    }, [allData, filters, isCoordinator, coordinatorScope]);
 
     const stats = useMemo(() => ({
         totalProjected: filteredData.reduce((s, r) => s + (r.original_fee || r.total_fee || 0), 0),
-        totalCollected: filteredData.reduce((s, r) => s + r.paid_amount, 0),
+        totalCollected: filteredData.reduce((s, r) => {
+            if (r.status === 'PAID') return s + (r.original_fee || r.total_fee || r.paid_amount || 0);
+            return s + (r.paid_amount || 0);
+        }, 0),
         totalOutstanding: filteredData.reduce((s, r) => {
             // If unpaid, outstanding is the original fee
             // If paid, outstanding is 0 (the discount accounts for the difference)
@@ -507,113 +600,215 @@ const StudentFeeCollection = () => {
 
     const activeFilterCount = [filters.program, filters.board, filters.term, filters.status, filters.payment_mode, filters.student_search, filters.date_range].filter(Boolean).length;
 
-    // Receipt download logic
-    const handleDownloadReceipt = (record) => {
-        const dateObj = new Date(record.paid_date || record.receipt_date || new Date());
-        const formattedDate = dateObj.toLocaleDateString('en-GB') + ' ' + dateObj.toLocaleTimeString('en-US');
-        
-        const receiptData = {
-            enrollmentNo: record.student_id,
-            studentName: record.student_name,
-            courseName: record.program,
-            semester: record.academic_term || 'N/A',
-            receiptDate: formattedDate,
-            receiptNo: record.receipt_no || record.payment_id || record.order_id || 'N/A',
-            amount: record.paid_amount || record.amount || 0,
-            feeName: record.academic_term || 'TUITION FEES',
-            paymentMode: (record.payment_mode || 'CASH') + ' PAYMENT',
-            transactionNo: record.receipt_no || record.payment_id || 'N/A',
-            original_fee: record.original_fee || record.total_fee || 0,
-            discount_amount: record.discount_amount || 0,
-            discount_name: record.discount_name || '',
-            discount_percentage: record.discount_percentage || 0
-        };
-
-        setSelectedReceipt(receiptData);
-
-        setTimeout(() => {
-            if (receiptRef.current) {
-                const opt = {
-                    margin: 0.3,
-                    filename: `Receipt_${receiptData.receiptNo}.pdf`,
-                    image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true, windowWidth: 700, width: 700 },
-                    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-                };
-                html2pdf().set(opt).from(receiptRef.current).save().then(() => {
-                    notification.success({ message: 'Receipt Downloaded Successfully' });
-                    setSelectedReceipt(null);
-                });
-            }
-        }, 500);
-    };
-
     // Open checkout modal
     const handleCollectFee = (row) => {
+        setIsMultiPayment(false);
         setSelectedRow(row);
         setPaymentAmount(row.outstanding);
         setPaymentMode('CASH');
+        setPaymentDate(dayjs());
         setManualReceiptRef('');
+        setSelectedDiscountId(null);
         setPaymentModalVisible(true);
+    };
+
+    const handleDiscountSelect = (val) => {
+        setSelectedDiscountId(val);
+        const originalAmount = isMultiPayment 
+            ? selectedRows.reduce((sum, r) => sum + (r.original_fee || r.total_fee || r.outstanding), 0)
+            : (selectedRow.original_fee || selectedRow.total_fee || selectedRow.outstanding);
+            
+        if (!val) {
+            setPaymentAmount(isMultiPayment ? selectedRows.reduce((sum, r) => sum + r.outstanding, 0) : selectedRow.outstanding);
+            return;
+        }
+        const discount = discountCategories.find(d => d.id === val);
+        if (discount) {
+            const pct = parseFloat(discount.percentage) || 0;
+            const discountAmt = (originalAmount * pct) / 100;
+            const newAmount = Math.max(0, originalAmount - discountAmt);
+            setPaymentAmount(newAmount);
+        }
+    };
+
+    const handleCollectSelected = () => {
+        if (selectedRows.length === 0) return;
+        setIsMultiPayment(true);
+        setSelectedRow(selectedRows[0]);
+        
+        const totalOutstanding = selectedRows.reduce((sum, r) => sum + r.outstanding, 0);
+        setPaymentAmount(totalOutstanding);
+        
+        setPaymentMode('CASH');
+        setPaymentDate(dayjs());
+        setManualReceiptRef('');
+        setSelectedDiscountId(null);
+        setPaymentModalVisible(true);
+    };
+
+    const handleCancelModal = () => {
+        setPaymentModalVisible(false);
+        setIsMultiPayment(false);
     };
 
     // Post to backend
     const handleConfirmPayment = async () => {
-        if (paymentAmount <= 0) {
-            notification.error({ message: 'Validation Error', description: 'Payment amount must be greater than 0.' });
-            return;
-        }
-        if (paymentAmount > selectedRow.outstanding) {
-            notification.error({ message: 'Validation Error', description: `Payment amount cannot exceed the outstanding balance of ₹${selectedRow.outstanding.toLocaleString()}.` });
-            return;
-        }
-
         setProcessingPayment(true);
         try {
-            const res = await axios.post('/local-api/payment/record-offline-payment', {
-                student_id: selectedRow.student_id,
-                student_name: selectedRow.student_name,
-                fee_structure: selectedRow.fee_structure,
-                fees_category: selectedRow.academic_term,
-                amount: paymentAmount,
-                payment_mode: paymentMode,
-                manual_receipt_no: manualReceiptRef,
-                fee_id: selectedRow.fee_id,
-                systemCode: 'schooler_system',
-                original_fee: selectedRow.original_fee || 0,
-                discount_amount: selectedRow.discount_amount || 0,
-                discount_name: selectedRow.discount_name || '',
-                discount_percentage: selectedRow.discount_percentage || 0
-            });
-
-            if (res.data.success) {
-                notification.success({ 
-                    message: 'Payment Recorded!', 
-                    description: `Sequential Receipt ${res.data.receipt_no} generated and sync: ${res.data.erp_sync}.` 
-                });
+            const finalReceiptDate = paymentDate ? paymentDate.toISOString() : new Date().toISOString();
+            
+            if (isMultiPayment) {
+                // Multi-payment logic: process selected rows sequentially
+                const discountToApply = selectedDiscountId ? discountCategories.find(d => d.id === selectedDiscountId) : null;
+                const finalDiscountPct = discountToApply ? (parseFloat(discountToApply.percentage) || 0) : 0;
                 
-                setPaymentModalVisible(false);
+                let successCount = 0;
+                for (const row of selectedRows) {
+                    try {
+                        let finalDiscountAmount = row.discount_amount || 0;
+                        let finalDiscountName = row.discount_name || '';
+                        let rowDiscountPct = row.discount_percentage || 0;
+                        let finalOriginalFee = row.original_fee || row.total_fee || row.outstanding || 0;
 
-                // Auto-print receipt right after payment
-                const mockRecord = {
+                        if (discountToApply) {
+                            rowDiscountPct = finalDiscountPct;
+                            finalDiscountAmount = (finalOriginalFee * rowDiscountPct) / 100;
+                            finalDiscountName = discountToApply.name;
+                        }
+                        
+                        const termAmountToPay = Math.max(0, finalOriginalFee - finalDiscountAmount);
+
+                        const res = await axios.post('/local-api/payment/record-offline-payment', {
+                            student_id: row.student_id,
+                            student_name: row.student_name,
+                            fee_structure: row.fee_structure,
+                            fees_category: row.academic_term,
+                            amount: termAmountToPay, // Pay discounted amount
+                            payment_mode: paymentMode,
+                            receipt_date: finalReceiptDate,
+                            manual_receipt_no: manualReceiptRef,
+                            fee_id: row.fee_id,
+                            systemCode: 'schooler_system',
+                            original_fee: finalOriginalFee,
+                            discount_amount: finalDiscountAmount,
+                            discount_name: finalDiscountName,
+                            discount_percentage: rowDiscountPct
+                        }, { withCredentials: true });
+
+                        if (res.data.success) {
+                            successCount++;
+                            notification.success({ 
+                                message: `Payment Recorded: ${row.academic_term}`, 
+                                description: `Receipt ${res.data.receipt_no} generated successfully.` 
+                            });
+
+                            // Add to receipt download queue
+                            const mockRecord = {
+                                student_id: row.student_id,
+                                student_name: row.student_name,
+                                program: row.program,
+                                academic_term: row.academic_term,
+                                receipt_no: res.data.receipt_no,
+                                payment_id: res.data.payment_id,
+                                paid_amount: termAmountToPay,
+                                payment_mode: paymentMode,
+                                paid_date: finalReceiptDate,
+                                original_fee: finalOriginalFee,
+                                discount_amount: finalDiscountAmount,
+                                discount_name: finalDiscountName,
+                                discount_percentage: rowDiscountPct
+                            };
+                            handleDownloadReceipt(mockRecord);
+                        }
+                    } catch (err) {
+                        console.error(`Error paying for term ${row.academic_term}:`, err);
+                        notification.error({
+                            message: `Payment Error (${row.academic_term})`,
+                            description: err.response?.data?.message || err.message
+                        });
+                    }
+                }
+
+                if (successCount > 0) {
+                    setPaymentModalVisible(false);
+                    // Clear row selection
+                    setSelectedRowKeys([]);
+                    setSelectedRows([]);
+                    setIsMultiPayment(false);
+                    // Refresh data
+                    await fetchData();
+                }
+            } else {
+                // Single payment logic
+                if (paymentAmount <= 0) {
+                    notification.error({ message: 'Validation Error', description: 'Payment amount must be greater than 0.' });
+                    setProcessingPayment(false);
+                    return;
+                }
+                if (paymentAmount > selectedRow.outstanding) {
+                    notification.error({ message: 'Validation Error', description: `Payment amount cannot exceed the outstanding balance of ₹${selectedRow.outstanding.toLocaleString()}.` });
+                    setProcessingPayment(false);
+                    return;
+                }
+
+                const discountToApply = selectedDiscountId ? discountCategories.find(d => d.id === selectedDiscountId) : null;
+                let finalDiscountAmount = selectedRow.discount_amount || 0;
+                let finalDiscountName = selectedRow.discount_name || '';
+                let finalDiscountPct = selectedRow.discount_percentage || 0;
+                let finalOriginalFee = selectedRow.original_fee || selectedRow.total_fee || 0;
+
+                if (discountToApply) {
+                    finalDiscountPct = parseFloat(discountToApply.percentage) || 0;
+                    finalDiscountAmount = (finalOriginalFee * finalDiscountPct) / 100;
+                    finalDiscountName = discountToApply.name;
+                }
+
+                const res = await axios.post('/local-api/payment/record-offline-payment', {
                     student_id: selectedRow.student_id,
                     student_name: selectedRow.student_name,
-                    program: selectedRow.program,
-                    academic_term: selectedRow.academic_term,
-                    receipt_no: res.data.receipt_no,
-                    payment_id: res.data.payment_id,
-                    paid_amount: paymentAmount,
+                    fee_structure: selectedRow.fee_structure,
+                    fees_category: selectedRow.academic_term,
+                    amount: paymentAmount,
                     payment_mode: paymentMode,
-                    paid_date: new Date().toISOString(),
-                    original_fee: selectedRow.original_fee,
-                    discount_amount: selectedRow.discount_amount,
-                    discount_name: selectedRow.discount_name,
-                    discount_percentage: selectedRow.discount_percentage
-                };
-                handleDownloadReceipt(mockRecord);
+                    receipt_date: finalReceiptDate,
+                    manual_receipt_no: manualReceiptRef,
+                    fee_id: selectedRow.fee_id,
+                    systemCode: 'schooler_system',
+                    original_fee: finalOriginalFee,
+                    discount_amount: finalDiscountAmount,
+                    discount_name: finalDiscountName,
+                    discount_percentage: finalDiscountPct
+                }, { withCredentials: true });
 
-                // Refresh data
-                await fetchData();
+                if (res.data.success) {
+                    notification.success({ 
+                        message: 'Payment Recorded!', 
+                        description: `Sequential Receipt ${res.data.receipt_no} generated and sync: ${res.data.erp_sync}.` 
+                    });
+                    
+                    setPaymentModalVisible(false);
+
+                    // Add to receipt download queue
+                    const mockRecord = {
+                        student_id: selectedRow.student_id,
+                        student_name: selectedRow.student_name,
+                        program: selectedRow.program,
+                        academic_term: selectedRow.academic_term,
+                        receipt_no: res.data.receipt_no,
+                        payment_id: res.data.payment_id,
+                        paid_amount: paymentAmount,
+                        payment_mode: paymentMode,
+                        paid_date: finalReceiptDate,
+                        original_fee: finalOriginalFee,
+                        discount_amount: finalDiscountAmount,
+                        discount_name: finalDiscountName,
+                        discount_percentage: finalDiscountPct
+                    };
+                    handleDownloadReceipt(mockRecord);
+
+                    // Refresh data
+                    await fetchData();
+                }
             }
         } catch (err) {
             console.error('Offline payment err:', err);
@@ -624,6 +819,24 @@ const StudentFeeCollection = () => {
         } finally {
             setProcessingPayment(false);
         }
+    };
+
+    const rowSelection = {
+        selectedRowKeys,
+        onChange: (keys, rows) => {
+            const validRows = (rows || []).filter(r => r && r.status !== 'PAID' && r.total_fee > 0);
+            const validKeys = validRows.map(r => r.key || `${r.student_id}_${r.academic_term}`);
+            setSelectedRowKeys(validKeys);
+            setSelectedRows(validRows);
+        },
+        getCheckboxProps: (record) => {
+            const isPaidOrNoFee = record.status === 'PAID' || record.total_fee <= 0;
+            const hasSelectedOtherStudent = selectedRows.length > 0 && selectedRows[0].student_id !== record.student_id;
+            return {
+                disabled: isPaidOrNoFee || hasSelectedOtherStudent,
+                name: record.student_name,
+            };
+        },
     };
 
     const columns = [
@@ -675,7 +888,7 @@ const StudentFeeCollection = () => {
         },
         {
             title: 'PAID', dataIndex: 'paid_amount', key: 'paid_amount', align: 'right',
-            render: v => <span style={{ fontWeight: 700, color: '#16a34a', fontSize: 13 }}>₹{v.toLocaleString()}</span>,
+            render: (v, r) => <span style={{ fontWeight: 700, color: '#16a34a', fontSize: 13 }}>₹{(r.status === 'PAID' ? (r.original_fee || r.total_fee || v) : v).toLocaleString()}</span>,
             sorter: (a, b) => a.paid_amount - b.paid_amount,
         },
         {
@@ -926,8 +1139,23 @@ const StudentFeeCollection = () => {
                     <span style={{ fontWeight: 700, color: '#334155', fontSize: 14 }}>
                         Showing {filteredData.length} of {allData.length} records
                     </span>
+                    {selectedRows.length > 0 && (
+                        <Button 
+                            type="primary" 
+                            onClick={handleCollectSelected}
+                            style={{ 
+                                background: 'linear-gradient(135deg, #10b981, #059669)', 
+                                border: 'none', 
+                                fontWeight: 700, 
+                                borderRadius: 8 
+                            }}
+                        >
+                            Collect Selected ({selectedRows.length} Term{selectedRows.length > 1 ? 's' : ''} - ₹{selectedRows.reduce((sum, r) => sum + r.outstanding, 0).toLocaleString()})
+                        </Button>
+                    )}
                 </div>
                 <Table 
+                    rowSelection={rowSelection}
                     columns={columns} 
                     dataSource={filteredData} 
                     loading={loading}
@@ -942,11 +1170,11 @@ const StudentFeeCollection = () => {
             <Modal
                 title={null}
                 visible={paymentModalVisible}
-                onCancel={() => setPaymentModalVisible(false)}
+                onCancel={handleCancelModal}
                 footer={null}
                 width={700}
                 centered
-                bodyStyle={{ padding: 0, borderRadius: '24px', overflow: 'hidden' }}
+                styles={{ body: { padding: 0, borderRadius: '24px', overflow: 'hidden' } }}
             >
                 <div style={{ background: 'linear-gradient(135deg, #10b981, #059669)', padding: '20px', color: 'white', display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <CreditCardOutlined style={{ fontSize: '22px' }} />
@@ -975,23 +1203,43 @@ const StudentFeeCollection = () => {
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '16px' }}>
                                 <div>
                                     <label style={modalLabelStyle}>Fee Structure</label>
-                                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>{selectedRow.fee_structure || 'Standard'}</span>
+                                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>
+                                        {isMultiPayment ? selectedRows[0]?.fee_structure : selectedRow.fee_structure || 'Standard'}
+                                    </span>
                                 </div>
                                 <div>
                                     <label style={modalLabelStyle}>Term / Installment</label>
-                                    <Tag color="green" style={{ margin: 0, fontWeight: 'bold', border: 'none', background: '#dcfce7', color: '#15803d' }}>{selectedRow.academic_term}</Tag>
+                                    {isMultiPayment ? (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                            {selectedRows.map(r => (
+                                                <Tag key={r.academic_term} color="green" style={{ margin: 0, fontWeight: 'bold', border: 'none', background: '#dcfce7', color: '#15803d' }}>
+                                                    {r.academic_term} (₹{r.outstanding})
+                                                </Tag>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <Tag color="green" style={{ margin: 0, fontWeight: 'bold', border: 'none', background: '#dcfce7', color: '#15803d' }}>{selectedRow.academic_term}</Tag>
+                                    )}
                                 </div>
                                 <div>
                                     <label style={modalLabelStyle}>ERP Fees ID</label>
-                                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>{selectedRow.fee_id !== '-' ? selectedRow.fee_id : 'Pre-billed Structure'}</span>
+                                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>
+                                        {isMultiPayment 
+                                            ? selectedRows.map(r => r.fee_id !== '-' ? r.fee_id : 'Pre-billed').join(', ') 
+                                            : (selectedRow.fee_id !== '-' ? selectedRow.fee_id : 'Pre-billed Structure')}
+                                    </span>
                                 </div>
                                 <div>
                                     <label style={modalLabelStyle}>Amount to Pay</label>
-                                    <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#dc2626' }}>₹{selectedRow.outstanding.toLocaleString()}</span>
+                                    <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#dc2626' }}>
+                                        ₹{isMultiPayment 
+                                            ? selectedRows.reduce((sum, r) => sum + r.outstanding, 0).toLocaleString() 
+                                            : selectedRow.outstanding.toLocaleString()}
+                                    </span>
                                 </div>
                             </div>
 
-                            {selectedRow.discount_amount > 0 && (
+                            {!isMultiPayment && selectedRow.discount_amount > 0 && (
                                 <div style={{ background: '#f3e8ff', padding: '12px 16px', borderRadius: '12px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div>
                                         <div style={{ fontSize: '12px', fontWeight: 600, color: '#7e22ce', marginBottom: 4 }}>DISCOUNT APPLIED</div>
@@ -1007,28 +1255,40 @@ const StudentFeeCollection = () => {
                             {/* Form Input fields */}
                             <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
                                 <Row gutter={16}>
-                                    <Col span={12}>
+                                    <Col span={8}>
                                         <label style={modalInputLabelStyle}>Payment Amount (₹) *</label>
                                         <InputNumber 
                                             style={{ width: '100%' }} 
                                             value={paymentAmount} 
                                             onChange={v => setPaymentAmount(v || 0)} 
                                             min={1} 
-                                            max={selectedRow.outstanding}
+                                            max={isMultiPayment ? paymentAmount : selectedRow.outstanding}
                                             precision={2}
+                                            disabled={isMultiPayment}
                                         />
                                     </Col>
-                                    <Col span={12}>
+                                    <Col span={8}>
                                         <label style={modalInputLabelStyle}>Payment Mode *</label>
                                         <Select style={{ width: '100%' }} value={paymentMode} onChange={setPaymentMode}>
                                             <Option value="CASH">Cash</Option>
                                             <Option value="CHEQUE">Cheque</Option>
                                             <Option value="BANK_TRANSFER">Bank Transfer</Option>
+                                            <Option value="ONLINE">Online</Option>
                                         </Select>
                                     </Col>
+                                    <Col span={8}>
+                                        <label style={modalInputLabelStyle}>Payment Date *</label>
+                                        <DatePicker 
+                                            style={{ width: '100%' }} 
+                                            value={paymentDate} 
+                                            onChange={v => setPaymentDate(v)} 
+                                            format="DD-MM-YYYY"
+                                            allowClear={false}
+                                        />
+                                    </Col>
                                 </Row>
-                                <Row style={{ marginTop: '16px' }}>
-                                    <Col span={24}>
+                                <Row style={{ marginTop: '16px' }} gutter={16}>
+                                    <Col span={12}>
                                         <label style={modalInputLabelStyle}>Manual Receipt Ref / Notes (Optional)</label>
                                         <Input 
                                             placeholder="Enter cash memo or book receipt reference..."
@@ -1036,12 +1296,26 @@ const StudentFeeCollection = () => {
                                             onChange={e => setManualReceiptRef(e.target.value)}
                                         />
                                     </Col>
+                                    <Col span={12}>
+                                        <label style={modalInputLabelStyle}>Apply Discount (Optional)</label>
+                                        <Select
+                                            style={{ width: '100%' }}
+                                            placeholder="Select Discount Category"
+                                            allowClear
+                                            value={selectedDiscountId}
+                                            onChange={handleDiscountSelect}
+                                        >
+                                            {discountCategories.map(d => (
+                                                <Option key={d.id} value={d.id}>{d.name} ({d.percentage}%)</Option>
+                                            ))}
+                                        </Select>
+                                    </Col>
                                 </Row>
                             </div>
 
                             {/* Checkout Footer buttons */}
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
-                                <Button onClick={() => setPaymentModalVisible(false)} size="large" style={{ borderRadius: '8px', fontWeight: 600 }}>
+                                <Button onClick={handleCancelModal} size="large" style={{ borderRadius: '8px', fontWeight: 600 }}>
                                     Cancel
                                 </Button>
                                 <Button 

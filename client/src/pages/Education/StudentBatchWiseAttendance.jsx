@@ -3,8 +3,12 @@ import { Table, Dropdown, Menu, notification } from 'antd';
 import { ReloadOutlined, MoreOutlined } from '@ant-design/icons';
 import API from '../../services/api';
 import dayjs from 'dayjs';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 export default function StudentBatchWiseAttendance() {
+    const { isInstructor, isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState([]);
@@ -12,20 +16,29 @@ export default function StudentBatchWiseAttendance() {
     const [executionTime, setExecutionTime] = useState('0.000000');
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         handleGenerate();
-    }, []);
+    }, [isCoordinator, coordinatorScope.loading]);
 
     const handleGenerate = async () => {
         setLoading(true);
         const startTime = performance.now();
         try {
-            const response = await API.post('/api/method/frappe.desk.query_report.run', {
-                report_name: 'Student Batch-Wise Attendance',
-                filters: { date: date }
-            });
+            const [response, sgRes] = await Promise.all([
+                API.post('/api/method/frappe.desk.query_report.run', {
+                    report_name: 'Student Batch-Wise Attendance',
+                    filters: { date: date }
+                }),
+                API.get('/api/resource/Student Group?fields=["name","custom_board","program"]&limit_page_length=None').catch(() => ({ data: { data: [] } }))
+            ]);
 
             const { columns: reportCols, result: reportResult } = response.data.message || { columns: [], result: [] };
             
+            const sgMap = {};
+            sgRes.data.data?.forEach(sg => {
+                sgMap[sg.name] = { board: sg.custom_board || '', program: sg.program || '' };
+            });
+
             const tableCols = reportCols.map((col, i) => {
                 const colKey = typeof col === 'string' ? col : col.fieldname || col.label;
                 let label = typeof col === 'string' ? col : col.label;
@@ -50,7 +63,28 @@ export default function StudentBatchWiseAttendance() {
             });
 
             setColumns(tableCols);
-            setData(reportResult?.map((r, i) => ({ ...r, key: i })) || []);
+            let finalData = reportResult?.map((r, i) => ({ ...r, key: i })) || [];
+            
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctBoards = coordinatorScope.boards || [];
+                const ctPrograms = coordinatorScope.programs || [];
+                
+                finalData = finalData.filter(r => {
+                    const batchVal = r.student_batch || r.student_group || r['Student Batch'] || r['Student Group'] || '';
+                    if (!batchVal) return true;
+                    
+                    const sgInfo = sgMap[batchVal];
+                    if (!sgInfo) return true;
+                    
+                    let match = false;
+                    if (ctBoards.length > 0 && ctBoards.includes(sgInfo.board)) match = true;
+                    if (ctPrograms.length > 0 && ctPrograms.includes(sgInfo.program)) match = true;
+                    if (ctBoards.length === 0 && ctPrograms.length === 0) match = true;
+                    
+                    return match;
+                });
+            }
+            setData(finalData);
         } catch (err) {
             console.error('Error fetching batch-wise report:', err);
             notification.error({ message: 'Error', description: 'Failed to fetch batch-wise data.' });

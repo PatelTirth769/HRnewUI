@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, Select, Checkbox, Button, Space, Breadcrumb, notification, Divider } from 'antd';
 import { PrinterOutlined, FileTextOutlined, TeamOutlined, SettingOutlined } from '@ant-design/icons';
 import API from '../../services/api';
+import { resolveInstructorId } from '../../utility/instructorHelper';
 
 const { Option } = Select;
 
@@ -50,9 +51,39 @@ const StudentReportGenerationTool = () => {
                 API.get('/api/resource/Letter Head?limit_page_length=None'),
             ]);
 
+            let students = stdRes.data.data || [];
+            let programs = prgRes.data.data?.map(d => d.name) || [];
+
+            const userRole = localStorage.getItem('userRole');
+            if (userRole === 'Instructor') {
+                const userEmail = localStorage.getItem('user');
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","program"]&limit_page_length=None`);
+                    const ctGroups = ctRes.data.data || [];
+                    const ctGroupNames = ctGroups.map(g => g.name);
+                    const ctPrograms = Array.from(new Set(ctGroups.map(g => g.program).filter(Boolean)));
+                    
+                    let ctStudentIds = [];
+                    if (ctGroupNames.length > 0) {
+                        const groupDetailPromises = ctGroupNames.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                        const groupDetails = await Promise.all(groupDetailPromises);
+                        ctStudentIds = Array.from(new Set(
+                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                        ));
+                    }
+                    
+                    students = students.filter(s => ctStudentIds.includes(s.name));
+                    programs = programs.filter(p => ctPrograms.includes(p));
+                } else {
+                    students = [];
+                    programs = [];
+                }
+            }
+
             setMasters({
-                students: stdRes.data.data || [],
-                programs: prgRes.data.data?.map(d => d.name) || [],
+                students: students,
+                programs: programs,
                 batches: bchRes.data.data?.map(d => d.name) || [],
                 assessmentGroups: agRes.data.data?.map(d => d.name) || [],
                 academicYears: ayRes.data.data?.map(d => d.name) || [],
@@ -64,13 +95,46 @@ const StudentReportGenerationTool = () => {
         }
     };
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
         if (!form.student || !form.assessment_group || !form.program || !form.academic_year) {
             notification.warning({
                 message: 'Missing Fields',
                 description: 'Please fill in all mandatory fields (marked with *).',
             });
             return;
+        }
+        
+        const userRole = localStorage.getItem('userRole');
+        if (userRole === 'Instructor') {
+            const userEmail = localStorage.getItem('user');
+            const instructorId = await resolveInstructorId(userEmail);
+            if (instructorId) {
+                const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","program"]&limit_page_length=None`);
+                const ctGroups = ctRes.data.data || [];
+                const ctGroupNames = ctGroups.map(g => g.name);
+                const ctPrograms = Array.from(new Set(ctGroups.map(g => g.program).filter(Boolean)));
+                
+                let ctStudentIds = [];
+                if (ctGroupNames.length > 0) {
+                    const groupDetailPromises = ctGroupNames.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                    const groupDetails = await Promise.all(groupDetailPromises);
+                    ctStudentIds = Array.from(new Set(
+                        groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                    ));
+                }
+                
+                if (form.student && !ctStudentIds.includes(form.student)) {
+                    notification.error({ message: 'Access Denied', description: 'This student does not belong to your class-teacher groups.' });
+                    return;
+                }
+                if (form.program && !ctPrograms.includes(form.program)) {
+                    notification.error({ message: 'Access Denied', description: 'You are not the class teacher of this program.' });
+                    return;
+                }
+            } else {
+                notification.error({ message: 'Access Denied', description: 'Instructor not identified.' });
+                return;
+            }
         }
         
         setLoading(true);

@@ -20,14 +20,18 @@ export function useUserRole() {
     const isStudent = userRole === 'Student';
     const isInstructor = userRole === 'Instructor';
     const isGuardian = userRole === 'Guardian';
+    const isAttendanceManager = userRole === 'Attendance manager';
+    const isCoordinator = userRole === 'Coordinator';
 
     return {
         isAdmin,
-        isEmployee: !isAdmin && !isInventory && !isAccounts && !isStudent && !isInstructor && !isGuardian,
+        isEmployee: !isAdmin && !isInventory && !isAccounts && !isStudent && !isInstructor && !isGuardian && !isAttendanceManager && !isCoordinator,
         isInventory,
         isAccounts,
         isStudent,
         isInstructor,
         isGuardian,
+        isAttendanceManager,
+        isCoordinator,
     };
 }

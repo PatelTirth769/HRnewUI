@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const emptyForm = () => ({
     guardian_name: '',
@@ -18,6 +21,9 @@ const emptyForm = () => ({
 });
 
 const Guardian = () => {
+    const userRole = localStorage.getItem('userRole');
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -33,6 +39,7 @@ const Guardian = () => {
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchGuardians();
         } else {
@@ -42,14 +49,98 @@ const Guardian = () => {
                 setForm(emptyForm());
             }
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     const fetchGuardians = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number","occupation"]&limit_page_length=None&order_by=modified desc';
-            const response = await API.get(url);
-            setGuardians(response.data.data || []);
+            const userEmail = localStorage.getItem('user');
+
+            if (userRole === 'Instructor') {
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const studentIds = groupDetails.studentIds;
+
+                    if (studentIds.length > 0) {
+                        try {
+                            const filterUri = `/api/resource/Guardian?filters=[["Guardian Student","student","in",${JSON.stringify(studentIds)}]]&fields=["name","guardian_name","email_address","mobile_number","occupation"]&limit_page_length=None&order_by=modified desc`;
+                            const response = await API.get(filterUri);
+                            setGuardians(response.data.data || []);
+                        } catch (filterErr) {
+                            console.warn("Child table filter failed, falling back to local filtration:", filterErr.message);
+                            const response = await API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number","occupation"]&limit_page_length=None&order_by=modified desc');
+                            const allGuardians = response.data.data || [];
+
+                            const studentDetailPromises = studentIds.map(id => API.get(`/api/resource/Student/${encodeURIComponent(id)}`));
+                            const studentDetails = await Promise.all(studentDetailPromises);
+                            const guardianIds = Array.from(new Set(
+                                studentDetails.flatMap(res => (res.data.data?.guardians || []).map(g => g.guardian).filter(Boolean))
+                            ));
+
+                            const filtered = allGuardians.filter(g => guardianIds.includes(g.name));
+                            setGuardians(filtered);
+                        }
+                    } else {
+                        setGuardians([]);
+                    }
+                } else {
+                    setGuardians([]);
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                // Coordinator: fetch students in assigned programs, then get their guardians
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+
+                if (ctPrograms.length > 0 || ctBoards.length > 0) {
+                    try {
+                        // Get students enrolled in coordinator's programs
+                        let enrollFilter = [];
+                        if (ctPrograms.length > 0) {
+                            enrollFilter.push(["program", "in", ctPrograms]);
+                        }
+                        const enrollRes = await API.get(`/api/resource/Program Enrollment?filters=${JSON.stringify(enrollFilter)}&fields=["student"]&limit_page_length=None`);
+                        const studentIds = [...new Set((enrollRes.data.data || []).map(e => e.student))];
+
+                        if (studentIds.length > 0) {
+                            // Try child table filter first
+                            try {
+                                const filterUri = `/api/resource/Guardian?filters=[["Guardian Student","student","in",${JSON.stringify(studentIds)}]]&fields=["name","guardian_name","email_address","mobile_number","occupation"]&limit_page_length=None&order_by=modified desc`;
+                                const response = await API.get(filterUri);
+                                setGuardians(response.data.data || []);
+                            } catch (filterErr) {
+                                // Fallback: fetch all guardians and filter locally
+                                const response = await API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number","occupation"]&limit_page_length=None&order_by=modified desc');
+                                const allGuardians = response.data.data || [];
+                                const batchSize = 10;
+                                const guardianIds = new Set();
+                                for (let i = 0; i < studentIds.length; i += batchSize) {
+                                    const batch = studentIds.slice(i, i + batchSize);
+                                    const promises = batch.map(id => API.get(`/api/resource/Student/${encodeURIComponent(id)}`).catch(() => null));
+                                    const results = await Promise.all(promises);
+                                    results.forEach(res => {
+                                        if (res?.data?.data?.guardians) {
+                                            res.data.data.guardians.forEach(g => { if (g.guardian) guardianIds.add(g.guardian); });
+                                        }
+                                    });
+                                }
+                                setGuardians(allGuardians.filter(g => guardianIds.has(g.name)));
+                            }
+                        } else {
+                            setGuardians([]);
+                        }
+                    } catch (err) {
+                        console.error('Coordinator guardian fetch error:', err);
+                        setGuardians([]);
+                    }
+                } else {
+                    setGuardians([]);
+                }
+            } else {
+                const url = '/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number","occupation"]&limit_page_length=None&order_by=modified desc';
+                const response = await API.get(url);
+                setGuardians(response.data.data || []);
+            }
         } catch (err) {
             console.error('Error fetching guardians:', err);
         } finally {
@@ -164,9 +255,11 @@ const Guardian = () => {
                         <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 flex items-center gap-2 transition" onClick={fetchGuardians} disabled={loadingList}>
                             {loadingList ? '⟳ Loading...' : '⟳ Refresh'}
                         </button>
-                        <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium" onClick={() => { setEditingRecord(null); setView('form'); }}>
-                            + Add Guardian
-                        </button>
+                        {userRole !== 'Instructor' && (
+                            <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium" onClick={() => { setEditingRecord(null); setView('form'); }}>
+                                + Add Guardian
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -241,12 +334,14 @@ const Guardian = () => {
                     <button className="p-2 border border-blue-400 bg-white text-blue-600 rounded-md hover:bg-blue-50 transition" onClick={() => setView('list')} title="Go Back">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                     </button>
-                    {editingRecord && (
+                    {editingRecord && userRole !== 'Instructor' && (
                         <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition shadow-sm" onClick={handleDelete}>Delete</button>
                     )}
-                    <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving}>
-                        {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save'}
-                    </button>
+                    {userRole !== 'Instructor' && (
+                        <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving}>
+                            {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save'}
+                        </button>
+                    )}
                 </div>
             </div>
 

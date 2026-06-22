@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { notification, Select } from 'antd';
+import { notification as staticNotification, Select } from 'antd';
 import API from '../../services/api';
+import { resolveInstructorId } from '../../utility/instructorHelper';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const { Option } = Select;
 
@@ -41,6 +44,10 @@ const emptyForm = () => ({
 });
 
 const StudentGroup = () => {
+    const [notification, contextHolder] = staticNotification.useNotification();
+    const userRole = localStorage.getItem('userRole');
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -80,6 +87,7 @@ const StudentGroup = () => {
     const [selectedStudentIndices, setSelectedStudentIndices] = useState([]);
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchGroups();
         } else {
@@ -91,9 +99,10 @@ const StudentGroup = () => {
                 setForm(emptyForm());
             }
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'form') {
             const fetchFilteredStudents = async () => {
                 if (!form.academic_year) {
@@ -154,14 +163,34 @@ const StudentGroup = () => {
         } else {
             setFilteredStudentsList([]);
         }
-    }, [form.academic_year, form.academic_term, form.program, form.batch, form.student_category, form.course, form.group_based_on, form.custom_board, studentsList, view]);
+    }, [form.academic_year, form.academic_term, form.program, form.batch, form.student_category, form.course, form.group_based_on, form.custom_board, studentsList, view, isCoordinator, coordinatorScope.loading]);
 
     const fetchGroups = async () => {
         try {
             setLoadingList(true);
+            const userEmail = localStorage.getItem('user');
+
             const url = '/api/resource/Student Group?fields=["name","student_group_name","academic_year","academic_term","group_based_on","program","custom_board","batch","max_strength","disabled","custom_class_teacher"]&limit_page_length=None&order_by=modified desc';
             const response = await API.get(url);
-            const groupData = response.data.data || [];
+            let groupData = response.data.data || [];
+
+            if (userRole === 'Instructor') {
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    groupData = groupData.filter(g => g.custom_class_teacher === instructorId);
+                } else {
+                    groupData = [];
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    groupData = groupData.filter(g => ctPrograms.includes(g.program));
+                } else if (ctBoards.length > 0) {
+                    groupData = groupData.filter(g => ctBoards.includes(g.custom_board));
+                }
+            }
+
             setGroups(groupData);
 
             // Fetch student counts per group asynchronously by fetching the individual records
@@ -359,6 +388,10 @@ const StudentGroup = () => {
 
     // --- Students Child Table Helpers ---
     const addStudentRow = () => {
+        if (form.max_strength > 0 && form.students.length >= form.max_strength) {
+            notification.error({ message: 'Student group limit reached please add in another student group.' });
+            return;
+        }
         setForm(prev => ({
             ...prev,
             students: [...prev.students, { student: '', student_name: '', group_roll_number: String(prev.students.length + 1), active: 1 }]
@@ -467,12 +500,17 @@ const StudentGroup = () => {
                 return;
             }
 
-            const newStudents = fetchedStudents.map((s, idx) => ({
+            let newStudents = fetchedStudents.map((s, idx) => ({
                 student: s.student,
                 student_name: s.student_name || s.student,
                 group_roll_number: String(idx + 1),
                 active: 1
             }));
+
+            if (form.max_strength > 0 && newStudents.length > form.max_strength) {
+                notification.error({ message: 'Student group limit reached please add in another student group.' });
+                newStudents = newStudents.slice(0, form.max_strength);
+            }
 
             setForm(prev => ({
                 ...prev,
@@ -518,21 +556,25 @@ const StudentGroup = () => {
             );
         });
 
-        const programOptions = [...new Set(groups.map(g => g.program).filter(Boolean))].sort();
+        const programOptionsGroups = filterBoard !== 'All' ? groups.filter(g => g.custom_board === filterBoard) : groups;
+        const programOptions = [...new Set(programOptionsGroups.map(g => g.program).filter(Boolean))].sort();
         const yearOptions = [...new Set(groups.map(g => g.academic_year).filter(Boolean))].sort();
         const boardOptions = boards.length > 0 ? boards : [...new Set(groups.map(g => g.custom_board).filter(Boolean))].sort();
 
         return (
             <div className="p-6">
+                {contextHolder}
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-semibold text-gray-800">Student Group</h1>
                     <div className="flex gap-2">
                         <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 flex items-center gap-2 transition" onClick={fetchGroups} disabled={loadingList}>
                             {loadingList ? '⟳ Loading...' : '⟳ Refresh'}
                         </button>
-                        <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium" onClick={() => { setEditingRecord(null); setView('form'); }}>
-                            + Add Student Group
-                        </button>
+                        {userRole !== 'Instructor' && (
+                            <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium" onClick={() => { setEditingRecord(null); setView('form'); }}>
+                                + Add Student Group
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -563,7 +605,10 @@ const StudentGroup = () => {
                             <label className="text-[13px] font-bold text-gray-700 uppercase tracking-wider">Board</label>
                             <select
                                 value={filterBoard}
-                                onChange={(e) => setFilterBoard(e.target.value)}
+                                onChange={(e) => {
+                                    setFilterBoard(e.target.value);
+                                    setFilterProgram('All');
+                                }}
                                 className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 outline-none bg-white w-full"
                             >
                                 <option value="All">All Boards</option>
@@ -712,6 +757,7 @@ const StudentGroup = () => {
     if (loadingForm) {
         return (
             <div className="p-6 max-w-5xl mx-auto">
+                {contextHolder}
                 <div className="text-center py-20 text-gray-400 italic font-medium">Loading student group data...</div>
             </div>
         );
@@ -719,6 +765,7 @@ const StudentGroup = () => {
 
     return (
         <div className="p-6 max-w-5xl mx-auto">
+            {contextHolder}
             <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-200">
                 <div className="flex items-center gap-2">
                     <span className="text-xl font-bold text-gray-900">{editingRecord ? editingRecord : 'New Student Group'}</span>
@@ -734,12 +781,14 @@ const StudentGroup = () => {
                     <button className="p-2 border border-blue-400 bg-white text-blue-600 rounded-md hover:bg-blue-50 transition" onClick={() => setView('list')} title="Go Back">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                     </button>
-                    {editingRecord && (
+                    {editingRecord && userRole !== 'Instructor' && (
                         <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition shadow-sm" onClick={handleDelete}>Delete</button>
                     )}
-                    <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving}>
-                        {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save'}
-                    </button>
+                    {userRole !== 'Instructor' && (
+                        <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving}>
+                            {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save'}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -949,20 +998,26 @@ const StudentGroup = () => {
                                                             onChange={(e) => {
                                                                 if (e.target.checked) {
                                                                     const unalloc = filteredStudentsList.filter(s => !studentAllocations[s.name]);
-                                                                    setForm(prev => {
-                                                                        const newStudents = [...prev.students];
-                                                                        unalloc.forEach(s => {
-                                                                            if (!newStudents.some(st => st.student === s.name)) {
-                                                                                newStudents.push({
-                                                                                    student: s.name,
-                                                                                    student_name: s.student_name,
-                                                                                    group_roll_number: String(newStudents.length + 1),
-                                                                                    active: 1
-                                                                                });
+                                                                    let newStudents = [...form.students];
+                                                                    let limitReached = false;
+                                                                    unalloc.forEach(s => {
+                                                                        if (!newStudents.some(st => st.student === s.name)) {
+                                                                            if (form.max_strength > 0 && newStudents.length >= form.max_strength) {
+                                                                                limitReached = true;
+                                                                                return;
                                                                             }
-                                                                        });
-                                                                        return { ...prev, students: newStudents };
+                                                                            newStudents.push({
+                                                                                student: s.name,
+                                                                                student_name: s.student_name,
+                                                                                group_roll_number: String(newStudents.length + 1),
+                                                                                active: 1
+                                                                            });
+                                                                        }
                                                                     });
+                                                                    if (limitReached) {
+                                                                        notification.error({ message: 'Student group limit reached please add in another student group.' });
+                                                                    }
+                                                                    setForm(prev => ({ ...prev, students: newStudents }));
                                                                 } else {
                                                                     const unallocIds = filteredStudentsList.filter(s => !studentAllocations[s.name]).map(s => s.name);
                                                                     setForm(prev => ({
@@ -985,24 +1040,28 @@ const StudentGroup = () => {
                                             style={{ minWidth: '280px', maxWidth: '400px' }}
                                             placeholder="Search and add multiple..."
                                             value={[]}
-                                            onChange={selectedValues => {
-                                                if (selectedValues && selectedValues.length > 0) {
-                                                    setForm(prev => {
-                                                        const newStudents = [...prev.students];
-                                                        selectedValues.forEach(val => {
-                                                            if (!newStudents.some(st => st.student === val)) {
-                                                                const found = studentsList.find(st => st.name === val);
-                                                                newStudents.push({
-                                                                    student: val,
-                                                                    student_name: found ? found.student_name : '',
-                                                                    group_roll_number: String(newStudents.length + 1),
-                                                                    active: 1
-                                                                });
-                                                            }
-                                                        });
-                                                        return { ...prev, students: newStudents };
-                                                    });
+                                            onSelect={val => {
+                                                if (form.max_strength > 0 && form.students.length >= form.max_strength) {
+                                                    notification.error({ message: 'Student group limit reached please add in another student group.' });
+                                                    return;
                                                 }
+                                                if (form.students.some(st => st.student === val)) {
+                                                    notification.info({ message: 'Student already added.' });
+                                                    return;
+                                                }
+                                                const found = studentsList.find(st => st.name === val);
+                                                setForm(prev => ({
+                                                    ...prev,
+                                                    students: [
+                                                        ...prev.students,
+                                                        {
+                                                            student: val,
+                                                            student_name: found ? found.student_name : '',
+                                                            group_roll_number: String(prev.students.length + 1),
+                                                            active: 1
+                                                        }
+                                                    ]
+                                                }));
                                             }}
                                             showSearch
                                             optionFilterProp="children"

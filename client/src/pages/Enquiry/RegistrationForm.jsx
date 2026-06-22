@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { notification, Spin, Tabs, Modal } from 'antd';
+import { notification, Spin, Tabs, Modal, Select } from 'antd';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import API from '../../services/api';
@@ -674,7 +674,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 parent_name: (formData.guardians?.[0]?.guardian_name) || '',
                 parent_mobile: formData.student_mobile_number || '',
                 parent_email: formData.student_email_id || '',
-            });
+            }, { withCredentials: true });
             if (res.data.success) {
                 setFormData(prev => ({
                     ...prev,
@@ -986,10 +986,23 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 console.error('Validation failed:', erpErr);
             }
 
+            // Data Sanitization to prevent Old Student status getting stuck
+            let sanitizedFormData = { ...formData };
+            if (sanitizedFormData.fees_status === 'unpaid') {
+                sanitizedFormData.isFeePaid = false;
+                if (sanitizedFormData.paymentMode === 'Old Student') {
+                    sanitizedFormData.paymentMode = 'Cash';
+                }
+            }
+            if (sanitizedFormData.academic_year !== '2025-2026' && sanitizedFormData.academic_year !== '2025-26') {
+                if (sanitizedFormData.fees_status === 'old student') sanitizedFormData.fees_status = 'unpaid';
+                if (sanitizedFormData.paymentMode === 'Old Student') sanitizedFormData.paymentMode = 'Cash';
+            }
+
             // 2. Save to Firebase (local storage)
             const colRef = collection(db, REGISTRATIONS_PATH);
             const finalData = {
-                ...formData,
+                ...sanitizedFormData,
                 erp_student_id: erpNextStudentName,
                 updated_at: serverTimestamp()
             };
@@ -1638,10 +1651,13 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     return cleaned;
                 });
 
-                // --- Validate headers ---
+                // --- Deep Validation ---
                 const fileHeaders = Object.keys(cleanedJsonData[0] || {});
-                const issueRows = [];
+                const validationErrors = [];
+                const maxErrorsToShow = 15;
+
                 cleanedJsonData.forEach((row, idx) => {
+                    const rowNum = idx + 2; // +2 for header row + 1-index
                     const academicYear = String(row['Academic Year'] || row['academic_year'] || '').trim();
                     const program = String(row['Program (Class)'] || row['Program'] || row['program'] || '').trim();
                     const firstName = String(row['First Name'] || row['first_name'] || '').trim();
@@ -1650,11 +1666,50 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     const gRelation = String(row['Guardian Relation'] || row['guardian_relation'] || '').trim();
                     const gName = String(row['Guardian Name'] || row['guardian_name'] || '').trim();
                     const gMobile = String(row['Guardian Mobile'] || row['guardian_mobile'] || '').trim();
+                    const rawDob = row['Date of Birth'] || row['date_of_birth'];
+                    const rawGuardianDob = row['Guardian Date of Birth'] || row['guardian_date_of_birth'];
 
-                    if (!academicYear || !program || !firstName || !gender || !mobile || !gRelation || !gName || !gMobile) {
-                        issueRows.push(idx + 2); // +2 for header row + 1-index
+                    if (!academicYear) validationErrors.push(`Row ${rowNum}: Missing Academic Year`);
+                    if (!program) validationErrors.push(`Row ${rowNum}: Missing Program (Class)`);
+                    if (!firstName) validationErrors.push(`Row ${rowNum}: Missing First Name`);
+                    if (!gender) validationErrors.push(`Row ${rowNum}: Missing Gender`);
+                    if (!mobile) validationErrors.push(`Row ${rowNum}: Missing Student Mobile Number`);
+                    if (!gRelation) validationErrors.push(`Row ${rowNum}: Missing Guardian Relation`);
+                    if (!gName) validationErrors.push(`Row ${rowNum}: Missing Guardian Name`);
+                    if (!gMobile) validationErrors.push(`Row ${rowNum}: Missing Guardian Mobile`);
+
+                    if (gender && !['Male', 'Female', 'Other'].includes(gender)) {
+                        validationErrors.push(`Row ${rowNum}: Invalid Gender '${gender}'. Must be Male, Female, or Other.`);
+                    }
+                    if (gRelation && !['Father', 'Mother', 'Others'].includes(gRelation)) {
+                        validationErrors.push(`Row ${rowNum}: Invalid Guardian Relation '${gRelation}'. Must be Father, Mother, or Others.`);
+                    }
+
+                    const validateDateFormat = (d, fieldName) => {
+                        if (!d) return;
+                        if (typeof d === 'number') return; // Excel serial date is valid
+                        const dStr = String(d).trim();
+                        if (!/^\d{4}-\d{2}-\d{2}$/.test(dStr) && !/^\d{2}-\d{2}-\d{4}$/.test(dStr)) {
+                            validationErrors.push(`Row ${rowNum}: Invalid ${fieldName} '${dStr}'. Expected format YYYY-MM-DD or DD-MM-YYYY.`);
+                        }
+                    };
+                    validateDateFormat(rawDob, 'Date of Birth');
+                    validateDateFormat(rawGuardianDob, 'Guardian Date of Birth');
+
+                    const bloodGroup = String(row['Blood Group'] || row['blood_group'] || '').trim();
+                    if (bloodGroup && !['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].includes(bloodGroup.replace(/\s+/g, '').toUpperCase())) {
+                        validationErrors.push(`Row ${rowNum}: Invalid Blood Group '${bloodGroup}'.`);
                     }
                 });
+
+                if (validationErrors.length > 0) {
+                    setParsing(false);
+                    const displayedErrors = validationErrors.slice(0, maxErrorsToShow);
+                    const errorMsg = displayedErrors.join('\n') + (validationErrors.length > maxErrorsToShow ? `\n...and ${validationErrors.length - maxErrorsToShow} more errors.` : '');
+                    
+                    window.alert(`Import Failed - Data Validation Errors:\n\nPlease fix these issues in your Excel file and try again.\n\n${errorMsg}`);
+                    return; // Abort parse, do not populate preview
+                }
 
                 // --- Auto-generate emails for missing student & guardian emails ---
                 const tempStudentEmails = [];
@@ -1705,20 +1760,11 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
                 const rowCount = cleanedJsonData.length;
                 const colCount = fileHeaders.length;
-
-                if (issueRows.length > 0) {
-                    api.warning({
-                        message: `⚠️ Parse Success with Issues`,
-                        description: `${rowCount} rows · ${colCount} columns detected. ${issueRows.length} row(s) missing required fields (Academic Year / Program / First Name / Gender / Mobile / Guardian Details). Row(s) ${issueRows.slice(0, 5).join(', ')}${issueRows.length > 5 ? '...' : ''}. These will fail on import.`,
-                        duration: 8
-                    });
-                } else {
-                    api.success({
-                        message: `✅ File Parsed Successfully`,
-                        description: `${rowCount} rows · ${colCount} columns detected. Emails auto-generated where missing.`,
-                        duration: 5
-                    });
-                }
+                api.success({
+                    message: `✅ File Parsed Successfully`,
+                    description: `${rowCount} rows · ${colCount} columns detected. Emails auto-generated where missing.`,
+                    duration: 5
+                });
             } catch (err) {
                 console.error(err);
                 setParsing(false);
@@ -2240,10 +2286,19 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                         if (!next.receiptNo) {
                                             next.receiptNo = `OLD-${Date.now().toString().slice(-6)}`;
                                         }
+                                    } else {
+                                        if (next.fees_status === 'old student' || next.paymentMode === 'Old Student') {
+                                            next.fees_status = 'unpaid';
+                                            next.isFeePaid = false;
+                                            next.paymentMode = 'Cash';
+                                            if (next.receiptNo && next.receiptNo.startsWith('OLD-')) {
+                                                next.receiptNo = '';
+                                            }
+                                        }
                                     }
                                     return next;
                                 });
-                            }} 
+                            }}
                         />
                         <SelectField 
                             label="Board" 
@@ -2399,10 +2454,22 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                         <>
                                             <div>
                                                 <label className="text-[13px] font-semibold text-gray-700 mb-1 block">Select Guardian *</label>
-                                                <select className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" value={g.guardian || ''} onChange={e => updateGuardian(idx, 'guardian', e.target.value)}>
-                                                    <option value="">Link Guardian...</option>
-                                                    {guardiansList.map(gl => <option key={gl.name} value={gl.name}>{gl.name} ({gl.guardian_name})</option>)}
-                                                </select>
+                                                <Select
+                                                    showSearch
+                                                    placeholder="Link Guardian..."
+                                                    className="w-full"
+                                                    value={g.guardian || undefined}
+                                                    onChange={v => updateGuardian(idx, 'guardian', v || '')}
+                                                    filterOption={(input, option) =>
+                                                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()) ||
+                                                        (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                                                    }
+                                                    options={guardiansList.map(gl => ({
+                                                        value: gl.name,
+                                                        label: `${gl.name} (${gl.guardian_name})`
+                                                    }))}
+                                                    allowClear
+                                                />
                                             </div>
                                             <div>
                                                 <InputField label="Guardian Name" value={g.guardian_name || ''} disabled={true} />
@@ -2706,6 +2773,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                         next.receiptNo = '';
                                         next.paymentId = '';
                                         next.paymentDate = '';
+                                        if (next.paymentMode === 'Old Student') {
+                                            next.paymentMode = 'Cash';
+                                        }
                                     }
                                     return next;
                                 });

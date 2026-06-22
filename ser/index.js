@@ -14,10 +14,11 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 app.use(cors({
-    origin: true, // This allows any origin (like localhost and your live domain) to connect
+    origin: true,
     credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.get('/', (req, res) => res.send('Resume Parser Server Running'));
 
@@ -56,6 +57,22 @@ app.use('/api', require('./routes/employeeRoutes'));
 app.use('/payment', require('./routes/payment'));
 app.use('/admission-payment', require('./routes/admissionPayment'));
 app.use('/api/s3', require('./routes/s3'));
+
+// ─── Global 404 Handler ───────────────────────────────────────────────────────
+app.use((req, res) => {
+    res.status(404).json({ error: 'Route not found', path: req.originalUrl });
+});
+
+// ─── Global Error Handler (prevents server crash on unhandled route errors) ───
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+    console.error('[Express Global Error Handler]', err.message || err);
+    const status = err.status || err.statusCode || 500;
+    res.status(status).json({
+        error: 'Internal Server Error',
+        message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message
+    });
+});
 
 const PORT = process.env.PORT || 3636;
 const useMongo = String(process.env.USE_MONGO || '').toLowerCase() === 'true';

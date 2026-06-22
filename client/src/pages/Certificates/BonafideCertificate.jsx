@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import API from '../../services/api';
 import { 
@@ -11,7 +11,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import html2pdf from 'html2pdf.js';
-import schoolHeader from '../../assets/images/school_header.jpg';
+import schoolHeader from '../../assets/images/newheader.jpeg';
 
 const { Title, Text } = Typography;
 const RECORDS_PATH = 'schooler_system/certificates/records';
@@ -132,7 +132,7 @@ export default function BonafideCertificate() {
         }
         setLoadingProgramStudents(true);
         try {
-            const fieldsList = JSON.stringify(["name", "student_name", "first_name", "middle_name", "last_name", "gender", "date_of_birth", "program", "roll_number", "gr_number"]);
+            const fieldsList = JSON.stringify(["name", "student_name", "first_name", "middle_name", "last_name", "gender", "date_of_birth", "program", "roll_number", "gr_number", "student_email_id"]);
             const filters = JSON.stringify([["program", "=", programName]]);
             const res = await API.get(`/api/resource/Student?filters=${filters}&fields=${fieldsList}&limit_page_length=1000`);
             const programStudents = res.data?.data || [];
@@ -230,7 +230,7 @@ export default function BonafideCertificate() {
             }
 
             const studentIds = groupStudents.map(s => s.student);
-            const fieldsList = JSON.stringify(["name", "student_name", "first_name", "middle_name", "last_name", "gender", "date_of_birth", "program", "roll_number", "gr_number"]);
+            const fieldsList = JSON.stringify(["name", "student_name", "first_name", "middle_name", "last_name", "gender", "date_of_birth", "program", "roll_number", "gr_number", "student_email_id"]);
             const filters = JSON.stringify([["name", "in", studentIds]]);
             const profileRes = await API.get(`/api/resource/Student?filters=${filters}&fields=${fieldsList}&limit_page_length=1000`);
 
@@ -318,7 +318,7 @@ export default function BonafideCertificate() {
                 ...additionalFilters
             ];
             const res = await API.get(
-                `/api/resource/Student?filters=${JSON.stringify(filters)}&fields=["name","student_name","first_name","middle_name","last_name","gender","date_of_birth","program","roll_number","gr_number"]&limit_page_length=20`
+                `/api/resource/Student?filters=${JSON.stringify(filters)}&fields=["name","student_name","first_name","middle_name","last_name","gender","date_of_birth","program","roll_number","gr_number","student_email_id"]&limit_page_length=20`
             );
             setStudents(res.data.data || []);
         } catch (err) {
@@ -328,15 +328,48 @@ export default function BonafideCertificate() {
         }
     };
 
-    // Auto-fill values and configure pronouns when a student is selected
-    const handleStudentSelect = (studentId) => {
+    const handleStudentSelect = async (studentId) => {
         const student = students.find(s => s.name === studentId);
         if (!student) return;
 
-        const fullName = student.student_name || `${student.first_name || ''} ${student.middle_name || ''} ${student.last_name || ''}`.trim();
+        let fullName = student.student_name || `${student.first_name || ''} ${student.middle_name || ''} ${student.last_name || ''}`.trim();
         const grNo = student.gr_number || '';
         const rollNo = student.roll_number || '';
+        let caste = '';
+        let subCaste = ' - ';
         
+        // Try to fetch caste from Firebase Registration data
+        try {
+            const enqRef = collection(db, 'schooler_system/enquiry_management/registrations');
+            let q;
+            if (student.student_email_id) {
+                q = query(enqRef, where('student_email_id', '==', student.student_email_id), limit(1));
+            } else if (student.first_name) {
+                // Query only by first_name to avoid issues with null vs empty string on last_name
+                q = query(enqRef, where('first_name', '==', student.first_name));
+            }
+            if (q) {
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    const docs = snap.docs.map(d => d.data());
+                    let bestMatch = docs[0];
+                    // If multiple matches, try to find the one with the same date of birth
+                    if (docs.length > 1 && student.date_of_birth) {
+                        const exactMatch = docs.find(d => d.date_of_birth === student.date_of_birth);
+                        if (exactMatch) bestMatch = exactMatch;
+                    }
+                    
+                    caste = bestMatch.caste || '';
+                    subCaste = bestMatch.sub_caste || ' - ';
+                    if (bestMatch.student_full_name) {
+                        fullName = bestMatch.student_full_name;
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching data from Firebase', err);
+        }
+
         // Extract a clean class/standard name if possible
         const std = student.program || '';
 
@@ -373,6 +406,8 @@ export default function BonafideCertificate() {
             grNo,
             rollNo,
             std,
+            caste,
+            subCaste,
             gender: student.gender || '',
             dateOfBirth: dob,
             prefix,
@@ -391,6 +426,8 @@ export default function BonafideCertificate() {
             grNo,
             rollNo,
             std,
+            caste,
+            subCaste,
             gender: student.gender || '',
             dob
         }));

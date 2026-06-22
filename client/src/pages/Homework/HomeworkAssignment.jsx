@@ -44,12 +44,16 @@ import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
 import API from '../../services/api';
 import { useUserRole } from '../../hooks/useUserRole';
+import { useInstructorGroups } from '../../hooks/useInstructorGroups';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const HOMEWORK_PATH = 'schooler_system/homework_management/assignments';
 
 export default function HomeworkAssignment() {
-    const { isAdmin, isInstructor, isStudent, isGuardian } = useUserRole();
-    const isWriteAllowed = isAdmin || isInstructor;
+    const { isAdmin, isInstructor, isStudent, isGuardian, isCoordinator } = useUserRole();
+    const isWriteAllowed = isAdmin || isInstructor || isCoordinator;
+    const instructorData = useInstructorGroups();
+    const coordinatorScope = useCoordinatorScope();
 
     const [assignments, setAssignments] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -123,9 +127,10 @@ export default function HomeworkAssignment() {
     };
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         fetchAssignments();
         fetchMasters();
-    }, []);
+    }, [isCoordinator, coordinatorScope.loading]);
 
     // Handle form submit
     const handleSubmit = async (values) => {
@@ -228,6 +233,17 @@ export default function HomeworkAssignment() {
     // Filter assignments
     const filteredAssignments = useMemo(() => {
         return assignments.filter(item => {
+            if (isCoordinator) {
+                if (coordinatorScope.loading) return false;
+                if (!item.program || !coordinatorScope.programs.includes(item.program)) {
+                    return false;
+                }
+            } else if (isInstructor) {
+                if (instructorData.loading) return false;
+                if (!item.studentGroup || !instructorData.studentGroups.includes(item.studentGroup)) {
+                    return false;
+                }
+            }
             const matchesBoard = !filterBoard || item.board === filterBoard;
             const matchesProgram = !filterProgram || item.program === filterProgram;
             const matchesGroup = !filterGroup || item.studentGroup === filterGroup;
@@ -241,32 +257,61 @@ export default function HomeworkAssignment() {
             
             return matchesBoard && matchesProgram && matchesGroup && matchesSubject && matchesStatus && matchesSearch;
         });
-    }, [assignments, filterBoard, filterProgram, filterGroup, filterSubject, filterStatus, searchQuery]);
+    }, [assignments, filterBoard, filterProgram, filterGroup, filterSubject, filterStatus, searchQuery, isInstructor, instructorData, isCoordinator, coordinatorScope]);
+
+    const allowedBoards = useMemo(() => {
+        if (isAdmin) return boards;
+        if (isCoordinator) {
+            if (coordinatorScope.loading) return [];
+            return boards.filter(b => coordinatorScope.boards.includes(b.name));
+        }
+        if (!isInstructor) return boards;
+        const instProgs = programs.filter(p => instructorData.programs.includes(p.name));
+        const instBoards = instProgs.map(p => p.custom_board).filter(Boolean);
+        return boards.filter(b => instBoards.includes(b.name));
+    }, [boards, programs, isInstructor, instructorData, isAdmin, isCoordinator, coordinatorScope]);
 
     const selectedBoard = Form.useWatch('board', form);
 
     const filteredPrograms = useMemo(() => {
-        if (!selectedBoard) return [];
-        return programs.filter(p => {
+        let list = programs;
+        if (isCoordinator) {
+            if (coordinatorScope.loading) return [];
+            list = list.filter(p => coordinatorScope.programs.includes(p.name));
+        } else if (isInstructor) {
+            list = list.filter(p => instructorData.programs.includes(p.name));
+        }
+        if (!selectedBoard) return (isInstructor || isCoordinator) ? list : [];
+        return list.filter(p => {
             const pBoard = (p.custom_board || '').toString().trim().toLowerCase();
             const fBoard = (selectedBoard || '').toString().trim().toLowerCase();
             return pBoard === fBoard;
         });
-    }, [programs, selectedBoard]);
+    }, [programs, selectedBoard, isInstructor, instructorData, isCoordinator, coordinatorScope]);
 
     const filterProgramsList = useMemo(() => {
-        if (!filterBoard) return programs;
-        return programs.filter(p => {
+        let list = programs;
+        if (isCoordinator) {
+            if (coordinatorScope.loading) return [];
+            list = list.filter(p => coordinatorScope.programs.includes(p.name));
+        } else if (isInstructor) {
+            list = list.filter(p => instructorData.programs.includes(p.name));
+        }
+        if (!filterBoard) return list;
+        return list.filter(p => {
             const pBoard = (p.custom_board || '').toString().trim().toLowerCase();
             const fBoard = (filterBoard || '').toString().trim().toLowerCase();
             return pBoard === fBoard;
         });
-    }, [programs, filterBoard]);
+    }, [programs, filterBoard, isInstructor, instructorData, isCoordinator, coordinatorScope]);
 
     const selectedProgram = Form.useWatch('program', form);
 
     const filteredStudentGroups = useMemo(() => {
         let groups = studentGroups;
+        if (isInstructor) {
+            groups = groups.filter(sg => instructorData.studentGroups.includes(sg.name));
+        }
         if (selectedProgram) {
             groups = groups.filter(sg => sg.program === selectedProgram);
         } else if (selectedBoard) {
@@ -278,10 +323,13 @@ export default function HomeworkAssignment() {
             });
         }
         return groups;
-    }, [studentGroups, programs, selectedBoard, selectedProgram]);
+    }, [studentGroups, programs, selectedBoard, selectedProgram, isInstructor, instructorData]);
 
     const filterStudentGroupsList = useMemo(() => {
         let groups = studentGroups;
+        if (isInstructor) {
+            groups = groups.filter(sg => instructorData.studentGroups.includes(sg.name));
+        }
         if (filterProgram) {
             groups = groups.filter(sg => sg.program === filterProgram);
         } else if (filterBoard) {
@@ -293,7 +341,7 @@ export default function HomeworkAssignment() {
             });
         }
         return groups;
-    }, [studentGroups, programs, filterBoard, filterProgram]);
+    }, [studentGroups, programs, filterBoard, filterProgram, isInstructor, instructorData]);
 
 
     // Reset all filters
@@ -540,7 +588,7 @@ export default function HomeworkAssignment() {
                             showSearch
                             optionFilterProp="children"
                         >
-                            {boards.map(b => (
+                            {allowedBoards.map(b => (
                                 <Select.Option key={b.name} value={b.name}>{b.name}</Select.Option>
                             ))}
                         </Select>
@@ -618,7 +666,7 @@ export default function HomeworkAssignment() {
                 <Table
                     columns={columns}
                     dataSource={filteredAssignments}
-                    loading={loading || loadingMasters}
+                    loading={loading || loadingMasters || (isCoordinator ? coordinatorScope.loading : false)}
                     rowKey="id"
                     pagination={{ 
                         pageSize: 10,
@@ -677,7 +725,7 @@ export default function HomeworkAssignment() {
                                 allowClear
                                 onChange={() => form.setFieldsValue({ program: undefined, studentGroup: undefined })}
                             >
-                                {boards.map(b => (
+                                {allowedBoards.map(b => (
                                     <Select.Option key={b.name} value={b.name}>{b.name}</Select.Option>
                                 ))}
                             </Select>

@@ -215,11 +215,15 @@ router.all('/:systemCode/*', async (req, res) => {
                         
                         // Priority 1: Direct Role Profile assignment (e.g. CEO)
                         if (roleProfileName) {
-                            updatedRole = roleProfileName;
+                            updatedRole = roleProfileName === 'Cordinator' ? 'Coordinator' : roleProfileName;
                         } 
                         // Priority 2: Hardcoded mappings
                         else if (erpRoles.includes('Administrator') || erpRoles.includes('System Manager')) {
                             updatedRole = 'Administrator';
+                        } else if (erpRoles.includes('Coordinator') || erpRoles.includes('Cordinator') || moduleProfile === 'Coordinator' || moduleProfile === 'Cordinator') {
+                            updatedRole = 'Coordinator';
+                        } else if (erpRoles.includes('Attendance manager') || moduleProfile === 'Attendance manager') {
+                            updatedRole = 'Attendance manager';
                         } else if (erpRoles.includes('HR Manager') || erpRoles.includes('HR') || moduleProfile === 'HR') {
                             updatedRole = 'HR Manager';
                         } else if (erpRoles.includes('HR User')) {
@@ -309,6 +313,9 @@ router.all('/:systemCode/*', async (req, res) => {
             let shortMsg = response.data?._server_messages || response.data?.message || 'Check network panel for details';
             if (typeof shortMsg === 'string' && shortMsg.length > 200) shortMsg = shortMsg.substring(0, 200) + '...';
             console.error(`ERP Proxy [${systemCode}] Error ${response.status} for ${targetUrl} - ${shortMsg}`);
+            if (response.status === 500 && response.data?.exception) {
+                console.error(`ERP Proxy Exception Trace:`, response.data.exception);
+            }
         }
 
         res.status(response.status).json(response.data);

@@ -7,7 +7,7 @@ const { getCollection } = require('./firebaseHelper');
 router.get('/get-role/:identifier', async (req, res) => {
     try {
         const identifier = (req.params.identifier || '').trim();
-        if (!identifier) return res.json({ role: null });
+        if (!identifier || identifier.length > 255) return res.json({ role: null, system: null, accounts: [] });
 
         const accounts = [];
         const seenEmails = new Set();

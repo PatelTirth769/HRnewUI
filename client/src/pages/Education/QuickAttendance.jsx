@@ -1,10 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../services/api';
+import { resolveInstructorId } from '../../utility/instructorHelper';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 import * as XLSX from 'xlsx';
 
 const QuickAttendance = () => {
     const navigate = useNavigate();
+    const userRole = localStorage.getItem('userRole');
+    const { isInstructor, isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
 
     // Filter states
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -42,22 +48,71 @@ const QuickAttendance = () => {
 
     // ─── Fetch Programs & Student Groups on mount ───
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         const fetchMasters = async () => {
             setLoadingMasters(true);
             try {
-                const [pRes, sgRes, bRes] = await Promise.all([
-                    API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
-                    API.get('/api/resource/Student Group?fields=["name","program","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
-                    API.get('/api/resource/Company?limit_page_length=None').catch(() => ({ data: { data: [] } })),
-                ]);
-                setPrograms(pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || []);
-                const groups = sgRes.data.data?.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board })) || [];
-                setAllStudentGroups(groups);
-                setFilteredGroups(groups);
-                
-                const fetchedBoards = bRes.data.data?.map(c => c.name) || [];
-                const studentBoards = [...new Set(groups.map(g => g.custom_board).filter(Boolean))];
-                setBoards([...new Set([...fetchedBoards, ...studentBoards])].sort());
+                const userEmail = localStorage.getItem('user');
+
+                if (isInstructor) {
+                    const instructorId = await resolveInstructorId(userEmail);
+                    if (instructorId) {
+                        const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","program","custom_board"]&limit_page_length=None`);
+                        const ctGroups = ctRes.data.data || [];
+
+                        const groups = ctGroups.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board }));
+                        setAllStudentGroups(groups);
+                        setFilteredGroups(groups);
+
+                        const ctPrograms = Array.from(new Set(ctGroups.map(d => d.program).filter(Boolean)));
+                        setPrograms(ctPrograms.map(p => ({ value: p, label: p, custom_board: ctGroups.find(g => g.program === p)?.custom_board })));
+
+                        const ctBoards = Array.from(new Set(ctGroups.map(d => d.custom_board).filter(Boolean)));
+                        setBoards(ctBoards.sort());
+                    } else {
+                        setAllStudentGroups([]);
+                        setFilteredGroups([]);
+                        setPrograms([]);
+                        setBoards([]);
+                    }
+                } else if (isCoordinator && !coordinatorScope.loading) {
+                    const ctPrograms = coordinatorScope.programs || [];
+                    const ctBoards = coordinatorScope.boards || [];
+
+                    let groupFilter = [];
+                    if (ctPrograms.length > 0) {
+                        groupFilter.push(["program", "in", ctPrograms]);
+                    } else if (ctBoards.length > 0) {
+                        groupFilter.push(["custom_board", "in", ctBoards]);
+                    }
+
+                    let ctGroupsData = [];
+                    if (groupFilter.length > 0) {
+                         const ctRes = await API.get(`/api/resource/Student Group?filters=${JSON.stringify(groupFilter)}&fields=["name","program","custom_board"]&limit_page_length=None`);
+                         ctGroupsData = ctRes.data.data || [];
+                    }
+
+                    const groups = ctGroupsData.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board }));
+                    setAllStudentGroups(groups);
+                    setFilteredGroups(groups);
+
+                    setPrograms(ctPrograms.map(p => ({ value: p, label: p, custom_board: ctGroupsData.find(g => g.program === p)?.custom_board })));
+                    setBoards(ctBoards.sort());
+                } else {
+                    const [pRes, sgRes, bRes] = await Promise.all([
+                        API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                        API.get('/api/resource/Student Group?fields=["name","program","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                        API.get('/api/resource/Company?limit_page_length=None').catch(() => ({ data: { data: [] } })),
+                    ]);
+                    setPrograms(pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || []);
+                    const groups = sgRes.data.data?.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board })) || [];
+                    setAllStudentGroups(groups);
+                    setFilteredGroups(groups);
+                    
+                    const fetchedBoards = bRes.data.data?.map(c => c.name) || [];
+                    const studentBoards = [...new Set(groups.map(g => g.custom_board).filter(Boolean))];
+                    setBoards([...new Set([...fetchedBoards, ...studentBoards])].sort());
+                }
             } catch (err) {
                 console.error('Error fetching masters:', err);
             } finally {
@@ -65,7 +120,7 @@ const QuickAttendance = () => {
             }
         };
         fetchMasters();
-    }, []);
+    }, [isCoordinator, coordinatorScope.loading]);
 
     // ─── Filter student groups when program or board changes ───
     useEffect(() => {
@@ -97,12 +152,21 @@ const QuickAttendance = () => {
     // ─── Fetch Students ───
     const handleGetStudents = useCallback(async () => {
         if (!selectedGroup) {
-            notification.warning({ message: 'Selection Required', description: 'Please select a Student Group first.' });
+            showToast('warning', 'Selection Required', 'Please select a Student Group first.');
             return;
         }
         if (!date) {
-            notification.warning({ message: 'Selection Required', description: 'Please select a Date.' });
+            showToast('warning', 'Selection Required', 'Please select a Date.');
             return;
+        }
+
+        // Defensive role check: verify group belongs to the instructor's or coordinator's allowed groups
+        if (isInstructor || isCoordinator) {
+            const isAllowed = allStudentGroups.some(g => g.value === selectedGroup);
+            if (!isAllowed) {
+                showToast('error', 'Access Denied', 'You are not authorized to view students for this group.');
+                return;
+            }
         }
 
         setFetchingStudents(true);
@@ -112,7 +176,7 @@ const QuickAttendance = () => {
             const groupStudents = sgRes.data.data.students || [];
 
             if (groupStudents.length === 0) {
-                notification.info({ message: 'No Students', description: 'No students found in this Student Group.' });
+                showToast('info', 'No Students', 'No students found in this Student Group.');
                 setStudents([]);
                 setExistingMap({});
                 setFetchedFor({ group: selectedGroup, date });
@@ -135,7 +199,7 @@ const QuickAttendance = () => {
             const activeGroupStudents = groupStudents.filter(s => enabledMap[s.student] !== 0);
 
             if (activeGroupStudents.length === 0) {
-                notification.info({ message: 'No Active Students', description: 'All students in this group are currently disabled/left.' });
+                showToast('info', 'No Active Students', 'All students in this group are currently disabled/left.');
                 setStudents([]);
                 setExistingMap({});
                 setFetchedFor({ group: selectedGroup, date });

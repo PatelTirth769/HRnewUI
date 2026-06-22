@@ -3,6 +3,9 @@ import { notification } from 'antd';
 import { FiEdit2, FiTrash2 } from 'react-icons/fi';
 import API from '../../services/api';
 import * as XLSX from 'xlsx';
+import { resolveInstructorId } from '../../utility/instructorHelper';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const emptyForm = () => ({
     naming_series: 'EDU-ATT-.YYYY.-',
@@ -15,6 +18,9 @@ const emptyForm = () => ({
 });
 
 const StudentAttendance = () => {
+    const userRole = localStorage.getItem('userRole');
+    const { isInstructor, isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -784,8 +790,9 @@ const StudentAttendance = () => {
     };
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         fetchDropdowns();
-    }, []);
+    }, [isCoordinator, coordinatorScope.loading]);
 
     useEffect(() => {
         const updateFilteredFilterData = async () => {
@@ -804,10 +811,14 @@ const StudentAttendance = () => {
                 setLoadingFilterStudents(true);
                 try {
                     const res = await API.get(`/api/resource/Student Group/${encodeURIComponent(filters.student_group)}`);
-                    const list = res.data.data.students?.map(s => ({
+                    let list = res.data.data.students?.map(s => ({
                         value: s.student,
                         label: `${s.student} - ${s.student_name}`
                     })) || [];
+                    if (isInstructor || isCoordinator) {
+                        const allowedIds = dropdowns.masterStudents.map(s => s.value);
+                        list = list.filter(s => allowedIds.includes(s.value));
+                    }
                     setFilteredFilterStudents(list);
                 } catch (err) {
                     console.error('Error fetching filter student group students:', err);
@@ -824,10 +835,14 @@ const StudentAttendance = () => {
                             limit_page_length: 'None'
                         }
                     });
-                    const list = res.data.data?.map(d => ({
+                    let list = res.data.data?.map(d => ({
                         value: d.student,
                         label: `${d.student} - ${d.student_name}`
                     })) || [];
+                    if (isInstructor || isCoordinator) {
+                        const allowedIds = dropdowns.masterStudents.map(s => s.value);
+                        list = list.filter(s => allowedIds.includes(s.value));
+                    }
                     setFilteredFilterStudents(list);
                 } catch (err) {
                     console.error('Error fetching filter program enrollment students:', err);
@@ -847,6 +862,7 @@ const StudentAttendance = () => {
     }, [filters.program, filters.student_group, filters.board, dropdowns.masterStudentGroups, dropdowns.masterStudents]);
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchAttendanceList();
         } else if (view === 'import') {
@@ -858,40 +874,103 @@ const StudentAttendance = () => {
                 setForm(emptyForm());
             }
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     const fetchDropdowns = async () => {
         try {
+            const userEmail = localStorage.getItem('user');
             const safeGet = (url) => API.get(url).catch(() => ({ data: { data: [] } }));
             const [sRes, csRes, pRes, sgRes, bRes] = await Promise.all([
                 safeGet('/api/resource/Student?fields=["name","first_name","last_name","custom_board"]&limit_page_length=None'),
                 safeGet('/api/resource/Course Schedule?limit_page_length=None'),
                 safeGet('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None'),
                 safeGet('/api/resource/Student Group?fields=["name","program","custom_board"]&limit_page_length=None'),
-                safeGet('/api/resource/Company?limit_page_length=None'),
+                userRole === 'Instructor' ? Promise.resolve({ data: { data: [] } }) : safeGet('/api/resource/Company?limit_page_length=None'),
             ]);
-            const studentsList = sRes.data.data?.map(d => ({ 
+            let studentsList = sRes.data.data?.map(d => ({ 
                 value: d.name, 
                 label: `${d.name} - ${d.first_name || ''} ${d.last_name || ''}`.trim(),
                 custom_board: d.custom_board 
             })) || [];
-            const studentGroupsList = sgRes.data.data?.map(d => ({ 
+            let studentGroupsList = sgRes.data.data?.map(d => ({ 
                 value: d.name, 
                 label: d.name,
                 program: d.program,
                 custom_board: d.custom_board
             })) || [];
+            let programsList = pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || [];
             
             const fetchedBoards = bRes.data.data?.map(c => c.name) || [];
             const studentBoards = [...new Set(sRes.data.data?.map(s => s.custom_board).filter(Boolean))];
-            const allBoards = [...new Set([...fetchedBoards, ...studentBoards])].sort();
+            let allBoards = [...new Set([...fetchedBoards, ...studentBoards])].sort();
+
+            if (isInstructor) {
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","program","custom_board"]&limit_page_length=None`);
+                    const ctGroupsData = ctRes.data.data || [];
+                    const ctGroups = ctGroupsData.map(g => g.name);
+                    const ctPrograms = Array.from(new Set(ctGroupsData.map(g => g.program).filter(Boolean)));
+                    const ctBoards = Array.from(new Set(ctGroupsData.map(g => g.custom_board).filter(Boolean)));
+
+                    let ctStudentIds = [];
+                    if (ctGroups.length > 0) {
+                        const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                        const groupDetails = await Promise.all(groupDetailPromises);
+                        ctStudentIds = Array.from(new Set(
+                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                        ));
+                    }
+
+                    studentsList = studentsList.filter(s => ctStudentIds.includes(s.value));
+                    studentGroupsList = studentGroupsList.filter(g => ctGroups.includes(g.value));
+                    programsList = programsList.filter(p => ctPrograms.includes(p.value));
+                    allBoards = allBoards.filter(b => ctBoards.includes(b));
+                } else {
+                    studentsList = [];
+                    studentGroupsList = [];
+                    programsList = [];
+                    allBoards = [];
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                
+                let groupFilter = [];
+                if (ctPrograms.length > 0) {
+                    groupFilter.push(["program", "in", ctPrograms]);
+                } else if (ctBoards.length > 0) {
+                    groupFilter.push(["custom_board", "in", ctBoards]);
+                }
+
+                let ctGroupsData = [];
+                if (groupFilter.length > 0) {
+                     const ctRes = await API.get(`/api/resource/Student Group?filters=${JSON.stringify(groupFilter)}&fields=["name","program","custom_board"]&limit_page_length=None`);
+                     ctGroupsData = ctRes.data.data || [];
+                }
+                const ctGroups = ctGroupsData.map(g => g.name);
+
+                let ctStudentIds = [];
+                if (ctGroups.length > 0) {
+                    const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                    const groupDetails = await Promise.all(groupDetailPromises);
+                    ctStudentIds = Array.from(new Set(
+                        groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                    ));
+                }
+
+                studentsList = studentsList.filter(s => ctStudentIds.includes(s.value));
+                studentGroupsList = studentGroupsList.filter(g => ctGroups.includes(g.value));
+                programsList = programsList.filter(p => ctPrograms.includes(p.value));
+                allBoards = allBoards.filter(b => ctBoards.includes(b));
+            }
 
             setDropdowns(prev => ({
                 ...prev,
                 students: studentsList,
                 masterStudents: studentsList,
                 courseSchedules: csRes.data.data?.map(d => ({ value: d.name, label: d.name })) || [],
-                programs: pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || [],
+                programs: programsList,
                 studentGroups: studentGroupsList,
                 masterStudentGroups: studentGroupsList,
                 boards: allBoards,
@@ -902,6 +981,7 @@ const StudentAttendance = () => {
     };
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         const updateFilteredData = async () => {
             // 1. Filter Student Groups
             let formSgList = dropdowns.masterStudentGroups || [];
@@ -918,10 +998,14 @@ const StudentAttendance = () => {
                 setLoadingStudents(true);
                 try {
                     const res = await API.get(`/api/resource/Student Group/${encodeURIComponent(form.student_group)}`);
-                    const list = res.data.data.students?.map(s => ({
+                    let list = res.data.data.students?.map(s => ({
                         value: s.student,
                         label: `${s.student} - ${s.student_name}`
                     })) || [];
+                    if (isInstructor || isCoordinator) {
+                        const allowedIds = dropdowns.masterStudents.map(s => s.value);
+                        list = list.filter(s => allowedIds.includes(s.value));
+                    }
                     setFilteredStudents(list);
                 } catch (err) {
                     console.error('Error fetching student group students:', err);
@@ -938,10 +1022,14 @@ const StudentAttendance = () => {
                             limit_page_length: 'None'
                         }
                     });
-                    const list = res.data.data?.map(d => ({
+                    let list = res.data.data?.map(d => ({
                         value: d.student,
                         label: `${d.student} - ${d.student_name}`
                     })) || [];
+                    if (isInstructor || isCoordinator) {
+                        const allowedIds = dropdowns.masterStudents.map(s => s.value);
+                        list = list.filter(s => allowedIds.includes(s.value));
+                    }
                     setFilteredStudents(list);
                 } catch (err) {
                     console.error('Error fetching program enrollment students:', err);
@@ -960,11 +1048,12 @@ const StudentAttendance = () => {
         if (view === 'form') {
             updateFilteredData();
         }
-    }, [form.program, form.student_group, form.custom_board, dropdowns.masterStudents, dropdowns.masterStudentGroups, view]);
+    }, [form.program, form.student_group, form.custom_board, dropdowns.masterStudents, dropdowns.masterStudentGroups, view, isCoordinator, coordinatorScope.loading]);
 
     const fetchAttendanceList = async () => {
         try {
             setLoadingList(true);
+            const userEmail = localStorage.getItem('user');
             const url = '/api/resource/Student Attendance?fields=["name","student","student_name","date","status","student_group","docstatus","custom_board"]&limit_page_length=None&order_by=date desc';
             const response = await API.get(url);
             
@@ -986,7 +1075,63 @@ const StudentAttendance = () => {
                 return { ...row, custom_board: board || '' };
             });
             
-            setAttendanceList(mappedData);
+            let filteredMappedData = mappedData;
+            if (userRole === 'Instructor') {
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name"]&limit_page_length=None`);
+                    const ctGroups = (ctRes.data.data || []).map(g => g.name);
+                    
+                    let ctStudentIds = [];
+                    if (ctGroups.length > 0) {
+                        const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                        const groupDetails = await Promise.all(groupDetailPromises);
+                        ctStudentIds = Array.from(new Set(
+                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                        ));
+                    }
+                    
+                    filteredMappedData = mappedData.filter(row => 
+                        (row.student_group && ctGroups.includes(row.student_group)) ||
+                        (row.student && ctStudentIds.includes(row.student))
+                    );
+                } else {
+                    filteredMappedData = [];
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                
+                let groupFilter = [];
+                if (ctPrograms.length > 0) {
+                    groupFilter.push(["program", "in", ctPrograms]);
+                } else if (ctBoards.length > 0) {
+                    groupFilter.push(["custom_board", "in", ctBoards]);
+                }
+
+                let ctGroupsData = [];
+                if (groupFilter.length > 0) {
+                     const ctRes = await API.get(`/api/resource/Student Group?filters=${JSON.stringify(groupFilter)}&fields=["name"]&limit_page_length=None`);
+                     ctGroupsData = ctRes.data.data || [];
+                }
+                const ctGroups = ctGroupsData.map(g => g.name);
+
+                let ctStudentIds = [];
+                if (ctGroups.length > 0) {
+                    const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                    const groupDetails = await Promise.all(groupDetailPromises);
+                    ctStudentIds = Array.from(new Set(
+                        groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                    ));
+                }
+
+                filteredMappedData = mappedData.filter(row => 
+                    (row.student_group && ctGroups.includes(row.student_group)) ||
+                    (row.student && ctStudentIds.includes(row.student))
+                );
+            }
+            
+            setAttendanceList(filteredMappedData);
         } catch (err) {
             console.error('Error fetching attendance list:', err);
         } finally {
@@ -1035,6 +1180,15 @@ const StudentAttendance = () => {
         if (!form.student || !form.date || !form.status) {
             notification.warning({ message: 'Missing Fields', description: 'Student, Date and Status are required.' });
             return;
+        }
+
+        if (userRole === 'Instructor') {
+            const isStudentAllowed = dropdowns.masterStudents.some(s => s.value === form.student);
+            const isGroupAllowed = !form.student_group || dropdowns.masterStudentGroups.some(g => g.value === form.student_group);
+            if (!isStudentAllowed || !isGroupAllowed) {
+                notification.error({ message: 'Access Denied', description: 'You are not authorized to record attendance for this student/group.' });
+                return;
+            }
         }
 
         setSaving(true);
@@ -1693,12 +1847,14 @@ const StudentAttendance = () => {
                         >
                             📤 Download
                         </button>
-                        <button 
-                            className="px-4 py-2 bg-white text-gray-700 text-sm rounded border border-gray-300 hover:bg-gray-50 flex items-center gap-1.5 transition font-semibold" 
-                            onClick={() => { setView('import'); setImportView('list'); }}
-                        >
-                            📥 Import
-                        </button>
+                        {userRole !== 'Instructor' && (
+                            <button 
+                                className="px-4 py-2 bg-white text-gray-700 text-sm rounded border border-gray-300 hover:bg-gray-50 flex items-center gap-1.5 transition font-semibold" 
+                                onClick={() => { setView('import'); setImportView('list'); }}
+                            >
+                                📥 Import
+                            </button>
+                        )}
                         <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium" onClick={() => { setEditingRecord(null); setView('form'); }}>
                             + Mark Attendance
                         </button>
@@ -1868,13 +2024,15 @@ const StudentAttendance = () => {
                                                 >
                                                     <FiEdit2 className="w-4 h-4" />
                                                 </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleDeleteRecord(row.name); }}
-                                                    className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors cursor-pointer border border-red-100"
-                                                    title="Delete"
-                                                >
-                                                    <FiTrash2 className="w-4 h-4" />
-                                                </button>
+                                                {userRole !== 'Instructor' && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleDeleteRecord(row.name); }}
+                                                        className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors cursor-pointer border border-red-100"
+                                                        title="Delete"
+                                                    >
+                                                        <FiTrash2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -1937,7 +2095,7 @@ const StudentAttendance = () => {
                 <div className="flex gap-2">
                     <button className="px-4 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50" onClick={() => setView('list')}>Back</button>
                     
-                    {editingRecord && form.docstatus === 0 && (
+                    {userRole !== 'Instructor' && editingRecord && form.docstatus === 0 && (
                         <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm hover:bg-red-100" onClick={handleDelete}>Delete</button>
                     )}
 
@@ -1963,7 +2121,7 @@ const StudentAttendance = () => {
                         </button>
                     )}
 
-                    {editingRecord && form.docstatus === 1 && form.status === originalStatus && (
+                    {userRole !== 'Instructor' && editingRecord && form.docstatus === 1 && form.status === originalStatus && (
                         <button className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:bg-red-700 disabled:opacity-50 shadow-sm" onClick={handleCancelDoc} disabled={saving}>
                             {saving ? 'Cancelling...' : 'Cancel'}
                         </button>

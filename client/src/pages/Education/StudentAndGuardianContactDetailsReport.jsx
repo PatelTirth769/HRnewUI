@@ -3,11 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { Table, Select, Button, notification, Typography, Spin, Empty } from 'antd';
 import { ReloadOutlined, MoreOutlined, SearchOutlined } from '@ant-design/icons';
 import API from '../../services/api';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
 const StudentAndGuardianContactDetailsReport = () => {
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [fetchingMasters, setFetchingMasters] = useState(false);
@@ -28,20 +32,34 @@ const StudentAndGuardianContactDetailsReport = () => {
     });
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         fetchMasters();
-    }, []);
+    }, [isCoordinator, coordinatorScope.loading]);
 
     const fetchMasters = async () => {
         setFetchingMasters(true);
         try {
             const [ayRes, prgRes, batchRes] = await Promise.all([
                 API.get('/api/resource/Academic Year?limit_page_length=None'),
-                API.get('/api/resource/Program?limit_page_length=None'),
+                API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None'),
                 API.get('/api/resource/Student Batch Name?limit_page_length=None')
             ]);
+            
+            let programsList = prgRes.data.data || [];
+            
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    programsList = programsList.filter(p => ctPrograms.includes(p.name));
+                } else if (ctBoards.length > 0) {
+                    programsList = programsList.filter(p => ctBoards.includes(p.custom_board));
+                }
+            }
+
             setMasters({
                 academicYears: ayRes.data.data?.map(d => d.name) || [],
-                programs: prgRes.data.data?.map(d => d.name) || [],
+                programs: programsList.map(d => d.name) || [],
                 batches: batchRes.data.data?.map(d => d.name) || []
             });
         } catch (err) {

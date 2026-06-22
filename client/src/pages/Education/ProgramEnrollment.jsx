@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { notification, Tag, Select } from 'antd';
 import API from '../../services/api';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const parseServerMessage = (err) => {
     const serverMsg = err?.response?.data?._server_messages;
@@ -37,6 +39,8 @@ const emptyForm = () => ({
 });
 
 const ProgramEnrollment = () => {
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -83,10 +87,12 @@ const ProgramEnrollment = () => {
     });
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         fetchDropdowns();
-    }, []);
+    }, [, isCoordinator, coordinatorScope.loading]);
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchEnrollments();
         } else if (editingRecord) {
@@ -95,7 +101,7 @@ const ProgramEnrollment = () => {
             setForm(emptyForm());
             setActiveTab('Details');
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     const fetchDropdowns = async () => {
         try {
@@ -121,15 +127,30 @@ const ProgramEnrollment = () => {
                 }
             });
 
+            let studentsList = sRes.data.data || [];
+            let programsList = pRes.data.data || [];
+
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    programsList = programsList.filter(p => ctPrograms.includes(p.name));
+                    studentsList = studentsList.filter(s => ctPrograms.includes(s.program));
+                } else if (ctBoards.length > 0) {
+                    programsList = programsList.filter(p => ctBoards.includes(p.custom_board));
+                    studentsList = studentsList.filter(s => ctBoards.includes(s.custom_board));
+                }
+            }
+
             setDropdowns({
-                students: sRes.data.data?.map(d => ({
+                students: studentsList.map(d => ({
                     id: d.name,
                     name: `${d.first_name || ''} ${d.last_name || ''}`.trim(),
                     program: d.program || '',
                     custom_board: d.custom_board || '',
                     allocatedProgram: allocatedMap[d.name] || null
-                })) || [],
-                programs: pRes.data.data || [],
+                })),
+                programs: programsList,
                 academicYears: yRes.data.data?.map(d => d.name) || [],
                 academicTerms: tRes.data.data?.map(d => d.name) || [],
                 studentCategories: cRes.data.data?.map(d => d.name) || [],
@@ -149,7 +170,19 @@ const ProgramEnrollment = () => {
             setLoadingList(true);
             const url = '/api/resource/Program Enrollment?fields=["name","student","student_name","program","academic_year","enrollment_date","docstatus","custom_board"]&limit_page_length=None&order_by=creation desc';
             const response = await API.get(url);
-            setEnrollments(response.data.data || []);
+            let enrollmentData = response.data.data || [];
+            
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    enrollmentData = enrollmentData.filter(e => ctPrograms.includes(e.program));
+                } else if (ctBoards.length > 0) {
+                    enrollmentData = enrollmentData.filter(e => ctBoards.includes(e.custom_board));
+                }
+            }
+            
+            setEnrollments(enrollmentData);
         } catch (err) {
             console.error('Error fetching enrollments:', err);
         } finally {

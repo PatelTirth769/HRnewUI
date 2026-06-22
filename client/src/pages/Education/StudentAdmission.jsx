@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const emptyForm = () => ({
     title: '',
@@ -18,6 +20,8 @@ const emptyForm = () => ({
 });
 
 const StudentAdmission = () => {
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -39,6 +43,7 @@ const StudentAdmission = () => {
     });
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchAdmissions();
         } else {
@@ -49,17 +54,30 @@ const StudentAdmission = () => {
                 setForm(emptyForm());
             }
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     const fetchDropdowns = async () => {
         try {
             const [yRes, pRes] = await Promise.all([
                 API.get('/api/resource/Academic Year?limit_page_length=None'),
-                API.get('/api/resource/Program?limit_page_length=None')
+                API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None')
             ]);
+            
+            let programsList = pRes.data.data || [];
+            
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    programsList = programsList.filter(p => ctPrograms.includes(p.name));
+                } else if (ctBoards.length > 0) {
+                    programsList = programsList.filter(p => ctBoards.includes(p.custom_board));
+                }
+            }
+            
             setDropdowns({
                 academicYears: yRes.data.data?.map(d => d.name) || [],
-                programs: pRes.data.data?.map(d => d.name) || [],
+                programs: programsList.map(d => d.name) || [],
             });
         } catch (err) {
             console.error('Error fetching dropdowns', err);

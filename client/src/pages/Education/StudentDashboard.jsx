@@ -27,7 +27,7 @@ import html2pdf from 'html2pdf.js';
 import FeeReceiptTemplate from './FeeReceiptTemplate';
 import { generateAdmissionReceipt } from '../Enquiry/AdmissionFeeReceipt';
 import { useRef } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
 
@@ -51,6 +51,7 @@ const StudentDashboard = () => {
     classTeacher: '',
     homework: [],
     classwork: [],
+    timetablePhoto: null,
     permissions: {
       fees: true,
       attendance: true,
@@ -68,6 +69,116 @@ const StudentDashboard = () => {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const receiptRef = useRef(null);
+  const [announcements, setAnnouncements] = useState([]);
+  const [enableOnlineFeePayment, setEnableOnlineFeePayment] = useState(false);
+
+  useEffect(() => {
+    const fetchFeeSetting = async () => {
+      try {
+        const docRef = doc(db, 'schooler_system', 'dashboard_settings');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setEnableOnlineFeePayment(docSnap.data().ENABLE_ONLINE_FEE_PAYMENT === true);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch dashboard settings:', err);
+      }
+    };
+    fetchFeeSetting();
+  }, []);
+
+  // Leave Application CRUD States
+  const [leavesList, setLeavesList] = useState([]);
+  const [leavesLoading, setLeavesLoading] = useState(false);
+  const [savingLeave, setSavingLeave] = useState(false);
+  const [leaveView, setLeaveView] = useState('list'); // 'list' or 'form'
+  const [leaveEditing, setLeaveEditing] = useState(null);
+  const [leaveForm, setLeaveForm] = useState({
+    student: '',
+    from_date: new Date().toISOString().split('T')[0],
+    to_date: new Date().toISOString().split('T')[0],
+    attendance_based_on: 'Student Group',
+    student_group: '',
+    mark_as_present: 0,
+    reason: '',
+  });
+
+  const fetchStudentLeaves = async (studentId) => {
+    if (!studentId) return;
+    setLeavesLoading(true);
+    try {
+      const url = `/api/resource/Student Leave Application?filters=[["student","=","${studentId}"]]&fields=["name","student","from_date","to_date","mark_as_present","student_group","reason","attendance_based_on","docstatus"]&limit_page_length=None&order_by=from_date desc`;
+      const response = await API.get(url);
+      setLeavesList(response.data?.data || []);
+    } catch (err) {
+      console.error('Error fetching student leave applications:', err);
+    } finally {
+      setLeavesLoading(false);
+    }
+  };
+
+  const handleSaveLeave = async () => {
+    if (!leaveForm.from_date || !leaveForm.to_date || !leaveForm.student_group) {
+      notification.warning({ message: 'Missing Fields', description: 'Student Group, From Date, and To Date are required.' });
+      return;
+    }
+
+    setSavingLeave(true);
+    try {
+      const payload = {
+        ...leaveForm,
+        student: studentData.profile?.name,
+      };
+
+      if (leaveEditing) {
+        await API.put(`/api/resource/Student Leave Application/${encodeURIComponent(leaveEditing)}`, payload);
+        notification.success({ message: 'Success', description: 'Draft updated successfully.' });
+      } else {
+        await API.post('/api/resource/Student Leave Application', { ...payload, docstatus: 0 });
+        notification.success({ message: 'Success', description: 'Draft created successfully.' });
+      }
+      setLeaveView('list');
+      setLeaveEditing(null);
+      await fetchStudentLeaves(studentData.profile?.name);
+    } catch (err) {
+      console.error('Save leave error:', err);
+      notification.error({ message: 'Save Failed', description: err.response?.data?._server_messages || err.message });
+    } finally {
+      setSavingLeave(false);
+    }
+  };
+
+  const handleSubmitLeave = async (name) => {
+    const idToSubmit = name || leaveEditing;
+    if (!idToSubmit) return;
+    if (!window.confirm(`Are you sure you want to submit leave application ${idToSubmit}? Once submitted, it cannot be modified.`)) return;
+
+    setSavingLeave(true);
+    try {
+      await API.put(`/api/resource/Student Leave Application/${encodeURIComponent(idToSubmit)}`, { docstatus: 1 });
+      notification.success({ message: 'Success', description: 'Leave application submitted successfully.' });
+      setLeaveView('list');
+      setLeaveEditing(null);
+      await fetchStudentLeaves(studentData.profile?.name);
+    } catch (err) {
+      console.error('Submit leave error:', err);
+      notification.error({ message: 'Submit Failed', description: err.response?.data?._server_messages || err.message });
+    } finally {
+      setSavingLeave(false);
+    }
+  };
+
+  const handleDeleteLeave = async (name) => {
+    if (!window.confirm('Are you sure you want to delete this leave application?')) return;
+    try {
+      await API.delete(`/api/resource/Student Leave Application/${encodeURIComponent(name)}`);
+      notification.success({ message: 'Success', description: 'Deleted successfully.' });
+      await fetchStudentLeaves(studentData.profile?.name);
+    } catch (err) {
+      console.error('Delete leave error:', err);
+      notification.error({ message: 'Delete Failed', description: err.message });
+    }
+  };
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -125,6 +236,22 @@ const StudentDashboard = () => {
       const fullRes = await API.get(`/api/resource/Student/${encodeURIComponent(student.name)}`);
       const profile = fullRes.data?.data;
       const studentId = student.name;
+
+      if (profile && profile.guardians && profile.guardians.length > 0) {
+        for (let g of profile.guardians) {
+          if (g.guardian) {
+            try {
+              const guardianRes = await API.get(`/api/resource/Guardian/${encodeURIComponent(g.guardian)}`);
+              const guardianDoc = guardianRes.data?.data;
+              if (guardianDoc && guardianDoc.email_address) {
+                g.guardian_email_address = guardianDoc.email_address;
+              }
+            } catch (e) {
+              console.warn('Failed to fetch guardian details for email:', e.message);
+            }
+          }
+        }
+      }
 
       // Fetch Student Group memberships
       let studentGroups = [];
@@ -226,45 +353,29 @@ const StudentDashboard = () => {
       const feeList = feeRes.status === 'fulfilled' ? (feeRes.value.data?.data || []) : [];
       
       const enrollmentData = enrRes.status === 'fulfilled' ? (enrRes.value.data?.data || []) : [];
-      console.log('[FeeDebug] Enrollment Data:', enrollmentData);
 
       // --- Fallback Student Group Fetching ---
       // Since ERPNext restricts direct child table access (Student Group Student) for students (causing 403s),
       // we extract the student group/batch from their Program Enrollment record.
-      console.log('=== STUDENT GROUP DIAGNOSTICS ===');
-      console.log('1. Extracted Enrollment Data:', enrollmentData);
-      console.log('2. Extracted Profile Data:', profile);
 
       if (enrollmentData.length > 0) {
         try {
           const enrollmentName = enrollmentData[0].name;
           const fullEnrRes = await API.get(`/api/resource/Program Enrollment/${encodeURIComponent(enrollmentName)}`);
           const enrDoc = fullEnrRes.data?.data || {};
-          
-          console.log('3. Full Program Enrollment Document Fields:', {
-             student_group: enrDoc.student_group,
-             student_batch_name: enrDoc.student_batch_name,
-             student_batch: enrDoc.student_batch
-          });
 
           const fallbackGroup = enrDoc.student_group || enrDoc.student_batch_name || enrDoc.student_batch;
           if (fallbackGroup) {
             studentGroups.push(fallbackGroup);
-            console.log('4. SUCCESS! Found group in Enrollment:', fallbackGroup);
           } else if (profile?.student_group || profile?.student_batch) {
              studentGroups.push(profile.student_group || profile.student_batch);
-             console.log('4. SUCCESS! Found group in Student Profile:', profile.student_group || profile.student_batch);
-          } else {
-             console.log('4. FAILED: No batch or group assigned to this student in ERPNext Program Enrollment or Profile.');
           }
         } catch(e) {
-          console.error('3. FAILED to fetch full program enrollment details:', e.message);
+          console.error('FAILED to fetch full program enrollment details:', e.message);
         }
       } else {
-         console.log('3. FAILED: Student has no active Program Enrollments to extract group from.');
          if (profile?.student_group || profile?.student_batch) {
              studentGroups.push(profile.student_group || profile.student_batch);
-             console.log('4. SUCCESS! Found group directly on Student Profile.');
          }
       }
       // --- Fallback 1: Query Student Group doctype directly ---
@@ -280,16 +391,11 @@ const StudentDashboard = () => {
         });
         if (sgRes.data?.data && sgRes.data.data.length > 0) {
            const groups = sgRes.data.data.map(g => g.name);
-           console.log('6. Found Student Groups via direct query:', groups);
            studentGroups.push(...groups);
-        } else {
-           console.log('6. Direct Student Group query returned empty.');
         }
       } catch (e) {
-        console.error('5. FAILED direct Student Group query:', e.message);
+        console.error('FAILED direct Student Group query:', e.message);
       }
-
-      console.log('===================================');
 
       // --- Course Schedule Fetching ---
       // Now that we have definitively determined the student's groups, we fetch their specific schedule.
@@ -362,17 +468,12 @@ const StudentDashboard = () => {
         ? enrollmentData[0].fee_structure 
         : (profile.fee_structure || null);
 
-      if (linkedFeeStructure) {
-        console.log('[FeeDebug] Found in Enrollment/Profile:', linkedFeeStructure);
-      }
-
       // Stage 3: Search for a Fee Structure record that matches the Program name
       const programToSearch = (enrollmentData.length > 0 && enrollmentData[0].program) 
         ? enrollmentData[0].program 
         : (profile.program || null);
 
       if (!linkedFeeStructure && programToSearch) {
-        console.log('[FeeDebug] Stage 3: Searching by Program name:', programToSearch);
         try {
           let filters = [["program", "=", programToSearch]];
           if (profile.custom_board) {
@@ -387,10 +488,7 @@ const StudentDashboard = () => {
           });
           if (fsRes.data?.data?.length > 0) {
             linkedFeeStructure = fsRes.data.data[0].name;
-            console.log('[FeeDebug] Found in Fee Structure list with board filter:', linkedFeeStructure);
           } else if (profile.custom_board) {
-            // Fallback without company filter if no match was found with it
-            console.log('[FeeDebug] Not found with company filter, trying just program...');
             const fsResFallback = await API.get('/api/resource/Fee Structure', {
               params: {
                 filters: JSON.stringify([["program", "=", programToSearch]]),
@@ -399,24 +497,21 @@ const StudentDashboard = () => {
             });
             if (fsResFallback.data?.data?.length > 0) {
               linkedFeeStructure = fsResFallback.data.data[0].name;
-              console.log('[FeeDebug] Found in Fee Structure list as fallback:', linkedFeeStructure);
             }
           }
 
           if (!linkedFeeStructure) {
-            console.log('[FeeDebug] No Fee Structure found with program filter. Trying exact name match...');
             try {
               const fsExact = await API.get(`/api/resource/Fee Structure/${encodeURIComponent(programToSearch)}`);
               if (fsExact.data?.data) {
                 linkedFeeStructure = fsExact.data.data.name;
-                console.log('[FeeDebug] Found via exact ID match:', linkedFeeStructure);
               }
             } catch (e) {
-              console.log('[FeeDebug] Exact ID match failed:', e.response?.status || e.message);
+              // Ignore
             }
           }
         } catch (e) {
-          console.error('[FeeDebug] Fee Structure search failed:', e.response?.status || e.message);
+          console.error('Fee Structure search failed:', e.response?.status || e.message);
         }
       }
 
@@ -425,14 +520,9 @@ const StudentDashboard = () => {
         try {
           const fsFull = await API.get(`/api/resource/Fee Structure/${encodeURIComponent(linkedFeeStructure)}`);
           feeStructureDetails = fsFull.data?.data;
-          console.log('[FeeDebug] Fee Structure Details fetched:', feeStructureDetails);
         } catch (e) {
-          console.error('[FeeDebug] Failed to fetch Fee Structure details:', e);
+          console.error('Failed to fetch Fee Structure details:', e);
         }
-      }
-
-      if (!linkedFeeStructure) {
-        console.warn('[FeeDebug] FINAL STATUS: Fee Structure NOT FOUND in any stage.');
       }
 
       // Fetch Homework and Classwork from Firestore
@@ -468,10 +558,40 @@ const StudentDashboard = () => {
           const matchesGroup = !item.studentGroup || studentGroups.includes(item.studentGroup);
           return matchesProgram && matchesGroup;
         });
-        
-        console.log('Filtered homework & classwork assignments for student:', { homework, classwork });
+
       } catch (err) {
         console.error('Error fetching work for student dashboard:', err);
+      }
+
+      // Fetch Announcements from Firestore and filter for this student
+      let filteredAnnouncements = [];
+      try {
+        const annRef = collection(db, 'schooler_system/announcements/records');
+        const annSnap = await getDocs(annRef);
+        const allAnnouncements = annSnap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => {
+            const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+            const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+            return tb - ta;
+          });
+        const studentProgram = profile?.program || '';
+        const studentBoard   = profile?.custom_board || '';
+        filteredAnnouncements = allAnnouncements.filter(ann => {
+          if (ann.targetType === 'All') return true;
+          if (ann.targetType === 'Program' && ann.targetValue === studentProgram) return true;
+          if (ann.targetType === 'Board'   && ann.targetValue === studentBoard)   return true;
+          if (ann.targetType === 'StudentGroup' && studentGroups.includes(ann.targetValue)) return true;
+          if (ann.targetType === 'Student') {
+            if (Array.isArray(ann.targetValue)) {
+              return ann.targetValue.includes(profile?.name);
+            }
+            return ann.targetValue === profile?.name;
+          }
+          return false;
+        });
+      } catch (annErr) {
+        console.error('[StudentDashboard] Could not fetch announcements:', annErr);
       }
 
       // Fetch Discounts and Apply
@@ -556,6 +676,23 @@ const StudentDashboard = () => {
           });
       }
       
+      // Fetch timetable photo from Firestore
+      let timetablePhotoData = null;
+      if (studentGroups && studentGroups.length > 0) {
+        try {
+          for (const group of studentGroups) {
+            const docRef = doc(db, 'schooler_system', 'course_scheduling', 'timetables', group);
+            const snap = await getDoc(docRef);
+            if (snap.exists()) {
+              timetablePhotoData = snap.data();
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn('[StudentDashboard] Failed to fetch timetable photo:', e.message);
+        }
+      }
+      
       setStudentData({
         profile,
         studentGroups,
@@ -573,12 +710,12 @@ const StudentDashboard = () => {
         fullSchedule,
         homework,
         classwork,
-        notifications: [
-          'Academic profile linked successfully.',
-          'Always check your schedule for real-time updates.',
-          'New coursework & homework assignments have been loaded!'
-        ]
+        notifications: filteredAnnouncements,
+        timetablePhoto: timetablePhotoData,
       });
+
+      // Fetch Student Leave Applications
+      await fetchStudentLeaves(studentId);
 
     } catch (err) {
       console.error('Dashboard Error:', err);
@@ -755,14 +892,14 @@ const StudentDashboard = () => {
         amount: record.amount,
         payment_mode: record.payment_mode || 'ONLINE',
         payment_id: record.payment_id || record.order_id || '',
-        receipt_date: record.verified_at || record.receipt_date || record.created_at || new Date().toISOString(),
+        receipt_date: record.receipt_date || record.verified_at || record.created_at || new Date().toISOString(),
         parent_name: record.parent_name || activeGuardian || '',
         parent_mobile: record.parent_mobile || profile?.student_mobile_number || ''
       });
       return;
     }
 
-    const dateObj = new Date(record.verified_at || record.created_at);
+    const dateObj = new Date(record.receipt_date || record.verified_at || record.created_at);
     const formattedDate = dateObj.toLocaleDateString('en-GB') + ' ' + dateObj.toLocaleTimeString('en-US');
     
     const receiptData = {
@@ -779,7 +916,8 @@ const StudentDashboard = () => {
       original_fee: record.original_fee || 0,
       discount_amount: record.discount_amount || 0,
       discount_name: record.discount_name || '',
-      discount_percentage: record.discount_percentage || 0
+      discount_percentage: record.discount_percentage || 0,
+      studentGroup: profile?.student_group || record.student_group || record.section || ''
     };
 
     setSelectedReceipt(receiptData);
@@ -815,10 +953,23 @@ const StudentDashboard = () => {
   }
 
   const totalPaidAmount = Object.values(paidTerms).reduce((sum, term) => sum + (term.amount || 0), 0);
-  const originalAcademicFees = studentData.feeStructureDetails?.total_amount || 0;
-  const totalAcademicFees = studentData.feeStructureDetails?.components?.reduce((sum, c) => sum + (c.amount || 0), 0) || originalAcademicFees;
-  const remainingPendingFees = Math.max(0, totalAcademicFees - totalPaidAmount);
-  const originalRemainingPendingFees = Math.max(0, originalAcademicFees - totalPaidAmount);
+  
+  let remainingPendingFees = 0;
+  let originalRemainingPendingFees = 0;
+  
+  if (studentData.feeStructureDetails && studentData.feeStructureDetails.components) {
+      studentData.feeStructureDetails.components.forEach(comp => {
+          const cat = comp.fees_category || comp.name;
+          if (!paidTerms[cat]) {
+              remainingPendingFees += (comp.amount || 0);
+              originalRemainingPendingFees += (comp.original_fee || comp.amount || 0);
+          }
+      });
+  } else {
+      const fallbackTotal = studentData.feeStructureDetails?.total_amount || 0;
+      remainingPendingFees = Math.max(0, fallbackTotal - totalPaidAmount);
+      originalRemainingPendingFees = remainingPendingFees;
+  }
   
   let totalDiscount = 0;
   let activeDiscountName = '';
@@ -851,15 +1002,15 @@ const StudentDashboard = () => {
   const guardianName = (profile && profile.guardians && profile.guardians.length > 0) ? profile.guardians[0].guardian_name : 'N/A';
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ padding: '16px', maxWidth: '1400px', margin: '0 auto', overflowX: 'hidden' }}>
+      <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <Title level={2} style={{ margin: 0 }}>Student Dashboard</Title>
+          <Title level={2} style={{ margin: 0, fontSize: 'clamp(24px, 4vw, 32px)' }}>Student Dashboard</Title>
           <Text type="secondary" style={{ fontSize: '16px' }}>Welcome back, <b>{studentName}</b>.</Text>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
           <Button icon={<SyncOutlined />} onClick={fetchAllData} shape="round">Sync Data</Button>
-          <Avatar size={64} src={profile?.image} icon={<UserOutlined />} style={{ border: '3px solid #1890ff', background: '#fff' }} />
+          <Avatar size={{ xs: 48, sm: 64 }} src={profile?.image} icon={<UserOutlined />} style={{ border: '3px solid #1890ff', background: '#fff' }} />
         </div>
       </div>
 
@@ -959,13 +1110,36 @@ const StudentDashboard = () => {
                   </Card>
                 </Col>
                 <Col xs={24} lg={8}>
-                  <Card title={<span><NotificationOutlined style={{ color: '#faad14', marginRight: '8px' }} /> Notifications</span>} bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                    <List
-                      dataSource={studentData.notifications}
-                      renderItem={item => (
-                        <List.Item><Alert message={item} type="info" showIcon style={{ width: '100%', borderRadius: '8px' }} /></List.Item>
-                      )}
-                    />
+                  <Card title={<span><NotificationOutlined style={{ color: '#faad14', marginRight: '8px' }} /> Announcements</span>} bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    {studentData.notifications.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af' }}>
+                        <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
+                        <p style={{ fontSize: 13 }}>No announcements for you yet.</p>
+                      </div>
+                    ) : (
+                      <List
+                        dataSource={studentData.notifications}
+                        renderItem={item => (
+                          <List.Item style={{ padding: '10px 0', alignItems: 'flex-start' }}>
+                            <div style={{
+                              width: '100%',
+                              background: item.targetType === 'All' ? '#eef2ff' : item.targetType === 'Board' ? '#e0f2fe' : item.targetType === 'StudentGroup' ? '#d1fae5' : '#fef3c7',
+                              border: `1px solid ${item.targetType === 'All' ? '#c7d2fe' : item.targetType === 'Board' ? '#bae6fd' : item.targetType === 'StudentGroup' ? '#a7f3d0' : '#fde68a'}`,
+                              borderRadius: 10,
+                              padding: '12px 14px',
+                            }}>
+                              <div style={{ fontWeight: 700, fontSize: 13, color: '#1f2937', marginBottom: 4 }}>{item.title}</div>
+                              <div style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.6 }}>{item.message}</div>
+                              {item.createdAt && (
+                                <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 6 }}>
+                                  {item.createdAt.toDate ? item.createdAt.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                                </div>
+                              )}
+                            </div>
+                          </List.Item>
+                        )}
+                      />
+                    )}
                   </Card>
                   {profile.guardians && profile.guardians.length > 0 && (
                     <Card 
@@ -980,7 +1154,16 @@ const StudentDashboard = () => {
                             <List.Item.Meta 
                               avatar={<Avatar icon={<UserOutlined />} />} 
                               title={g.guardian_name} 
-                              description={<Tag color="purple">{g.relation}</Tag>} 
+                              description={
+                                <div className="flex flex-col gap-1 mt-1">
+                                  <div><Tag color="purple">{g.relation}</Tag></div>
+                                  {g.guardian_email_address && (
+                                    <div className="text-gray-500 text-xs flex items-center gap-1">
+                                      <MailOutlined /> {g.guardian_email_address}
+                                    </div>
+                                  )}
+                                </div>
+                              } 
                             />
                           </List.Item>
                         )} 
@@ -1007,24 +1190,10 @@ const StudentDashboard = () => {
                         return (
                           <List.Item
                             style={{ padding: '20px 0', borderBottom: '1px solid #f0f0f0' }}
-                            extra={
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                                <Tag color={
-                                  item.status === 'Completed' ? 'green' :
-                                  item.status === 'Closed' ? 'default' :
-                                  isOverdue ? 'red' : 'blue'
-                                } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
-                                  {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
-                                </Tag>
-                                {item.estimatedMinutes && (
-                                  <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <ClockCircleOutlined /> {item.estimatedMinutes} mins
-                                  </span>
-                                )}
-                              </div>
-                            }
                           >
-                            <List.Item.Meta
+                            <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', gap: '16px', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <List.Item.Meta
+                                style={{ flex: '1 1 300px' }}
                               title={
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                   <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>
@@ -1063,6 +1232,21 @@ const StudentDashboard = () => {
                                 </div>
                               }
                             />
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', minWidth: '120px' }}>
+                                <Tag color={
+                                  item.status === 'Completed' ? 'green' :
+                                  item.status === 'Closed' ? 'default' :
+                                  isOverdue ? 'red' : 'blue'
+                                } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
+                                  {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
+                                </Tag>
+                                {item.estimatedMinutes && (
+                                  <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <ClockCircleOutlined /> {item.estimatedMinutes} mins
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </List.Item>
                         );
                       }}
@@ -1078,24 +1262,10 @@ const StudentDashboard = () => {
                         return (
                           <List.Item
                             style={{ padding: '20px 0', borderBottom: '1px solid #f0f0f0' }}
-                            extra={
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                                <Tag color={
-                                  item.status === 'Completed' ? 'green' :
-                                  item.status === 'Closed' ? 'default' :
-                                  isOverdue ? 'red' : 'blue'
-                                } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
-                                  {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
-                                </Tag>
-                                {item.estimatedMinutes && (
-                                  <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <ClockCircleOutlined /> {item.estimatedMinutes} mins
-                                  </span>
-                                )}
-                              </div>
-                            }
                           >
-                            <List.Item.Meta
+                            <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', gap: '16px', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <List.Item.Meta
+                                style={{ flex: '1 1 300px' }}
                               title={
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                   <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>
@@ -1134,6 +1304,21 @@ const StudentDashboard = () => {
                                 </div>
                               }
                             />
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', minWidth: '120px' }}>
+                                <Tag color={
+                                  item.status === 'Completed' ? 'green' :
+                                  item.status === 'Closed' ? 'default' :
+                                  isOverdue ? 'red' : 'blue'
+                                } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
+                                  {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
+                                </Tag>
+                                {item.estimatedMinutes && (
+                                  <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <ClockCircleOutlined /> {item.estimatedMinutes} mins
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </List.Item>
                         );
                       }}
@@ -1143,6 +1328,7 @@ const StudentDashboard = () => {
               </Card>
             </Tabs.TabPane>
 
+            {enableOnlineFeePayment && (
             <Tabs.TabPane tab={<span><WalletOutlined /> Fee Details</span>} key="3">
               <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                 {studentData.feeRecords && studentData.feeRecords.length > 0 ? (
@@ -1151,39 +1337,41 @@ const StudentDashboard = () => {
                     renderItem={item => {
                       const isPaid = paidTerms[item.name] || item.outstanding_amount === 0;
                       return (
-                        <List.Item extra={
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                {item.discount_amount > 0 && (
-                                    <div style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 11, marginBottom: '-2px' }}>
-                                        ₹{item.original_fee?.toLocaleString()}
-                                    </div>
-                                )}
-                                <span className="font-bold">₹{item.outstanding_amount.toLocaleString()}</span>
-                                {item.discount_amount > 0 && (
-                                    <span style={{ color: '#a855f7', fontSize: 10, fontWeight: 700, background: '#f3e8ff', padding: '0 6px', borderRadius: 4, marginTop: 2 }}>
-                                        -₹{item.discount_amount.toLocaleString()} Off {item.discount_name ? `(${item.discount_name})` : ''}
-                                    </span>
-                                )}
+                        <List.Item>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', gap: '16px', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <List.Item.Meta 
+                              style={{ flex: '1 1 200px' }}
+                              title={<Text strong>{item.name}</Text>} 
+                              description={isPaid ? <Text type="success" size="small">Paid on {new Date(paidTerms[item.name]?.paid_at || Date.now()).toLocaleDateString()}</Text> : `Due: ${item.due_date}`} 
+                            />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                  {item.discount_amount > 0 && (
+                                      <div style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 11, marginBottom: '-2px' }}>
+                                          ₹{item.original_fee?.toLocaleString()}
+                                      </div>
+                                  )}
+                                  <span className="font-bold">₹{item.outstanding_amount.toLocaleString()}</span>
+                                  {item.discount_amount > 0 && (
+                                      <span style={{ color: '#a855f7', fontSize: 10, fontWeight: 700, background: '#f3e8ff', padding: '0 6px', borderRadius: 4, marginTop: 2 }}>
+                                          -₹{item.discount_amount.toLocaleString()} Off {item.discount_name ? `(${item.discount_name})` : ''}
+                                      </span>
+                                  )}
+                              </div>
+                              <Tag color={isPaid ? "green" : "red"} style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>{isPaid ? "PAID" : "UNPAID"}</Tag>
+                              {!isPaid && (
+                                <Button 
+                                  type="primary" 
+                                  size="small" 
+                                  shape="round"
+                                  style={{ fontSize: '10px', height: '24px' }}
+                                  onClick={() => handlePayNow(item)}
+                                >
+                                  PAY NOW
+                                </Button>
+                              )}
                             </div>
-                            <Tag color={isPaid ? "green" : "red"} style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>{isPaid ? "PAID" : "UNPAID"}</Tag>
-                            {!isPaid && (
-                              <Button 
-                                type="primary" 
-                                size="small" 
-                                shape="round"
-                                style={{ fontSize: '10px', height: '24px' }}
-                                onClick={() => handlePayNow(item)}
-                              >
-                                PAY NOW
-                              </Button>
-                            )}
                           </div>
-                        }>
-                          <List.Item.Meta 
-                            title={<Text strong>{item.name}</Text>} 
-                            description={isPaid ? <Text type="success" size="small">Paid on {new Date(paidTerms[item.name]?.paid_at || Date.now()).toLocaleDateString()}</Text> : `Due: ${item.due_date}`} 
-                          />
                         </List.Item>
                       );
                     }}
@@ -1209,39 +1397,41 @@ const StudentDashboard = () => {
                         else if (t.includes("Q4")) dueDate = "Payable by 10th Dec";
 
                         return (
-                          <List.Item extra={
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                  {item.discount_amount > 0 && (
-                                      <div style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 11, marginBottom: '-2px' }}>
-                                          ₹{item.original_fee?.toLocaleString()}
-                                      </div>
-                                  )}
-                                  <span className="font-bold">₹{item.amount.toLocaleString()}</span>
-                                  {item.discount_amount > 0 && (
-                                      <span style={{ color: '#a855f7', fontSize: 10, fontWeight: 700, background: '#f3e8ff', padding: '0 6px', borderRadius: 4, marginTop: 2 }}>
-                                          -₹{item.discount_amount.toLocaleString()} Off {item.discount_name ? `(${item.discount_name})` : ''}
-                                      </span>
-                                  )}
+                          <List.Item>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', gap: '16px', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <List.Item.Meta 
+                                style={{ flex: '1 1 200px' }}
+                                title={t} 
+                                description={isPaid ? <Text type="success" style={{ fontSize: '10px' }}>✓ Paid on {new Date(isPaid.paid_at).toLocaleDateString()}</Text> : (dueDate && <span style={{ fontSize: '10px', color: '#8c8c8c' }}>{dueDate}</span>)}
+                              />
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                    {item.discount_amount > 0 && (
+                                        <div style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 11, marginBottom: '-2px' }}>
+                                            ₹{item.original_fee?.toLocaleString()}
+                                        </div>
+                                    )}
+                                    <span className="font-bold">₹{item.amount.toLocaleString()}</span>
+                                    {item.discount_amount > 0 && (
+                                        <span style={{ color: '#a855f7', fontSize: 10, fontWeight: 700, background: '#f3e8ff', padding: '0 6px', borderRadius: 4, marginTop: 2 }}>
+                                            -₹{item.discount_amount.toLocaleString()} Off {item.discount_name ? `(${item.discount_name})` : ''}
+                                        </span>
+                                    )}
+                                </div>
+                                <Tag color={isPaid ? "green" : "red"} style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>{isPaid ? "PAID" : "UNPAID"}</Tag>
+                                {!isPaid && (
+                                  <Button 
+                                    type="primary" 
+                                    size="small" 
+                                    shape="round"
+                                    style={{ fontSize: '10px', height: '24px' }}
+                                    onClick={() => handlePayNow(item)}
+                                  >
+                                    PAY NOW
+                                  </Button>
+                                )}
                               </div>
-                              <Tag color={isPaid ? "green" : "red"} style={{ fontSize: '10px', margin: 0, fontWeight: 'bold' }}>{isPaid ? "PAID" : "UNPAID"}</Tag>
-                              {!isPaid && (
-                                <Button 
-                                  type="primary" 
-                                  size="small" 
-                                  shape="round"
-                                  style={{ fontSize: '10px', height: '24px' }}
-                                  onClick={() => handlePayNow(item)}
-                                >
-                                  PAY NOW
-                                </Button>
-                              )}
                             </div>
-                          }>
-                            <List.Item.Meta 
-                              title={t} 
-                              description={isPaid ? <Text type="success" style={{ fontSize: '10px' }}>✓ Paid on {new Date(isPaid.paid_at).toLocaleDateString()}</Text> : (dueDate && <span style={{ fontSize: '10px', color: '#8c8c8c' }}>{dueDate}</span>)}
-                            />
                           </List.Item>
                         );
                       }}
@@ -1257,7 +1447,9 @@ const StudentDashboard = () => {
                 )}
               </Card>
             </Tabs.TabPane>
+            )}
 
+            {enableOnlineFeePayment && (
             <Tabs.TabPane tab={<span><WalletOutlined /> Fees Receipt Transaction</span>} key="4">
               <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                 <Table 
@@ -1281,7 +1473,26 @@ const StudentDashboard = () => {
                       }
                     },
                     { title: 'Receipt No', dataIndex: 'payment_id', key: 'receipt_no' },
-                    { title: 'Amount', dataIndex: 'amount', key: 'amount', render: text => `₹ ${text?.toLocaleString()}` },
+                    { 
+                      title: 'Amount', 
+                      dataIndex: 'amount', 
+                      key: 'amount', 
+                      render: (text, rec) => (
+                        <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                            {rec.discount_amount > 0 && (
+                                <div style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 11, marginBottom: '-2px' }}>
+                                    ₹{rec.original_fee?.toLocaleString()}
+                                </div>
+                            )}
+                            <span className="font-semibold text-gray-800">₹{text?.toLocaleString()}</span>
+                            {rec.discount_amount > 0 && (
+                                <span style={{ color: '#a855f7', fontSize: 10, fontWeight: 700, background: '#f3e8ff', padding: '0 6px', borderRadius: 4, marginTop: 2 }}>
+                                    -₹{rec.discount_amount.toLocaleString()} Off {rec.discount_name ? `(${rec.discount_name})` : ''}
+                                </span>
+                            )}
+                        </div>
+                      ) 
+                    },
                     { 
                       title: 'Download', 
                       key: 'download',
@@ -1298,74 +1509,105 @@ const StudentDashboard = () => {
                 />
               </Card>
             </Tabs.TabPane>
+            )}
             <Tabs.TabPane tab={<span><TableOutlined /> Time Table</span>} key="5">
-              <Card 
-                bordered={false} 
-                style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
-                title={
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                    <span style={{ fontSize: '16px', fontWeight: 700 }}>Weekly Time Table</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '14px', color: '#595959', fontWeight: 500 }}>Filter by Day:</span>
-                      <select 
-                        style={{ 
-                          padding: '6px 12px', 
-                          borderRadius: '8px', 
-                          border: '1px solid #d9d9d9', 
-                          fontSize: '14px', 
-                          fontWeight: 500,
-                          outline: 'none',
-                          cursor: 'pointer',
-                          minWidth: '140px',
-                          background: '#fff'
-                        }}
-                        value={selectedDayFilter}
-                        onChange={(e) => setSelectedDayFilter(e.target.value)}
+              {studentData.timetablePhoto ? (
+                <Card 
+                  bordered={false} 
+                  style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                  title={<span style={{ fontSize: '16px', fontWeight: 700 }}>Weekly Time Table</span>}
+                  extra={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <Button 
+                        type="primary" 
+                        shape="round" 
+                        href={studentData.timetablePhoto.fileUrl} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        icon={<DownloadOutlined />}
                       >
-                        <option value="">All Days</option>
-                        <option value="Monday">Monday</option>
-                        <option value="Tuesday">Tuesday</option>
-                        <option value="Wednesday">Wednesday</option>
-                        <option value="Thursday">Thursday</option>
-                        <option value="Friday">Friday</option>
-                        <option value="Saturday">Saturday</option>
-                        <option value="Sunday">Sunday</option>
-                      </select>
+                        Download Timetable
+                      </Button>
                     </div>
+                  }
+                >
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f9fafb', borderRadius: '12px', padding: '16px', border: '1px solid #f0f0f0' }}>
+                    <img 
+                      src={studentData.timetablePhoto.fileUrl} 
+                      alt="Weekly Timetable" 
+                      style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }} 
+                    />
                   </div>
-                }
-              >
-                <Table 
-                  dataSource={(studentData.fullSchedule || []).filter(item => !selectedDayFilter || item.custom_day === selectedDayFilter)}
-                  rowKey="name"
-                  pagination={{ pageSize: 10 }}
-                  scroll={{ x: 'max-content' }}
-                  columns={[
-                    { title: 'ID', dataIndex: 'name', key: 'id', width: 120, ellipsis: true },
-                    { 
-                      title: 'Title', 
-                      key: 'title_display',
-                      render: (rec) => rec.title || rec.course 
-                    },
-                    { title: 'Instructor', dataIndex: 'instructor', key: 'instructor' },
-                    { 
-                      title: 'Day', 
-                      dataIndex: 'custom_day', 
-                      key: 'day',
-                      render: (text) => text ? <Tag color="blue" style={{ fontWeight: 'bold' }}>{text}</Tag> : '-'
-                    },
-                    { 
-                      title: 'Date', 
-                      dataIndex: 'schedule_date', 
-                      key: 'date',
-                      sorter: (a, b) => new Date(a.schedule_date) - new Date(b.schedule_date)
-                    },
-                    { title: 'From Time', dataIndex: 'from_time', key: 'from' },
-                    { title: 'To Time', dataIndex: 'to_time', key: 'to' },
-                    { title: 'Room', dataIndex: 'room', key: 'room' }
-                  ]}
-                />
-              </Card>
+                </Card>
+              ) : (
+                <Card 
+                  bordered={false} 
+                  style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                  title={
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                      <span style={{ fontSize: '16px', fontWeight: 700 }}>Weekly Time Table</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '14px', color: '#595959', fontWeight: 500 }}>Filter by Day:</span>
+                        <select 
+                          style={{ 
+                            padding: '6px 12px', 
+                            borderRadius: '8px', 
+                            border: '1px solid #d9d9d9', 
+                            fontSize: '14px', 
+                            fontWeight: 500,
+                            outline: 'none',
+                            cursor: 'pointer',
+                            minWidth: '140px',
+                            background: '#fff'
+                          }}
+                          value={selectedDayFilter}
+                          onChange={(e) => setSelectedDayFilter(e.target.value)}
+                        >
+                          <option value="">All Days</option>
+                          <option value="Monday">Monday</option>
+                          <option value="Tuesday">Tuesday</option>
+                          <option value="Wednesday">Wednesday</option>
+                          <option value="Thursday">Thursday</option>
+                          <option value="Friday">Friday</option>
+                          <option value="Saturday">Saturday</option>
+                          <option value="Sunday">Sunday</option>
+                        </select>
+                      </div>
+                    </div>
+                  }
+                >
+                  <Table 
+                    dataSource={(studentData.fullSchedule || []).filter(item => !selectedDayFilter || item.custom_day === selectedDayFilter)}
+                    rowKey="name"
+                    pagination={{ pageSize: 10 }}
+                    scroll={{ x: 'max-content' }}
+                    columns={[
+                      { title: 'ID', dataIndex: 'name', key: 'id', width: 120, ellipsis: true },
+                      { 
+                        title: 'Title', 
+                        key: 'title_display',
+                        render: (rec) => rec.title || rec.course 
+                      },
+                      { title: 'Instructor', dataIndex: 'instructor', key: 'instructor' },
+                      { 
+                        title: 'Day', 
+                        dataIndex: 'custom_day', 
+                        key: 'day',
+                        render: (text) => text ? <Tag color="blue" style={{ fontWeight: 'bold' }}>{text}</Tag> : '-'
+                      },
+                      { 
+                        title: 'Date', 
+                        dataIndex: 'schedule_date', 
+                        key: 'date',
+                        sorter: (a, b) => new Date(a.schedule_date) - new Date(b.schedule_date)
+                      },
+                      { title: 'From Time', dataIndex: 'from_time', key: 'from' },
+                      { title: 'To Time', dataIndex: 'to_time', key: 'to' },
+                      { title: 'Room', dataIndex: 'room', key: 'room' }
+                    ]}
+                  />
+                </Card>
+              )}
             </Tabs.TabPane>
 
             <Tabs.TabPane tab={<span><CalendarOutlined /> Attendance</span>} key="6">
@@ -1373,9 +1615,35 @@ const StudentDashboard = () => {
                 {studentData.permissions.attendance ? (
                   <Calendar 
                     cellRender={(current, info) => {
-                      if (info.type !== 'date' || !studentData.attendanceList) return info.originNode;
+                      if (info.type !== 'date') return info.originNode;
                       
                       const dateStr = current.format('YYYY-MM-DD');
+                      
+                      // Check for submitted leave applications covering this date
+                      const leavesOnDate = (leavesList || []).filter(l => 
+                        l.docstatus === 1 && 
+                        l.from_date <= dateStr && 
+                        l.to_date >= dateStr
+                      );
+                      
+                      if (leavesOnDate.length > 0) {
+                        const markPresent = leavesOnDate.some(l => l.mark_as_present === 1 || l.mark_as_present === true);
+                        if (markPresent) {
+                          return (
+                            <div className="events animate-pulse" style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '2px' }}>
+                              <Badge status="success" text={<span style={{ fontSize: '10px', fontWeight: 'bold' }}>Present (Leave Approved)</span>} />
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div className="events" style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '2px' }}>
+                              <Badge status="warning" text={<span style={{ fontSize: '10px', fontWeight: 'bold', color: '#d97706' }}>Leave</span>} />
+                            </div>
+                          );
+                        }
+                      }
+                      
+                      if (!studentData.attendanceList) return info.originNode;
                       const atts = studentData.attendanceList.filter(a => a.date === dateStr);
                       
                       return (
@@ -1390,6 +1658,238 @@ const StudentDashboard = () => {
                   />
                 ) : (
                   <Empty description="You do not have permission to view Attendance." />
+                )}
+              </Card>
+            </Tabs.TabPane>
+
+            <Tabs.TabPane tab={<span><CalendarOutlined /> Leave Application</span>} key="7">
+              <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                {leaveView === 'list' ? (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                      <Title level={4} style={{ margin: 0 }}>My Leave Applications</Title>
+                      <Button type="primary" onClick={() => {
+                        setLeaveEditing(null);
+                        setLeaveForm({
+                          student: studentData.profile?.name || '',
+                          from_date: new Date().toISOString().split('T')[0],
+                          to_date: new Date().toISOString().split('T')[0],
+                          attendance_based_on: 'Student Group',
+                          student_group: studentData.studentGroups?.[0] || '',
+                          mark_as_present: 0,
+                          reason: '',
+                          docstatus: 0
+                        });
+                        setLeaveView('form');
+                      }}>
+                        + Apply for Leave
+                      </Button>
+                    </div>
+
+                    <Table
+                      dataSource={leavesList}
+                      rowKey="name"
+                      loading={leavesLoading}
+                      pagination={{ pageSize: 10 }}
+                      scroll={{ x: 'max-content' }}
+                      columns={[
+                        { title: 'Application ID', dataIndex: 'name', key: 'name' },
+                        { title: 'Student Group', dataIndex: 'student_group', key: 'student_group' },
+                        { title: 'From Date', dataIndex: 'from_date', key: 'from_date' },
+                        { title: 'To Date', dataIndex: 'to_date', key: 'to_date' },
+                        { 
+                          title: 'Reason', 
+                          dataIndex: 'reason', 
+                          key: 'reason',
+                          ellipsis: true
+                        },
+                        {
+                          title: 'Status',
+                          dataIndex: 'docstatus',
+                          key: 'status',
+                          render: (docstatus) => (
+                            docstatus === 1 ? (
+                              <Tag color="green">Approved</Tag>
+                            ) : docstatus === 2 ? (
+                              <Tag color="red">Cancelled</Tag>
+                            ) : (
+                              <Tag color="amber">Draft</Tag>
+                            )
+                          )
+                        },
+                        {
+                          title: 'Actions',
+                          key: 'actions',
+                          align: 'center',
+                          render: (_, record) => (
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                              <Button size="small" onClick={() => {
+                                setLeaveEditing(record.name);
+                                setLeaveForm({
+                                  student: record.student || '',
+                                  from_date: record.from_date || '',
+                                  to_date: record.to_date || '',
+                                  attendance_based_on: record.attendance_based_on || 'Student Group',
+                                  student_group: record.student_group || '',
+                                  mark_as_present: record.mark_as_present || 0,
+                                  reason: record.reason || '',
+                                  docstatus: record.docstatus
+                                });
+                                setLeaveView('form');
+                              }}>
+                                {record.docstatus === 0 ? 'Edit' : 'View'}
+                              </Button>
+                              {record.docstatus === 0 && (
+                                <Button size="small" style={{ borderColor: '#52c41a', color: '#52c41a' }} onClick={() => handleSubmitLeave(record.name)}>
+                                  Submit
+                                </Button>
+                              )}
+                              {record.docstatus === 0 && (
+                                <Button size="small" danger onClick={() => handleDeleteLeave(record.name)}>
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
+                          )
+                        }
+                      ]}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid #f0f0f0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Title level={4} style={{ margin: 0 }}>
+                          {leaveEditing ? `Leave Application: ${leaveEditing}` : 'New Leave Application'}
+                        </Title>
+                        {leaveEditing && (
+                          leaveForm.docstatus === 1 ? (
+                            <Tag color="green">Approved</Tag>
+                          ) : leaveForm.docstatus === 2 ? (
+                            <Tag color="red">Cancelled</Tag>
+                          ) : (
+                            <Tag color="amber">Draft</Tag>
+                          )
+                        )}
+                        {!leaveEditing && <Tag color="red">Not Saved (Draft)</Tag>}
+                      </div>
+                      <Button onClick={() => setLeaveView('list')}>Back to List</Button>
+                    </div>
+
+                    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px 0' }}>
+                      {/* Readonly indicators for submitted states */}
+                      {leaveEditing && leaveForm.docstatus === 1 && (
+                        <Alert 
+                          message="Submitted Document" 
+                          description="This leave application has been submitted and is read-only. It cannot be modified." 
+                          type="info" 
+                          showIcon 
+                          style={{ marginBottom: '20px', borderRadius: '8px' }}
+                        />
+                      )}
+                      
+                      <Row gutter={[16, 16]}>
+                        <Col xs={24} sm={12}>
+                          <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>Student ID</label>
+                          <input 
+                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed" 
+                            value={studentData.profile?.name || ''} 
+                            disabled 
+                          />
+                        </Col>
+
+                        <Col xs={24} sm={12}>
+                          <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>Student Name</label>
+                          <input 
+                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed" 
+                            value={studentName || ''} 
+                            disabled 
+                          />
+                        </Col>
+                        
+                        <Col span={24}>
+                          <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>Student Group *</label>
+                          <select 
+                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                            value={leaveForm.student_group} 
+                            onChange={e => setLeaveForm({ ...leaveForm, student_group: e.target.value })}
+                            disabled={leaveForm.docstatus === 1}
+                          >
+                            <option value="">Select Student Group</option>
+                            {studentData.studentGroups?.map(sg => (
+                              <option key={sg} value={sg}>{sg}</option>
+                            ))}
+                          </select>
+                        </Col>
+
+                        <Col xs={24} sm={12}>
+                          <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>From Date *</label>
+                          <input 
+                            type="date"
+                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                            value={leaveForm.from_date} 
+                            onChange={e => setLeaveForm({ ...leaveForm, from_date: e.target.value })} 
+                            disabled={leaveForm.docstatus === 1}
+                          />
+                        </Col>
+
+                        <Col xs={24} sm={12}>
+                          <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>To Date *</label>
+                          <input 
+                            type="date"
+                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                            value={leaveForm.to_date} 
+                            onChange={e => setLeaveForm({ ...leaveForm, to_date: e.target.value })} 
+                            disabled={leaveForm.docstatus === 1}
+                          />
+                        </Col>
+
+                        <Col span={24}>
+                          <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>Attendance Based On</label>
+                          <select 
+                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                            value={leaveForm.attendance_based_on} 
+                            onChange={e => setLeaveForm({ ...leaveForm, attendance_based_on: e.target.value })}
+                            disabled={leaveForm.docstatus === 1}
+                          >
+                            <option value="Student Group">Student Group</option>
+                            <option value="Course">Course</option>
+                          </select>
+                        </Col>
+
+                        <Col span={24}>
+                          <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>Reason</label>
+                          <textarea 
+                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white h-28 resize-none"
+                            placeholder="Please state the reason for leave..."
+                            value={leaveForm.reason} 
+                            onChange={e => setLeaveForm({ ...leaveForm, reason: e.target.value })}
+                            disabled={leaveForm.docstatus === 1}
+                          />
+                        </Col>
+
+                        <Col span={24} style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
+                          <Button onClick={() => setLeaveView('list')}>Cancel</Button>
+                          {(!leaveEditing || leaveForm.docstatus === 0) && (
+                            <>
+                              {leaveEditing && (
+                                <Button 
+                                  style={{ backgroundColor: '#52c41a', borderColor: '#52c41a', color: '#fff' }} 
+                                  loading={savingLeave} 
+                                  onClick={() => handleSubmitLeave(leaveEditing)}
+                                >
+                                  Submit Leave
+                                </Button>
+                              )}
+                              <Button type="primary" loading={savingLeave} onClick={handleSaveLeave}>
+                                {leaveEditing ? 'Save Draft' : 'Create Draft'}
+                              </Button>
+                            </>
+                          )}
+                        </Col>
+                      </Row>
+                    </div>
+                  </div>
                 )}
               </Card>
             </Tabs.TabPane>
@@ -1444,7 +1944,7 @@ const StudentDashboard = () => {
               </div>
 
               {/* Detail Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px', paddingLeft: '8px', paddingRight: '8px' }}>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4 px-2">
                 <div>
                   <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block' }}>Student ID</span>
                   <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937' }}>{profile.name}</span>
@@ -1483,8 +1983,8 @@ const StudentDashboard = () => {
               </div>
 
               {/* Footer Bar */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '24px', borderTop: '1px solid #f3f4f6', paddingTop: '24px' }}>
-                <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '24px', borderTop: '1px solid #f3f4f6', paddingTop: '24px' }}>
+                <div style={{ flex: '1 1 100%' }}>
                   <Checkbox 
                     checked={termsAccepted} 
                     onChange={(e) => setTermsAccepted(e.target.checked)}
@@ -1493,7 +1993,7 @@ const StudentDashboard = () => {
                     I confirm all student and fee details are correct. I agree to the <span style={{ color: '#1d4ed8', textDecoration: 'underline' }}>Terms</span>.
                   </Checkbox>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                   <div style={{ textAlign: 'right' }}>
                     <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Payable Amount</span>
                     <span style={{ fontSize: '28px', fontWeight: 900, color: '#1d4ed8', lineHeight: 1 }}>₹{(selectedFee.amount || selectedFee.outstanding_amount || 0).toLocaleString()}</span>

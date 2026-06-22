@@ -4,8 +4,12 @@ import { ReloadOutlined, MoreOutlined } from '@ant-design/icons';
 import API from '../../services/api';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 export default function AbsentStudentReport() {
+    const { isInstructor, isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
     const [selectedBoard, setSelectedBoard] = useState('All');
     const [boards, setBoards] = useState([]);
@@ -17,6 +21,7 @@ export default function AbsentStudentReport() {
     const [studentBoardMap, setStudentBoardMap] = useState({});
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         const fetchMasters = async () => {
             try {
                 const [cRes, sRes, sgRes] = await Promise.all([
@@ -47,7 +52,7 @@ export default function AbsentStudentReport() {
         fetchMasters().then(() => {
             handleGenerate();
         });
-    }, []);
+    }, [isCoordinator, coordinatorScope.loading]);
 
     const handleGenerate = async () => {
         setLoading(true);
@@ -110,6 +115,14 @@ export default function AbsentStudentReport() {
                     custom_board: resolvedBoard || ''
                 };
             }) || [];
+
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctBoards = coordinatorScope.boards || [];
+                // Filtering primarily by board, as program is not directly present in this report result.
+                if (ctBoards.length > 0) {
+                    finalData = finalData.filter(r => ctBoards.includes(r.custom_board));
+                }
+            }
             
             setData(finalData);
         } catch (err) {

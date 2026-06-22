@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { resolveInstructorId } from '../../utility/instructorHelper';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const emptyForm = () => ({
     student: '',
@@ -13,6 +16,9 @@ const emptyForm = () => ({
 });
 
 const StudentLeaveApplication = () => {
+    const userRole = localStorage.getItem('userRole');
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -34,7 +40,27 @@ const StudentLeaveApplication = () => {
         attendanceBasedOn: ['Student Group', 'Course'],
     });
 
+    const [studentMap, setStudentMap] = useState({});
+
     useEffect(() => {
+        fetchStudentMap();
+    }, []);
+
+    const fetchStudentMap = async () => {
+        try {
+            const res = await API.get('/api/resource/Student?fields=["name","student_name"]&limit_page_length=None');
+            const map = {};
+            res.data?.data?.forEach(s => {
+                map[s.name] = s.student_name;
+            });
+            setStudentMap(map);
+        } catch (e) {
+            console.error("Error fetching student map:", e);
+        }
+    };
+
+    useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchLeaveList();
         } else {
@@ -45,19 +71,63 @@ const StudentLeaveApplication = () => {
                 setForm(emptyForm());
             }
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     const fetchDropdowns = async () => {
         try {
+            const userEmail = localStorage.getItem('user');
             const safeGet = (url) => API.get(url).catch(() => ({ data: { data: [] } }));
             const [sRes, sgRes] = await Promise.all([
                 safeGet('/api/resource/Student?limit_page_length=None'),
                 safeGet('/api/resource/Student Group?limit_page_length=None'),
             ]);
+            let students = sRes.data.data?.map(d => d.name) || [];
+            let studentGroups = sgRes.data.data?.map(d => d.name) || [];
+
+            if (userRole === 'Instructor') {
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name"]&limit_page_length=None`);
+                    const ctGroups = (ctRes.data.data || []).map(g => g.name);
+                    
+                    let ctStudentIds = [];
+                    if (ctGroups.length > 0) {
+                        const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                        const groupDetails = await Promise.all(groupDetailPromises);
+                        ctStudentIds = Array.from(new Set(
+                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                        ));
+                    }
+                    
+                    students = students.filter(s => ctStudentIds.includes(s));
+                    studentGroups = studentGroups.filter(g => ctGroups.includes(g));
+                } else {
+                    students = [];
+                    studentGroups = [];
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                if (ctPrograms.length > 0) {
+                    const sgRes2 = await API.get(`/api/resource/Student Group?filters=[["program","in",${JSON.stringify(ctPrograms)}]]&fields=["name"]&limit_page_length=None`).catch(() => ({data:{data:[]}}));
+                    const ctGroups = (sgRes2.data.data || []).map(g => g.name);
+                    studentGroups = studentGroups.filter(g => ctGroups.includes(g));
+
+                    let ctStudentIds = [];
+                    if (ctGroups.length > 0) {
+                        const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                        const groupDetails = await Promise.all(groupDetailPromises);
+                        ctStudentIds = Array.from(new Set(
+                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                        ));
+                    }
+                    students = students.filter(s => ctStudentIds.includes(s));
+                }
+            }
+
             setDropdowns(prev => ({
                 ...prev,
-                students: sRes.data.data?.map(d => d.name) || [],
-                studentGroups: sgRes.data.data?.map(d => d.name) || [],
+                students: students,
+                studentGroups: studentGroups,
             }));
         } catch (err) {
             console.error('Error fetching dropdowns:', err);
@@ -67,9 +137,55 @@ const StudentLeaveApplication = () => {
     const fetchLeaveList = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Student Leave Application?fields=["name","student","from_date","to_date","mark_as_present"]&limit_page_length=None&order_by=from_date desc';
+            const userEmail = localStorage.getItem('user');
+            const url = '/api/resource/Student Leave Application?fields=["name","student","from_date","to_date","mark_as_present","student_group","docstatus"]&limit_page_length=None&order_by=from_date desc';
             const response = await API.get(url);
-            setLeaveList(response.data.data || []);
+            
+            let leaves = response.data.data || [];
+            if (userRole === 'Instructor') {
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name"]&limit_page_length=None`);
+                    const ctGroups = (ctRes.data.data || []).map(g => g.name);
+                    
+                    let ctStudentIds = [];
+                    if (ctGroups.length > 0) {
+                        const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                        const groupDetails = await Promise.all(groupDetailPromises);
+                        ctStudentIds = Array.from(new Set(
+                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                        ));
+                    }
+                    
+                    leaves = leaves.filter(row => 
+                        (row.student_group && ctGroups.includes(row.student_group)) ||
+                        (row.student && ctStudentIds.includes(row.student))
+                    );
+                } else {
+                    leaves = [];
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                if (ctPrograms.length > 0) {
+                    const sgRes = await API.get(`/api/resource/Student Group?filters=[["program","in",${JSON.stringify(ctPrograms)}]]&fields=["name"]&limit_page_length=None`).catch(() => ({data:{data:[]}}));
+                    const ctGroups = (sgRes.data.data || []).map(g => g.name);
+                    
+                    let ctStudentIds = [];
+                    if (ctGroups.length > 0) {
+                        const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                        const groupDetails = await Promise.all(groupDetailPromises);
+                        ctStudentIds = Array.from(new Set(
+                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                        ));
+                    }
+                    
+                    leaves = leaves.filter(row =>
+                        (row.student_group && ctGroups.includes(row.student_group)) ||
+                        (row.student && ctStudentIds.includes(row.student))
+                    );
+                }
+            }
+            setLeaveList(leaves);
         } catch (err) {
             console.error('Error fetching leave applications:', err);
         } finally {
@@ -98,12 +214,44 @@ const StudentLeaveApplication = () => {
 
         setSaving(true);
         try {
+            if (userRole === 'Instructor') {
+                const userEmail = localStorage.getItem('user');
+                const instructorId = await resolveInstructorId(userEmail);
+                if (!instructorId) {
+                    notification.error({ message: 'Access Denied', description: 'Instructor not identified.' });
+                    setSaving(false);
+                    return;
+                }
+                const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name"]&limit_page_length=None`);
+                const ctGroups = (ctRes.data.data || []).map(g => g.name);
+                
+                let ctStudentIds = [];
+                if (ctGroups.length > 0) {
+                    const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                    const groupDetails = await Promise.all(groupDetailPromises);
+                    ctStudentIds = Array.from(new Set(
+                        groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                    ));
+                }
+                
+                if (form.student_group && !ctGroups.includes(form.student_group)) {
+                    notification.error({ message: 'Access Denied', description: 'You are not the class teacher of this student group.' });
+                    setSaving(false);
+                    return;
+                }
+                if (form.student && !ctStudentIds.includes(form.student)) {
+                    notification.error({ message: 'Access Denied', description: 'This student does not belong to your class-teacher groups.' });
+                    setSaving(false);
+                    return;
+                }
+            }
+
             if (editingRecord) {
                 await API.put(`/api/resource/Student Leave Application/${encodeURIComponent(editingRecord)}`, form);
-                notification.success({ message: 'Leave application updated.' });
+                notification.success({ message: 'Draft updated successfully.' });
             } else {
-                await API.post('/api/resource/Student Leave Application', form);
-                notification.success({ message: 'Leave application submitted.' });
+                await API.post('/api/resource/Student Leave Application', { ...form, docstatus: 0 });
+                notification.success({ message: 'Draft created successfully.' });
             }
             setView('list');
         } catch (err) {
@@ -114,7 +262,29 @@ const StudentLeaveApplication = () => {
         }
     };
 
+    const handleSubmit = async (recordName) => {
+        const idToSubmit = recordName || editingRecord;
+        if (!idToSubmit) return;
+        if (!window.confirm(`Submit leave application ${idToSubmit}? Once submitted, it cannot be modified.`)) return;
+
+        setSaving(true);
+        try {
+            await API.put(`/api/resource/Student Leave Application/${encodeURIComponent(idToSubmit)}`, { docstatus: 1 });
+            notification.success({ message: 'Submitted successfully.' });
+            setView('list');
+        } catch (err) {
+            console.error('Submit error:', err);
+            notification.error({ message: 'Submit Failed', description: err.response?.data?._server_messages || err.message });
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleDelete = async () => {
+        if (userRole === 'Instructor') {
+            notification.error({ message: 'Access Denied', description: 'Instructors are not allowed to delete leave applications.' });
+            return;
+        }
         if (!window.confirm('Delete this leave application?')) return;
         try {
             await API.delete(`/api/resource/Student Leave Application/${encodeURIComponent(editingRecord)}`);
@@ -162,23 +332,41 @@ const StudentLeaveApplication = () => {
                                 <th className="px-5 py-4 font-bold text-gray-400 uppercase tracking-widest text-[10px]">Student</th>
                                 <th className="px-5 py-4 font-bold text-gray-400 uppercase tracking-widest text-[10px]">From Date</th>
                                 <th className="px-5 py-4 font-bold text-gray-400 uppercase tracking-widest text-[10px]">To Date</th>
+                                <th className="px-5 py-4 font-bold text-gray-400 uppercase tracking-widest text-[10px]">Status</th>
                                 <th className="px-5 py-4 font-bold text-gray-400 uppercase tracking-widest text-[10px]">Mark as Present</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loadingList ? (
-                                <tr><td colSpan="5" className="text-center py-10 text-gray-400 italic">Data is loading...</td></tr>
+                                <tr><td colSpan="6" className="text-center py-10 text-gray-400 italic">Data is loading...</td></tr>
                             ) : filtered.length === 0 ? (
-                                <tr><td colSpan="5" className="text-center py-10 text-gray-400 italic">No leave applications found.</td></tr>
+                                <tr><td colSpan="6" className="text-center py-10 text-gray-400 italic">No leave applications found.</td></tr>
                             ) : (
                                 filtered.map((row) => (
                                     <tr key={row.name} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
                                         <td className="px-5 py-4 font-medium">
                                             <button className="text-blue-600 hover:text-blue-800" onClick={() => { setEditingRecord(row.name); setView('form'); }}>{row.name}</button>
                                         </td>
-                                        <td className="px-5 py-4 text-gray-800">{row.student}</td>
+                                        <td className="px-5 py-4 text-gray-800">
+                                            {studentMap[row.student] ? `${studentMap[row.student]} (${row.student})` : row.student}
+                                        </td>
                                         <td className="px-5 py-4">{row.from_date}</td>
                                         <td className="px-5 py-4">{row.to_date}</td>
+                                        <td className="px-5 py-4">
+                                            {row.docstatus === 1 ? (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-green-50 text-green-600 border border-green-200">
+                                                    Approved
+                                                </span>
+                                            ) : row.docstatus === 2 ? (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-50 text-red-600 border border-red-200">
+                                                    Cancelled
+                                                </span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-50 text-amber-600 border border-amber-200">
+                                                    Draft
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="px-5 py-4">
                                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${row.mark_as_present ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
                                                 {row.mark_as_present ? 'Yes' : 'No'}
@@ -196,19 +384,49 @@ const StudentLeaveApplication = () => {
 
     if (loadingForm) return <div className="p-6 text-center text-gray-400 italic py-24">Fetching record details...</div>;
 
+    const isSubmitted = form.docstatus === 1 || form.docstatus === 2;
+
     return (
         <div className="p-6 max-w-5xl mx-auto pb-32">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
                 <div className="flex items-center gap-2">
-                    <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{editingRecord ? `Edit ${editingRecord}` : 'New Student Leave Application'}</h2>
-                    {!editingRecord && <span className="px-2 py-0.5 rounded text-[10px] bg-red-100 text-red-600 font-bold uppercase tracking-widest shadow-sm">Not Saved</span>}
+                    <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{editingRecord ? `Leave Application: ${editingRecord}` : 'New Student Leave Application'}</h2>
+                    {editingRecord && (
+                        form.docstatus === 1 ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] bg-green-100 text-green-600 font-bold uppercase tracking-widest shadow-sm">Approved</span>
+                        ) : form.docstatus === 2 ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] bg-red-100 text-red-600 font-bold uppercase tracking-widest shadow-sm">Cancelled</span>
+                        ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] bg-amber-100 text-amber-600 font-bold uppercase tracking-widest shadow-sm">Draft</span>
+                        )
+                    )}
+                    {!editingRecord && <span className="px-2 py-0.5 rounded text-[10px] bg-red-100 text-red-600 font-bold uppercase tracking-widest shadow-sm">Not Saved (Draft)</span>}
                 </div>
-                <div className="flex gap-3">
-                    <button className="px-5 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 flex items-center bg-white shadow-sm" onClick={() => setView('list')}>Back</button>
-                    {editingRecord && <button className="px-5 py-2 bg-red-50 text-red-600 rounded-md text-sm font-semibold hover:bg-red-100 flex items-center shadow-sm" onClick={handleDelete}>Delete</button>}
-                    <button className="px-8 py-2 bg-gray-900 text-white rounded-md text-sm font-bold hover:bg-gray-800 disabled:opacity-50 shadow-sm transition-all" onClick={handleSave} disabled={saving}>
-                        {saving ? 'Processing...' : 'Save'}
+                <div className="flex items-center gap-2">
+                    <button className="p-2 border border-blue-400 bg-white text-blue-600 rounded-md hover:bg-blue-50 transition" onClick={() => setView('list')} title="Go Back">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                     </button>
+                    {editingRecord && !isSubmitted && userRole !== 'Instructor' && (
+                        <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition shadow-sm" onClick={handleDelete}>Delete</button>
+                    )}
+                    {editingRecord && !isSubmitted && (
+                        <button 
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-sm font-medium transition shadow-sm" 
+                            onClick={() => handleSubmit()} 
+                            disabled={saving}
+                        >
+                            Submit Leave
+                        </button>
+                    )}
+                    {!isSubmitted && (
+                        <button 
+                            className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2" 
+                            onClick={handleSave} 
+                            disabled={saving}
+                        >
+                            {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save Draft'}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -216,32 +434,63 @@ const StudentLeaveApplication = () => {
                 <div className="grid grid-cols-2 gap-x-16 gap-y-8">
                     <div className="col-span-1">
                         <label className={labelStyle}>Student *</label>
-                        <select className={inputStyle} value={form.student} onChange={e => setForm({ ...form, student: e.target.value })}>
+                        <select 
+                            className={inputStyle} 
+                            value={form.student} 
+                            onChange={e => setForm({ ...form, student: e.target.value })}
+                            disabled={isSubmitted}
+                        >
                             <option value="">Select Student</option>
-                            {dropdowns.students.map(s => <option key={s} value={s}>{s}</option>)}
+                            {dropdowns.students.map(s => (
+                                <option key={s} value={s}>
+                                    {studentMap[s] ? `${studentMap[s]} (${s})` : s}
+                                </option>
+                            ))}
                         </select>
                     </div>
                     <div className="col-span-1 space-y-4">
                         <div>
                             <label className={labelStyle}>From Date *</label>
-                            <input type="date" className={inputStyle} value={form.from_date} onChange={e => setForm({ ...form, from_date: e.target.value })} />
+                            <input 
+                                type="date" 
+                                className={inputStyle} 
+                                value={form.from_date} 
+                                onChange={e => setForm({ ...form, from_date: e.target.value })} 
+                                disabled={isSubmitted}
+                            />
                         </div>
                         <div>
                             <label className={labelStyle}>To Date *</label>
-                            <input type="date" className={inputStyle} value={form.to_date} onChange={e => setForm({ ...form, to_date: e.target.value })} />
+                            <input 
+                                type="date" 
+                                className={inputStyle} 
+                                value={form.to_date} 
+                                onChange={e => setForm({ ...form, to_date: e.target.value })} 
+                                disabled={isSubmitted}
+                            />
                         </div>
                     </div>
 
                     <div className="col-span-1 pt-4 border-t border-gray-50">
                         <div className="mb-6">
                             <label className={labelStyle}>Attendance Based On</label>
-                            <select className={inputStyle} value={form.attendance_based_on} onChange={e => setForm({ ...form, attendance_based_on: e.target.value })}>
+                            <select 
+                                className={inputStyle} 
+                                value={form.attendance_based_on} 
+                                onChange={e => setForm({ ...form, attendance_based_on: e.target.value })}
+                                disabled={isSubmitted}
+                            >
                                 {dropdowns.attendanceBasedOn.map(o => <option key={o} value={o}>{o}</option>)}
                             </select>
                         </div>
                         <div className="mb-6">
                             <label className={labelStyle}>Student Group *</label>
-                            <select className={inputStyle} value={form.student_group} onChange={e => setForm({ ...form, student_group: e.target.value })}>
+                            <select 
+                                className={inputStyle} 
+                                value={form.student_group} 
+                                onChange={e => setForm({ ...form, student_group: e.target.value })}
+                                disabled={isSubmitted}
+                            >
                                 <option value="">Select Group</option>
                                 {dropdowns.studentGroups.map(sg => <option key={sg} value={sg}>{sg}</option>)}
                             </select>
@@ -252,6 +501,7 @@ const StudentLeaveApplication = () => {
                                 className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
                                 checked={form.mark_as_present} 
                                 onChange={e => setForm({ ...form, mark_as_present: e.target.checked ? 1 : 0 })} 
+                                disabled={isSubmitted}
                              />
                              <div>
                                 <label className="text-sm font-semibold text-gray-800 block">Mark as Present</label>
@@ -267,6 +517,7 @@ const StudentLeaveApplication = () => {
                             placeholder="Please provide the reason for leave..."
                             value={form.reason} 
                             onChange={e => setForm({ ...form, reason: e.target.value })} 
+                            disabled={isSubmitted}
                         />
                     </div>
                 </div>

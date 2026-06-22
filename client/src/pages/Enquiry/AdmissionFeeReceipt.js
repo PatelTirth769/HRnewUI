@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import schoolHeader from '../../assets/images/school_header.jpg';
+import schoolHeader from '../../assets/images/newheader.jpeg';
 
 /**
  * Convert number to words (reused from FeeReceiptTemplate)
@@ -139,7 +139,7 @@ export const generateAdmissionReceipt = async (data) => {
     const studentDetails = [
         ['Student Name', (data.student_name || 'N/A').toUpperCase()],
         ['Registration No', data.registration_no || 'N/A'],
-        ['Program / Class', data.program || 'N/A'],
+        ['Class', data.program || 'N/A'],
         ['Parent / Guardian', data.parent_name || 'N/A'],
         ['Contact Number', data.parent_mobile || 'N/A'],
     ];
@@ -250,10 +250,6 @@ export const generateAdmissionReceipt = async (data) => {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.text('Authorized Signatory', pageWidth - 60, footerY + 6);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139);
-    doc.text('SSV CAMPUS - CBSE', pageWidth - 58, footerY + 11);
 
     // Save
     const fileName = `${feeTypeLabel}_Fee_Receipt_${data.receipt_no || 'receipt'}.pdf`;

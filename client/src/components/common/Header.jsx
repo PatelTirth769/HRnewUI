@@ -11,7 +11,7 @@ const employeeHiddenModules = new Set(['master', 'elcLetters', 'approvers']);
 
 const Header = ({ onModuleClick }) => {
   const navigate = useNavigate();
-  const { isAdmin, isInventory, isAccounts, isStudent, isInstructor, isGuardian } = useUserRole();
+  const { isAdmin, isInventory, isAccounts, isStudent, isInstructor, isGuardian, isAttendanceManager, isCoordinator } = useUserRole();
   const branding = getBranding();
   const [auth, setAuth] = useAuth();
 
@@ -53,7 +53,7 @@ const Header = ({ onModuleClick }) => {
   return (
     <header className="bg-white px-4 py-2 flex justify-between items-center relative shadow-sm" >
       <Link
-        to={isAdmin ? "/home" : "/employee-self-service"}
+        to={isAttendanceManager ? "/education/student-attendance" : (isAdmin ? "/home" : "/employee-self-service")}
         className={`no-underline text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors flex items-center ${branding.showHeaderTitle ? 'gap-2' : ''}`}
       >
         <img src={branding.headerLogo} alt={`${branding.displayName} logo`} className="h-10 w-auto object-contain" />
@@ -100,6 +100,18 @@ const Header = ({ onModuleClick }) => {
                     <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('enquiry'); }}>
                       Enquiry Module
                     </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/education/roll-gr-assign'); }}>
+                      Roll & GR Assign
+                    </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/education/dashboard-fees-manage'); }}>
+                      Dashboard Fees Manage
+                    </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/enquiry/announcement'); }}>
+                      📢 Announcement
+                    </div>
+                    <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/enquiry/coordinator-setup'); }}>
+                      🛡️ Coordinator Setup
+                    </div>
                     <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('homework'); }}>
                       Work
                     </div>
@@ -115,9 +127,13 @@ const Header = ({ onModuleClick }) => {
                   </div>
                 </div>
               </>
+            ) : isAttendanceManager ? (
+              <>
+                <div onClick={() => onModuleClick('education')} className="cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold">Education</div>
+              </>
             ) : (
               <>
-                {(isStudent || isInstructor || isGuardian) && (
+                {(isStudent || isInstructor || isGuardian || isCoordinator) && (
                   (isStudent || isGuardian) ? (
                     <div 
                       className="text-gray-400 select-none truncate font-semibold" 
@@ -131,13 +147,31 @@ const Header = ({ onModuleClick }) => {
                   )
                 )}
                 <Link 
-                  to={isStudent ? "/student-dashboard" : isInstructor ? "/instructor-dashboard" : isGuardian ? "/guardian-dashboard" : "/employee-self-service"} 
-                  target={(isStudent || isInstructor || isGuardian) ? "_self" : "_blank"} 
+                  to={isStudent ? "/student-dashboard" : (isInstructor || isCoordinator) ? "/instructor-dashboard" : isGuardian ? "/guardian-dashboard" : "/employee-self-service"} 
+                  target={(isStudent || isInstructor || isCoordinator || isGuardian) ? "_self" : "_blank"} 
                   rel="noopener noreferrer" 
                   className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold"
                 >
-                  {(isStudent || isInstructor || isGuardian) ? "Dashboard" : "Self Service"}
+                  {(isStudent || isInstructor || isCoordinator || isGuardian) ? "Dashboard" : "Self Service"}
                 </Link>
+                {(isInstructor || isCoordinator) && (
+                  <div key="instructor-more-dropdown" className="nav-dropdown-group">
+                    <div className="nav-dropdown-trigger cursor-pointer font-semibold hover:text-blue-600 transition-colors">
+                      More
+                    </div>
+                    <div className="nav-dropdown-content">
+                      <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/enquiry/announcement'); }}>
+                        📢 Announcement
+                      </div>
+                      <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('homework'); }}>
+                        Work
+                      </div>
+                      <div className="nav-dropdown-item" onClick={(e) => { e.stopPropagation(); onModuleClick('storedDocuments'); }}>
+                        Stored Documents
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {isInventory && (
                   <div onClick={() => onModuleClick('assets')} className="cursor-pointer hover:text-blue-600 transition-colors truncate">Assets</div>
                 )}

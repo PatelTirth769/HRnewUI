@@ -669,8 +669,28 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                 }
             } catch (erpErr) {
                 console.error('ERPNext Admission sync failed:', erpErr);
-                const errMsg = erpErr.response?.data?.exception || erpErr.response?.data?._server_messages || erpErr.message;
-                throw new Error(`ERPNext Sync Failed: ${typeof errMsg === 'string' ? errMsg.slice(0, 100) : 'Check server logs'}. Admission aborted.`);
+                console.error('ERPNext Response Data:', erpErr.response?.data);
+                
+                let errorDesc = 'Check server logs';
+                if (erpErr.response?.data?.exception) {
+                    const exc = String(erpErr.response.data.exception);
+                    const lines = exc.split('\n').filter(l => l.trim().length > 0);
+                    errorDesc = lines.length > 0 ? lines[lines.length - 1] : 'Server Exception (500)';
+                } else if (erpErr.response?.data?._server_messages) {
+                    try {
+                        const msgs = JSON.parse(erpErr.response.data._server_messages);
+                        errorDesc = msgs.map(m => {
+                            const parsed = JSON.parse(m);
+                            return parsed.message;
+                        }).join(', ');
+                    } catch(e) {
+                        errorDesc = String(erpErr.response.data._server_messages).slice(0, 150);
+                    }
+                } else {
+                    errorDesc = erpErr.message;
+                }
+                
+                throw new Error(`ERPNext Sync Failed: ${errorDesc}. Admission aborted.`);
             }
 
             // 2. Save to Firebase Final Admissions
@@ -695,7 +715,8 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
             setView('list');
             fetchRegistrations();
         } catch (err) { 
-            notification.error({ message: 'Admission Failed', description: err.message }); 
+            console.error('Showing Failure Modal:', err.message);
+            window.alert('Admission Failed:\n\n' + err.message);
         } finally { 
             setSaving(false); 
         }
@@ -911,7 +932,22 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
             if (!erpNextStudentName && lastSyncErr) throw lastSyncErr;
         } catch (erpErr) {
             console.error('[Bulk Confirm ERPNext Failed]', erpErr);
-            throw new Error(`ERPNext Sync Failed: ${erpErr.message}. Admission aborted.`);
+            let errorDesc = 'Check server logs';
+            if (erpErr.response?.data?.exception) {
+                const exc = String(erpErr.response.data.exception);
+                const lines = exc.split('\n').filter(l => l.trim().length > 0);
+                errorDesc = lines.length > 0 ? lines[lines.length - 1] : 'Server Exception (500)';
+            } else if (erpErr.response?.data?._server_messages) {
+                try {
+                    const msgs = JSON.parse(erpErr.response.data._server_messages);
+                    errorDesc = msgs.map(m => JSON.parse(m).message).join(', ');
+                } catch(e) {
+                    errorDesc = String(erpErr.response.data._server_messages).slice(0, 150);
+                }
+            } else {
+                errorDesc = erpErr.message;
+            }
+            throw new Error(`ERPNext Sync Failed: ${errorDesc}. Admission aborted.`);
         }
 
         // Save to Firebase Final Admissions
@@ -968,6 +1004,7 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                 errors++;
                 log.push({ name: `${reg.first_name} ${reg.last_name || ''}`.trim(), status: 'error', msg: err.message });
                 console.error('[Bulk Confirm] Failed for', reg.first_name, err);
+                window.alert(`Admission Failed for ${reg.first_name}:\n\n${err.message}`);
             }
             setBulkProgress(prev => ({ ...prev, done: done, errors: errors, log: [...log] }));
             // Generous delay between students to proactively avoid Frappe server rate limits (417/429)

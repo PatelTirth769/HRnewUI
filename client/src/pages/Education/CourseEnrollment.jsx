@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const emptyForm = () => ({
     program_enrollment: '',
@@ -10,6 +12,8 @@ const emptyForm = () => ({
 });
 
 const CourseEnrollment = () => {
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -32,6 +36,7 @@ const CourseEnrollment = () => {
     });
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchEnrollmentList();
         } else {
@@ -42,20 +47,37 @@ const CourseEnrollment = () => {
                 setForm(emptyForm());
             }
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     const fetchDropdowns = async () => {
         try {
             const safeGet = (url) => API.get(url).catch(() => ({ data: { data: [] } }));
             const [peRes, cRes, sRes] = await Promise.all([
-                safeGet('/api/resource/Program Enrollment?limit_page_length=None'),
+                safeGet('/api/resource/Program Enrollment?fields=["name","program","student"]&limit_page_length=None'),
                 safeGet('/api/resource/Course?limit_page_length=None'),
-                safeGet('/api/resource/Student?fields=["name","first_name","last_name"]&limit_page_length=None'),
+                safeGet('/api/resource/Student?fields=["name","first_name","last_name","custom_board"]&limit_page_length=None'),
             ]);
+            let students = sRes.data.data || [];
+            let programEnrollments = peRes.data.data || [];
+            
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    programEnrollments = programEnrollments.filter(pe => ctPrograms.includes(pe.program));
+                    const allowedStudents = programEnrollments.map(pe => pe.student);
+                    students = students.filter(s => allowedStudents.includes(s.name));
+                } else if (ctBoards.length > 0) {
+                    students = students.filter(s => ctBoards.includes(s.custom_board));
+                    const allowedStudents = students.map(s => s.name);
+                    programEnrollments = programEnrollments.filter(pe => allowedStudents.includes(pe.student));
+                }
+            }
+
             setDropdowns({
-                programEnrollments: peRes.data.data?.map(d => d.name) || [],
+                programEnrollments: programEnrollments.map(d => d.name) || [],
                 courses: cRes.data.data?.map(d => d.name) || [],
-                students: sRes.data.data?.map(d => ({
+                students: students.map(d => ({
                     id: d.name,
                     name: `${d.first_name || ''} ${d.last_name || ''}`.trim()
                 })) || [],
@@ -70,7 +92,31 @@ const CourseEnrollment = () => {
             setLoadingList(true);
             const url = '/api/resource/Course Enrollment?fields=["name","student","student_name","course","enrollment_date","program_enrollment"]&limit_page_length=None&order_by=enrollment_date desc';
             const response = await API.get(url);
-            setEnrollmentList(response.data.data || []);
+            let enrollments = response.data.data || [];
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0 || ctBoards.length > 0) {
+                     // Filter via students in dropdowns (we fetched and filtered them already)
+                     // Re-use the fetched dropdowns
+                     const safeGet = (u) => API.get(u).catch(() => ({ data: { data: [] } }));
+                     const [peRes, sRes] = await Promise.all([
+                         safeGet('/api/resource/Program Enrollment?fields=["name","program","student"]&limit_page_length=None'),
+                         safeGet('/api/resource/Student?fields=["name","custom_board"]&limit_page_length=None'),
+                     ]);
+                     let programEnrollments = peRes.data.data || [];
+                     let studentsList = sRes.data.data || [];
+                     
+                     if (ctPrograms.length > 0) {
+                         const allowedStudents = programEnrollments.filter(pe => ctPrograms.includes(pe.program)).map(pe => pe.student);
+                         enrollments = enrollments.filter(e => allowedStudents.includes(e.student));
+                     } else if (ctBoards.length > 0) {
+                         const allowedStudents = studentsList.filter(s => ctBoards.includes(s.custom_board)).map(s => s.name);
+                         enrollments = enrollments.filter(e => allowedStudents.includes(e.student));
+                     }
+                }
+            }
+            setEnrollmentList(enrollments);
         } catch (err) {
             console.error('Error fetching enrollment list:', err);
         } finally {

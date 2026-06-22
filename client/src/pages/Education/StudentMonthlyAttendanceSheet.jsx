@@ -5,8 +5,13 @@ import API from '../../services/api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { resolveInstructorId } from '../../utility/instructorHelper';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 export default function StudentMonthlyAttendanceSheet() {
+    const { isInstructor, isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     const [loading, setLoading] = useState(false);
     const [studentGroups, setStudentGroups] = useState([]);
     const [reportData, setReportData] = useState({ columns: [], result: [] });
@@ -39,13 +44,34 @@ export default function StudentMonthlyAttendanceSheet() {
 
     const fetchStudentGroups = async () => {
         try {
+            const userRole = localStorage.getItem('userRole');
+            const userEmail = localStorage.getItem('user');
             const [sgRes, cRes, sRes] = await Promise.all([
-                API.get('/api/resource/Student Group?fields=["name","custom_board"]&limit_page_length=None'),
+                API.get('/api/resource/Student Group?fields=["name","custom_board","custom_class_teacher","program"]&limit_page_length=None'),
                 API.get('/api/resource/Company?limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Student?fields=["name","student_name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } }))
             ]);
             
-            const sgData = sgRes.data.data || [];
+            let sgData = sgRes.data.data || [];
+            if (isInstructor) {
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    sgData = sgData.filter(sg => sg.custom_class_teacher === instructorId);
+                } else {
+                    sgData = [];
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                
+                sgData = sgData.filter(sg => {
+                    let match = false;
+                    if (ctPrograms.length > 0 && ctPrograms.includes(sg.program)) match = true;
+                    if (ctBoards.length > 0 && ctBoards.includes(sg.custom_board)) match = true;
+                    return match;
+                });
+            }
+            
             setMasterStudentGroups(sgData);
             setStudentGroups(sgData.map(d => d.name));
             
@@ -59,7 +85,15 @@ export default function StudentMonthlyAttendanceSheet() {
             setStudentBoardMap(boardMap);
             
             const companyBoards = cRes.data.data?.map(c => c.name) || [];
-            setBoards([...new Set([...companyBoards, ...Array.from(studentBoards)])].sort());
+            if (isInstructor || isCoordinator) {
+                const allowedBoards = new Set();
+                sgData.forEach(sg => {
+                    if (sg.custom_board) allowedBoards.add(sg.custom_board);
+                });
+                setBoards(Array.from(allowedBoards).sort());
+            } else {
+                setBoards([...new Set([...companyBoards, ...Array.from(studentBoards)])].sort());
+            }
             
         } catch (err) {
             console.error('Error fetching student groups:', err);
@@ -88,6 +122,13 @@ export default function StudentMonthlyAttendanceSheet() {
 
     const handleGenerate = async () => {
         if (!studentGroup) return;
+        if (isInstructor || isCoordinator) {
+            const isAllowed = masterStudentGroups.some(sg => sg.name === studentGroup);
+            if (!isAllowed) {
+                notification.error({ message: 'Access Denied', description: 'You are not authorized to view this student group.' });
+                return;
+            }
+        }
         setLoading(true);
         const startTime = performance.now();
         try {

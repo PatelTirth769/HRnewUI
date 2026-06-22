@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { notification, Spin, Tabs } from 'antd';
+import { notification, Spin, Tabs, Select } from 'antd';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import API from '../../services/api';
@@ -521,10 +521,22 @@ export default function AddEnquiry() {
                                         <>
                                             <div>
                                                 <label className="text-[13px] font-semibold text-gray-700 mb-1 block">Select Guardian *</label>
-                                                <select className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" value={g.guardian || ''} onChange={e => updateGuardian(idx, 'guardian', e.target.value)}>
-                                                    <option value="">Link Guardian...</option>
-                                                    {guardiansList.map(gl => <option key={gl.name} value={gl.name}>{gl.name} ({gl.guardian_name})</option>)}
-                                                </select>
+                                                <Select
+                                                    showSearch
+                                                    placeholder="Link Guardian..."
+                                                    className="w-full"
+                                                    value={g.guardian || undefined}
+                                                    onChange={v => updateGuardian(idx, 'guardian', v || '')}
+                                                    filterOption={(input, option) =>
+                                                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()) ||
+                                                        (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                                                    }
+                                                    options={guardiansList.map(gl => ({
+                                                        value: gl.name,
+                                                        label: `${gl.name} (${gl.guardian_name})`
+                                                    }))}
+                                                    allowClear
+                                                />
                                             </div>
                                             <div>
                                                 <InputField label="Guardian Name" value={g.guardian_name || ''} disabled={true} />

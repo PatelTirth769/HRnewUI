@@ -2,11 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Select, Button, Table, Radio, Space, notification, Typography } from 'antd';
 import API from '../../services/api';
+import { resolveInstructorId } from '../../utility/instructorHelper';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const { Title } = Typography;
 const { Option } = Select;
 
 const StudentAttendanceTool = () => {
+    const userRole = localStorage.getItem('userRole');
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     const navigate = useNavigate();
     const [basedOn, setBasedOn] = useState('Student Group');
     const [students, setStudents] = useState([]);
@@ -26,18 +32,40 @@ const StudentAttendanceTool = () => {
     });
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         fetchMasters();
-    }, []);
+    }, [isCoordinator, coordinatorScope.loading]);
 
     const fetchMasters = async () => {
         try {
+            const userEmail = localStorage.getItem('user');
             const [sgRes, csRes] = await Promise.all([
-                API.get('/api/resource/Student Group?limit_page_length=None'),
-                API.get('/api/resource/Course Schedule?limit_page_length=None'),
+                API.get('/api/resource/Student Group?fields=["name","custom_class_teacher","program"]&limit_page_length=None'),
+                API.get('/api/resource/Course Schedule?fields=["name","student_group"]&limit_page_length=None'),
             ]);
+
+            let studentGroups = sgRes.data.data || [];
+            let courseSchedules = csRes.data.data || [];
+
+            if (userRole === 'Instructor') {
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    const ctGroups = studentGroups.filter(g => g.custom_class_teacher === instructorId).map(g => g.name);
+                    studentGroups = studentGroups.filter(g => g.custom_class_teacher === instructorId);
+                    courseSchedules = courseSchedules.filter(cs => ctGroups.includes(cs.student_group));
+                } else {
+                    studentGroups = [];
+                    courseSchedules = [];
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                const allowedGroups = studentGroups.filter(g => coordinatorScope.programs.includes(g.program)).map(g => g.name);
+                studentGroups = studentGroups.filter(g => coordinatorScope.programs.includes(g.program));
+                courseSchedules = courseSchedules.filter(cs => allowedGroups.includes(cs.student_group));
+            }
+
             setMasters({
-                studentGroups: sgRes.data.data?.map(d => d.name) || [],
-                courseSchedules: csRes.data.data?.map(d => d.name) || [],
+                studentGroups: studentGroups.map(d => d.name),
+                courseSchedules: courseSchedules.map(d => d.name),
             });
         } catch (err) {
             console.error('Error fetching masters:', err);
@@ -49,6 +77,24 @@ const StudentAttendanceTool = () => {
         if (!filterValue) {
             notification.warning({ message: 'Selection Required', description: `Please select a ${basedOn} first.` });
             return;
+        }
+
+        if (userRole === 'Instructor') {
+            const isAllowed = basedOn === 'Student Group'
+                ? masters.studentGroups.includes(filters.student_group)
+                : masters.courseSchedules.includes(filters.course_schedule);
+            if (!isAllowed) {
+                notification.error({ message: 'Access Denied', description: `You are not authorized for this ${basedOn}.` });
+                return;
+            }
+        } else if (isCoordinator) {
+            const isAllowed = basedOn === 'Student Group'
+                ? masters.studentGroups.includes(filters.student_group)
+                : masters.courseSchedules.includes(filters.course_schedule);
+            if (!isAllowed) {
+                notification.error({ message: 'Access Denied', description: `You are not authorized for this ${basedOn}.` });
+                return;
+            }
         }
 
         setFetchingStudents(true);
@@ -109,6 +155,25 @@ const StudentAttendanceTool = () => {
 
     const handleSave = async () => {
         if (students.length === 0) return;
+
+        if (userRole === 'Instructor') {
+            const isAllowed = basedOn === 'Student Group'
+                ? masters.studentGroups.includes(filters.student_group)
+                : masters.courseSchedules.includes(filters.course_schedule);
+            if (!isAllowed) {
+                notification.error({ message: 'Access Denied', description: `You are not authorized to save attendance for this ${basedOn}.` });
+                return;
+            }
+        } else if (isCoordinator) {
+            const isAllowed = basedOn === 'Student Group'
+                ? masters.studentGroups.includes(filters.student_group)
+                : masters.courseSchedules.includes(filters.course_schedule);
+            if (!isAllowed) {
+                notification.error({ message: 'Access Denied', description: `You are not authorized to save attendance for this ${basedOn}.` });
+                return;
+            }
+        }
+
         setLoading(true);
         try {
             await Promise.all(students.map(s =>

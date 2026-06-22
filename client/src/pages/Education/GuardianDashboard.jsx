@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Row, Col, Statistic, Table, Tag, List, Avatar, Skeleton, Empty, Button, Tabs, notification, Modal, Descriptions, Checkbox, Typography, Divider, Calendar, Badge } from 'antd';
+import { Card, Row, Col, Statistic, Table, Tag, List, Avatar, Skeleton, Empty, Button, Tabs, notification, Modal, Descriptions, Checkbox, Typography, Divider, Calendar, Badge, Alert } from 'antd';
 import { 
     UserOutlined, 
     CalendarOutlined, 
@@ -25,7 +25,7 @@ import API from '../../services/api';
 import axios from 'axios';
 import html2pdf from 'html2pdf.js';
 import FeeReceiptTemplate from './FeeReceiptTemplate';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { generateAdmissionReceipt } from '../Enquiry/AdmissionFeeReceipt';
 import dayjs from 'dayjs';
@@ -47,12 +47,13 @@ const GuardianDashboard = () => {
         feeRecords: [],
         attendanceList: [],
         assessmentList: [],
-        assessmentList: [],
         studentGroups: [],
         classTeacher: '',
         homework: [],
         classwork: [],
-        fullSchedule: []
+        fullSchedule: [],
+        timetablePhoto: null,
+        announcements: [],
     });
 
     // Payment Modal State
@@ -68,6 +69,116 @@ const GuardianDashboard = () => {
     const receiptRef = useRef(null);
 
     const userEmail = localStorage.getItem('user');
+
+    const [enableOnlineFeePayment, setEnableOnlineFeePayment] = useState(false);
+
+    useEffect(() => {
+        const fetchFeeSetting = async () => {
+            try {
+                const docRef = doc(db, 'schooler_system', 'dashboard_settings');
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setEnableOnlineFeePayment(docSnap.data().ENABLE_ONLINE_FEE_PAYMENT === true);
+                }
+            } catch (err) {
+                console.warn('Failed to fetch dashboard settings:', err);
+            }
+        };
+        fetchFeeSetting();
+    }, []);
+
+    // Leave Application CRUD States
+    const [leavesList, setLeavesList] = useState([]);
+    const [leavesLoading, setLeavesLoading] = useState(false);
+    const [savingLeave, setSavingLeave] = useState(false);
+    const [leaveView, setLeaveView] = useState('list'); // 'list' or 'form'
+    const [leaveEditing, setLeaveEditing] = useState(null);
+    const [leaveForm, setLeaveForm] = useState({
+        student: '',
+        from_date: new Date().toISOString().split('T')[0],
+        to_date: new Date().toISOString().split('T')[0],
+        attendance_based_on: 'Student Group',
+        student_group: '',
+        mark_as_present: 0,
+        reason: '',
+    });
+
+    const fetchStudentLeaves = async (studentId) => {
+        if (!studentId) return;
+        setLeavesLoading(true);
+        try {
+            const url = `/api/resource/Student Leave Application?filters=[["student","=","${studentId}"]]&fields=["name","student","from_date","to_date","mark_as_present","student_group","reason","attendance_based_on","docstatus"]&limit_page_length=None&order_by=from_date desc`;
+            const response = await API.get(url);
+            setLeavesList(response.data?.data || []);
+        } catch (err) {
+            console.error('Error fetching student leave applications:', err);
+        } finally {
+            setLeavesLoading(false);
+        }
+    };
+
+    const handleSaveLeave = async () => {
+        if (!leaveForm.from_date || !leaveForm.to_date || !leaveForm.student_group) {
+            notification.warning({ message: 'Missing Fields', description: 'Student Group, From Date, and To Date are required.' });
+            return;
+        }
+
+        setSavingLeave(true);
+        try {
+            const payload = {
+                ...leaveForm,
+                student: activeWard,
+            };
+
+            if (leaveEditing) {
+                await API.put(`/api/resource/Student Leave Application/${encodeURIComponent(leaveEditing)}`, payload);
+                notification.success({ message: 'Success', description: 'Draft updated successfully.' });
+            } else {
+                await API.post('/api/resource/Student Leave Application', { ...payload, docstatus: 0 });
+                notification.success({ message: 'Success', description: 'Draft created successfully.' });
+            }
+            setLeaveView('list');
+            setLeaveEditing(null);
+            await fetchStudentLeaves(activeWard);
+        } catch (err) {
+            console.error('Save leave error:', err);
+            notification.error({ message: 'Save Failed', description: err.response?.data?._server_messages || err.message });
+        } finally {
+            setSavingLeave(false);
+        }
+    };
+
+    const handleSubmitLeave = async (name) => {
+        const idToSubmit = name || leaveEditing;
+        if (!idToSubmit) return;
+        if (!window.confirm(`Are you sure you want to submit leave application ${idToSubmit}? Once submitted, it cannot be modified.`)) return;
+
+        setSavingLeave(true);
+        try {
+            await API.put(`/api/resource/Student Leave Application/${encodeURIComponent(idToSubmit)}`, { docstatus: 1 });
+            notification.success({ message: 'Success', description: 'Leave application submitted successfully.' });
+            setLeaveView('list');
+            setLeaveEditing(null);
+            await fetchStudentLeaves(activeWard);
+        } catch (err) {
+            console.error('Submit leave error:', err);
+            notification.error({ message: 'Submit Failed', description: err.response?.data?._server_messages || err.message });
+        } finally {
+            setSavingLeave(false);
+        }
+    };
+
+    const handleDeleteLeave = async (name) => {
+        if (!window.confirm('Are you sure you want to delete this leave application?')) return;
+        try {
+            await API.delete(`/api/resource/Student Leave Application/${encodeURIComponent(name)}`);
+            notification.success({ message: 'Success', description: 'Deleted successfully.' });
+            await fetchStudentLeaves(activeWard);
+        } catch (err) {
+            console.error('Delete leave error:', err);
+            notification.error({ message: 'Delete Failed', description: err.message });
+        }
+    };
 
     useEffect(() => {
         fetchGuardianData();
@@ -141,15 +252,36 @@ const GuardianDashboard = () => {
         setLoading(true);
         try {
             // 1. Fetch Guardian Profile
-            const guardRes = await API.get(`/api/resource/Guardian?filters=[["email_address","=","${userEmail}"]]&fields=["name","guardian_name","mobile_number"]`);
-            
-            if (guardRes.data.data && guardRes.data.data.length > 0) {
-                const guardian = guardRes.data.data[0];
-                // Get FULL guardian doc for child table of students
-                const fullGuard = await API.get(`/api/resource/Guardian/${encodeURIComponent(guardian.name)}`);
-                setGuardianData(fullGuard.data.data);
+            let guardian = null;
+            const savedGuardianId = localStorage.getItem('guardian_profile_id');
+            const loginInput = localStorage.getItem('login_input') || userEmail;
 
-                const students = fullGuard.data.data.students || [];
+            if (savedGuardianId) {
+                try {
+                    const fullGuard = await API.get(`/api/resource/Guardian/${encodeURIComponent(savedGuardianId)}`);
+                    if (fullGuard.data?.data) {
+                        guardian = fullGuard.data.data;
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch by saved guardian ID:', e.message);
+                }
+            }
+
+            if (!guardian) {
+                const guardRes = await API.get(`/api/resource/Guardian?or_filters=[["email_address","=","${userEmail}"],["mobile_number","=","${userEmail}"],["email_address","=","${loginInput}"],["mobile_number","=","${loginInput}"]]&fields=["name"]`);
+                
+                if (guardRes.data?.data && guardRes.data.data.length > 0) {
+                    const guardianId = guardRes.data.data[0].name;
+                    localStorage.setItem('guardian_profile_id', guardianId);
+                    const fullGuard = await API.get(`/api/resource/Guardian/${encodeURIComponent(guardianId)}`);
+                    guardian = fullGuard.data.data;
+                }
+            }
+            
+            if (guardian) {
+                setGuardianData(guardian);
+
+                const students = guardian.students || [];
                 setWards(students);
 
                 if (students.length > 0) {
@@ -179,26 +311,25 @@ const GuardianDashboard = () => {
             // Fetch paid terms from Firebase in parallel with ERP data
             fetchPaidTerms(studentId, wardProf);
 
-            // Parallel Data Fetch with Individual Error Handling & 417 recovery
-            const [attRes, feeRes, assessRes, enrRes] = await Promise.allSettled([
-                API.get('/api/resource/Student Attendance', { params: { filters: JSON.stringify([["student", "=", studentId]]), limit_page_length: 1000 } }),
-                API.get('/api/resource/Fees', { params: { filters: JSON.stringify([["student", "=", studentId], ["outstanding_amount", ">", 0]]), fields: JSON.stringify(["name", "due_date", "outstanding_amount", "total_amount"]) } })
-                    .catch(err => {
-                        if (err.response?.status === 417) return API.get('/api/resource/Fees', { params: { filters: JSON.stringify([["student", "=", studentId], ["outstanding_amount", ">", 0]]), fields: JSON.stringify(["name", "outstanding_amount"]) } });
-                        throw err;
-                    }),
+            // Parallel Data Fetch with Individual Error Handling
+            const [attRes, feeRes, assessRes, enrRes, leaveRes] = await Promise.allSettled([
+                API.get('/api/resource/Student Attendance', { params: { filters: JSON.stringify([["student", "=", studentId]]), fields: JSON.stringify(["name", "date", "status", "student", "student_name", "student_group"]), limit_page_length: 1000 } }),
+                API.get('/api/resource/Fees', { params: { filters: JSON.stringify([["student", "=", studentId], ["outstanding_amount", ">", 0]]), fields: JSON.stringify(["name", "due_date", "outstanding_amount"]) } }),
                 API.get('/api/resource/Assessment Result', { params: { filters: JSON.stringify([["student", "=", studentId]]) } }),
-                API.get('/api/resource/Program Enrollment', { params: { filters: JSON.stringify([["student", "=", studentId]]), fields: JSON.stringify(["name", "program", "fee_structure"]) } })
-                    .catch(err => {
-                        if (err.response?.status === 417) return API.get('/api/resource/Program Enrollment', { params: { filters: JSON.stringify([["student", "=", studentId]]), fields: JSON.stringify(["name", "program"]) } });
-                        throw err;
-                    })
+                API.get('/api/resource/Program Enrollment', { params: { filters: JSON.stringify([["student", "=", studentId]]), fields: JSON.stringify(["name", "program"]) } }),
+                API.get('/api/resource/Student Leave Application', {
+                    params: {
+                        filters: JSON.stringify([["student", "=", studentId], ["docstatus", "=", 1]]),
+                        fields: JSON.stringify(["name", "student", "from_date", "to_date", "mark_as_present"])
+                    }
+                })
             ]);
 
             const attendanceList = attRes.status === 'fulfilled' ? (attRes.value.data?.data || []) : [];
             const feeList = feeRes.status === 'fulfilled' ? (feeRes.value.data?.data || []) : [];
             const assessList = assessRes.status === 'fulfilled' ? (assessRes.value.data?.data || []) : [];
             const enrollmentData = enrRes.status === 'fulfilled' ? (enrRes.value.data?.data || []) : [];
+            const leavesList = leaveRes.status === 'fulfilled' ? (leaveRes.value.data?.data || []) : [];
 
             const presentDays = attendanceList.filter(a => a.status === 'Present').length;
             const attendancePct = attendanceList.length > 0 ? Math.round((presentDays / attendanceList.length) * 100) : 0;
@@ -444,9 +575,26 @@ const GuardianDashboard = () => {
                 });
             }
 
+            let timetablePhotoData = null;
+            if (studentGroups && studentGroups.length > 0) {
+                try {
+                    for (const group of studentGroups) {
+                        const docRef = doc(db, 'schooler_system', 'course_scheduling', 'timetables', group);
+                        const snap = await getDoc(docRef);
+                        if (snap.exists()) {
+                            timetablePhotoData = snap.data();
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[GuardianDashboard] Failed to fetch timetable photo:', e.message);
+                }
+            }
+
             setWardDetails({
                 attendance: attendancePct,
                 attendanceList: attendanceList,
+                leavesList: leavesList,
                 fees: feeList.reduce((acc, f) => acc + (f.outstanding_amount || 0), 0),
                 feeRecords: feeList,
                 assessments: assessList.length,
@@ -458,8 +606,47 @@ const GuardianDashboard = () => {
                 classTeacher: classTeacherName,
                 homework,
                 classwork,
-                fullSchedule
+                fullSchedule,
+                timetablePhoto: timetablePhotoData,
+                announcements: [],  // will be populated below
             });
+
+            // Fetch Announcements from Firestore and filter for this ward
+            try {
+                const annRef = collection(db, 'schooler_system/announcements/records');
+                const annSnap = await getDocs(annRef);
+                const allAnn = annSnap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a, b) => {
+                        const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                        const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                        return tb - ta;
+                    });
+                const wardProgram = wardProf?.program || '';
+                const wardBoard   = wardProf?.custom_board || '';
+                console.log('[GuardianDashboard] Ward program:', wardProgram, '| Ward board:', wardBoard, '| Student Groups:', studentGroups);
+                console.log('[GuardianDashboard] All announcements:', allAnn.length, allAnn.map(a => `${a.targetType}:${a.targetValue}`));
+                const filteredAnn = allAnn.filter(ann => {
+                    if (ann.targetType === 'All') return true;
+                    if (ann.targetType === 'Program'      && ann.targetValue === wardProgram) return true;
+                    if (ann.targetType === 'Board'        && ann.targetValue === wardBoard)   return true;
+                    if (ann.targetType === 'StudentGroup' && studentGroups.includes(ann.targetValue)) return true;
+                    if (ann.targetType === 'Student') {
+                        if (Array.isArray(ann.targetValue)) {
+                            return ann.targetValue.includes(wardProf?.name);
+                        }
+                        return ann.targetValue === wardProf?.name;
+                    }
+                    return false;
+                });
+                console.log('[GuardianDashboard] Filtered announcements:', filteredAnn.length);
+                setWardDetails(prev => ({ ...prev, announcements: filteredAnn }));
+            } catch (annErr) {
+                console.error('[GuardianDashboard] Could not fetch announcements:', annErr);
+            }
+
+            // Fetch leave applications separately via state
+            await fetchStudentLeaves(studentId);
         } catch (e) {
             console.error("Error fetching ward details", e);
         }
@@ -666,7 +853,7 @@ const GuardianDashboard = () => {
                 amount: record.amount,
                 payment_mode: record.payment_mode || 'ONLINE',
                 payment_id: record.payment_id || record.order_id || '',
-                receipt_date: record.verified_at || record.receipt_date || record.created_at || new Date().toISOString(),
+                receipt_date: record.receipt_date || record.verified_at || record.created_at || new Date().toISOString(),
                 parent_name: record.parent_name || activeGuardian || '',
                 parent_mobile: record.parent_mobile || wardProfile?.mobile_number || ''
             });
@@ -674,7 +861,7 @@ const GuardianDashboard = () => {
         }
 
         // Construct receipt data
-        const dateObj = new Date(record.verified_at || record.created_at);
+        const dateObj = new Date(record.receipt_date || record.verified_at || record.created_at);
         const formattedDate = dateObj.toLocaleDateString('en-GB') + ' ' + dateObj.toLocaleTimeString('en-US');
         
         const receiptData = {
@@ -751,10 +938,26 @@ const GuardianDashboard = () => {
     }
 
     const totalPaidAmount = Object.values(paidTerms).reduce((sum, term) => sum + (term.amount || 0), 0);
-    const originalAcademicFees = wardDetails.feeStructureDetails?.total_amount || 0;
-    const totalAcademicFees = wardDetails.feeStructureDetails?.components?.reduce((sum, c) => sum + (c.amount || 0), 0) || originalAcademicFees;
-    const remainingPendingFees = Math.max(0, totalAcademicFees - totalPaidAmount);
-    const originalRemainingPendingFees = Math.max(0, originalAcademicFees - totalPaidAmount);
+    
+    let originalAcademicFees = 0;
+    let remainingPendingFees = 0;
+    let originalRemainingPendingFees = 0;
+    
+    if (wardDetails.feeStructureDetails && wardDetails.feeStructureDetails.components) {
+        wardDetails.feeStructureDetails.components.forEach(comp => {
+            const cat = comp.fees_category || comp.name;
+            originalAcademicFees += (comp.original_fee || comp.amount || 0);
+            if (!paidTerms[cat]) {
+                remainingPendingFees += (comp.amount || 0);
+                originalRemainingPendingFees += (comp.original_fee || comp.amount || 0);
+            }
+        });
+    } else {
+        const fallbackTotal = wardDetails.feeStructureDetails?.total_amount || 0;
+        originalAcademicFees = fallbackTotal;
+        remainingPendingFees = Math.max(0, fallbackTotal - totalPaidAmount);
+        originalRemainingPendingFees = remainingPendingFees;
+    }
     
     let totalDiscount = 0;
     let activeDiscountName = '';
@@ -768,12 +971,14 @@ const GuardianDashboard = () => {
     } 
     
     if (wardDetails.feeRecords && wardDetails.feeRecords.length > 0) {
-        const originalPending = wardDetails.feeRecords.reduce((sum, f) => sum + (f.original_fee || f.outstanding_amount || 0), 0);
+        const originalPending = wardDetails.feeRecords.reduce((sum, f) => sum + (f.original_fee || f.total_amount || f.outstanding_amount || 0), 0);
         if (!wardDetails.feeStructureDetails) {
+            originalAcademicFees = originalPending;
             totalDiscount = originalPending - wardDetails.fees;
         }
         if (!activeDiscountName) {
             const recWithDiscount = wardDetails.feeRecords.find(f => f.discount_amount > 0);
+
             if (recWithDiscount && recWithDiscount.discount_name) {
                 activeDiscountName = recWithDiscount.discount_name;
             }
@@ -783,8 +988,8 @@ const GuardianDashboard = () => {
     return (
         <div className="p-6 lg:p-10 max-w-[1600px] mx-auto animate-in fade-in duration-700">
             {/* Header Section */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
-                <div className="flex items-center gap-5">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 flex-wrap">
+                <div className="flex items-center gap-5 flex-wrap">
                     <div className="relative">
                         <Avatar size={72} icon={<UserOutlined />} className="bg-indigo-600 shadow-xl" />
                         <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 border-4 border-white rounded-full"></div>
@@ -977,6 +1182,70 @@ const GuardianDashboard = () => {
                 </Card>
             )}
 
+            {/* Announcements Card for Guardian — always visible */}
+            <div style={{
+                background: '#fff',
+                borderRadius: 16,
+                boxShadow: '0 4px 12px rgba(99,102,241,0.08)',
+                border: '1px solid #e8e8f5',
+                overflow: 'hidden',
+                marginBottom: 32,
+            }}>
+                <div style={{
+                    padding: '16px 24px',
+                    borderBottom: '1px solid #f1f1f8',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    background: 'linear-gradient(135deg, #eef2ff 0%, #f8faff 100%)',
+                }}>
+                    <span style={{ fontSize: 18 }}>📢</span>
+                    <span style={{ fontWeight: 700, fontSize: 15, color: '#1e1b4b' }}>Announcements</span>
+                    {wardDetails.announcements?.length > 0 && (
+                        <span style={{
+                            marginLeft: 'auto',
+                            background: '#6366f1',
+                            color: '#fff',
+                            borderRadius: 20,
+                            padding: '2px 10px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                        }}>{wardDetails.announcements.length}</span>
+                    )}
+                </div>
+                <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {(!wardDetails.announcements || wardDetails.announcements.length === 0) ? (
+                        <div style={{ textAlign: 'center', padding: '28px 0', color: '#9ca3af' }}>
+                            <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
+                            <p style={{ fontSize: 13 }}>No announcements for your child yet.</p>
+                        </div>
+                    ) : (
+                        wardDetails.announcements.map(ann => {
+                            const bgMap = { All: '#eef2ff', Board: '#e0f2fe', StudentGroup: '#d1fae5', Program: '#fef3c7' };
+                            const bdMap = { All: '#c7d2fe', Board: '#bae6fd', StudentGroup: '#a7f3d0', Program: '#fde68a' };
+                            const bg = bgMap[ann.targetType] || '#f3f4f6';
+                            const bd = bdMap[ann.targetType] || '#e5e7eb';
+                            return (
+                                <div key={ann.id} style={{
+                                    background: bg,
+                                    border: `1px solid ${bd}`,
+                                    borderRadius: 12,
+                                    padding: '14px 16px',
+                                }}>
+                                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1f2937', marginBottom: 4 }}>{ann.title}</div>
+                                    <div style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.6 }}>{ann.message}</div>
+                                    {ann.createdAt && (
+                                        <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 6 }}>
+                                            {ann.createdAt.toDate ? ann.createdAt.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
+
             {/* Main Content */}
             <Tabs defaultActiveKey="1" className="guardian-tabs">
                 <Tabs.TabPane tab={<span><BookOutlined /> Work</span>} key="1">
@@ -995,24 +1264,10 @@ const GuardianDashboard = () => {
                                         return (
                                             <List.Item
                                                 style={{ padding: '20px 0', borderBottom: '1px solid #f0f0f0' }}
-                                                extra={
-                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                                                        <Tag color={
-                                                            item.status === 'Completed' ? 'green' :
-                                                            item.status === 'Closed' ? 'default' :
-                                                            isOverdue ? 'red' : 'blue'
-                                                        } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
-                                                            {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
-                                                        </Tag>
-                                                        {item.estimatedMinutes && (
-                                                            <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                <ClockCircleOutlined /> {item.estimatedMinutes} mins
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                }
                                             >
-                                                <List.Item.Meta
+                                              <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', gap: '16px', justifyContent: 'space-between' }}>
+                                                <div style={{ flex: '1 1 300px' }}>
+                                                  <List.Item.Meta
                                                     title={
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                             <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>
@@ -1051,6 +1306,22 @@ const GuardianDashboard = () => {
                                                         </div>
                                                     }
                                                 />
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', minWidth: '120px' }}>
+                                                    <Tag color={
+                                                        item.status === 'Completed' ? 'green' :
+                                                        item.status === 'Closed' ? 'default' :
+                                                        isOverdue ? 'red' : 'blue'
+                                                    } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
+                                                        {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
+                                                    </Tag>
+                                                    {item.estimatedMinutes && (
+                                                        <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <ClockCircleOutlined /> {item.estimatedMinutes} mins
+                                                        </span>
+                                                    )}
+                                                </div>
+                                              </div>
                                             </List.Item>
                                         );
                                     }}
@@ -1066,24 +1337,10 @@ const GuardianDashboard = () => {
                                         return (
                                             <List.Item
                                                 style={{ padding: '20px 0', borderBottom: '1px solid #f0f0f0' }}
-                                                extra={
-                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                                                        <Tag color={
-                                                            item.status === 'Completed' ? 'green' :
-                                                            item.status === 'Closed' ? 'default' :
-                                                            isOverdue ? 'red' : 'blue'
-                                                        } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
-                                                            {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
-                                                        </Tag>
-                                                        {item.estimatedMinutes && (
-                                                            <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                <ClockCircleOutlined /> {item.estimatedMinutes} mins
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                }
                                             >
-                                                <List.Item.Meta
+                                              <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', gap: '16px', justifyContent: 'space-between' }}>
+                                                <div style={{ flex: '1 1 300px' }}>
+                                                  <List.Item.Meta
                                                     title={
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                             <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>
@@ -1122,6 +1379,22 @@ const GuardianDashboard = () => {
                                                         </div>
                                                     }
                                                 />
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', minWidth: '120px' }}>
+                                                    <Tag color={
+                                                        item.status === 'Completed' ? 'green' :
+                                                        item.status === 'Closed' ? 'default' :
+                                                        isOverdue ? 'red' : 'blue'
+                                                    } style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>
+                                                        {item.status === 'Assigned' && isOverdue ? 'Overdue' : item.status || 'Assigned'}
+                                                    </Tag>
+                                                    {item.estimatedMinutes && (
+                                                        <span style={{ fontSize: '11px', color: '#8c8c8c', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <ClockCircleOutlined /> {item.estimatedMinutes} mins
+                                                        </span>
+                                                    )}
+                                                </div>
+                                              </div>
                                             </List.Item>
                                         );
                                     }}
@@ -1132,82 +1405,138 @@ const GuardianDashboard = () => {
                 </Tabs.TabPane>
 
                 <Tabs.TabPane tab={<span><TableOutlined /> Time Table</span>} key="2">
-                    <Card 
-                        bordered={false} 
-                        style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
-                        title={
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                                <span style={{ fontSize: '16px', fontWeight: 700 }}>Weekly Time Table</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ fontSize: '14px', color: '#595959', fontWeight: 500 }}>Filter by Day:</span>
-                                    <select 
-                                        style={{ 
-                                            padding: '6px 12px', 
-                                            borderRadius: '8px', 
-                                            border: '1px solid #d9d9d9', 
-                                            fontSize: '14px', 
-                                            fontWeight: 500,
-                                            outline: 'none',
-                                            cursor: 'pointer',
-                                            minWidth: '140px',
-                                            background: '#fff'
-                                        }}
-                                        value={selectedDayFilter}
-                                        onChange={(e) => setSelectedDayFilter(e.target.value)}
+                    {wardDetails.timetablePhoto ? (
+                        <Card 
+                            bordered={false} 
+                            style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                            title={<span style={{ fontSize: '16px', fontWeight: 700 }}>Weekly Time Table</span>}
+                            extra={
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <Button 
+                                        type="primary" 
+                                        shape="round" 
+                                        href={wardDetails.timetablePhoto.fileUrl} 
+                                        target="_blank" 
+                                        rel="noreferrer"
+                                        icon={<DownloadOutlined />}
                                     >
-                                        <option value="">All Days</option>
-                                        <option value="Monday">Monday</option>
-                                        <option value="Tuesday">Tuesday</option>
-                                        <option value="Wednesday">Wednesday</option>
-                                        <option value="Thursday">Thursday</option>
-                                        <option value="Friday">Friday</option>
-                                        <option value="Saturday">Saturday</option>
-                                        <option value="Sunday">Sunday</option>
-                                    </select>
+                                        Download Timetable
+                                    </Button>
                                 </div>
+                            }
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f9fafb', borderRadius: '12px', padding: '16px', border: '1px solid #f0f0f0' }}>
+                                <img 
+                                    src={wardDetails.timetablePhoto.fileUrl} 
+                                    alt="Weekly Timetable" 
+                                    style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }} 
+                                />
                             </div>
-                        }
-                    >
-                        <Table 
-                            dataSource={(wardDetails.fullSchedule || []).filter(item => !selectedDayFilter || item.custom_day === selectedDayFilter)}
-                            rowKey="name"
-                            pagination={{ pageSize: 10 }}
-                            scroll={{ x: 'max-content' }}
-                            columns={[
-                                { title: 'ID', dataIndex: 'name', key: 'id', width: 120, ellipsis: true },
-                                { 
-                                    title: 'Title', 
-                                    key: 'title_display',
-                                    render: (rec) => rec.title || rec.course 
-                                },
-                                { title: 'Instructor', dataIndex: 'instructor', key: 'instructor' },
-                                { 
-                                    title: 'Day', 
-                                    dataIndex: 'custom_day', 
-                                    key: 'day',
-                                    render: (text) => text ? <Tag color="blue" style={{ fontWeight: 'bold' }}>{text}</Tag> : '-'
-                                },
-                                { 
-                                    title: 'Date', 
-                                    dataIndex: 'schedule_date', 
-                                    key: 'date',
-                                    sorter: (a, b) => new Date(a.schedule_date) - new Date(b.schedule_date)
-                                },
-                                { title: 'From Time', dataIndex: 'from_time', key: 'from' },
-                                { title: 'To Time', dataIndex: 'to_time', key: 'to' },
-                                { title: 'Room', dataIndex: 'room', key: 'room' }
-                            ]}
-                        />
-                    </Card>
+                        </Card>
+                    ) : (
+                        <Card 
+                            bordered={false} 
+                            style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                            title={
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                                    <span style={{ fontSize: '16px', fontWeight: 700 }}>Weekly Time Table</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontSize: '14px', color: '#595959', fontWeight: 500 }}>Filter by Day:</span>
+                                        <select 
+                                            style={{ 
+                                                padding: '6px 12px', 
+                                                borderRadius: '8px', 
+                                                border: '1px solid #d9d9d9', 
+                                                fontSize: '14px', 
+                                                fontWeight: 500,
+                                                outline: 'none',
+                                                cursor: 'pointer',
+                                                minWidth: '140px',
+                                                background: '#fff'
+                                            }}
+                                            value={selectedDayFilter}
+                                            onChange={(e) => setSelectedDayFilter(e.target.value)}
+                                        >
+                                            <option value="">All Days</option>
+                                            <option value="Monday">Monday</option>
+                                            <option value="Tuesday">Tuesday</option>
+                                            <option value="Wednesday">Wednesday</option>
+                                            <option value="Thursday">Thursday</option>
+                                            <option value="Friday">Friday</option>
+                                            <option value="Saturday">Saturday</option>
+                                            <option value="Sunday">Sunday</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            }
+                        >
+                            <Table 
+                                dataSource={(wardDetails.fullSchedule || []).filter(item => !selectedDayFilter || item.custom_day === selectedDayFilter)}
+                                rowKey="name"
+                                pagination={{ pageSize: 10 }}
+                                scroll={{ x: 'max-content' }}
+                                columns={[
+                                    { title: 'ID', dataIndex: 'name', key: 'id', width: 120, ellipsis: true },
+                                    { 
+                                        title: 'Title', 
+                                        key: 'title_display',
+                                        render: (rec) => rec.title || rec.course 
+                                    },
+                                    { title: 'Instructor', dataIndex: 'instructor', key: 'instructor' },
+                                    { 
+                                        title: 'Day', 
+                                        dataIndex: 'custom_day', 
+                                        key: 'day',
+                                        render: (text) => text ? <Tag color="blue" style={{ fontWeight: 'bold' }}>{text}</Tag> : '-'
+                                    },
+                                    { 
+                                        title: 'Date', 
+                                        dataIndex: 'schedule_date', 
+                                        key: 'date',
+                                        sorter: (a, b) => new Date(a.schedule_date) - new Date(b.schedule_date)
+                                    },
+                                    { title: 'From Time', dataIndex: 'from_time', key: 'from' },
+                                    { title: 'To Time', dataIndex: 'to_time', key: 'to' },
+                                    { title: 'Room', dataIndex: 'room', key: 'room' }
+                                ]}
+                            />
+                        </Card>
+                    )}
                 </Tabs.TabPane>
 
                 <Tabs.TabPane tab={<span><CalendarOutlined /> Attendance</span>} key="3">
                     <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                         <Calendar 
                             cellRender={(current, info) => {
-                                if (info.type !== 'date' || !wardDetails.attendanceList) return info.originNode;
+                                if (info.type !== 'date') return info.originNode;
                                 
                                 const dateStr = current.format('YYYY-MM-DD');
+                                
+                                // Check for submitted leaves on this date
+                                const leaves = leavesList || [];
+                                const leavesOnDate = leaves.filter(l => 
+                                    l.from_date <= dateStr && 
+                                    l.to_date >= dateStr
+                                );
+                                
+                                if (leavesOnDate.length > 0) {
+                                    const markPresent = leavesOnDate.some(l => l.mark_as_present === 1 || l.mark_as_present === true);
+                                    if (markPresent) {
+                                        return (
+                                            <div className="events animate-pulse" style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '2px' }}>
+                                                <Badge status="success" text={<span style={{ fontSize: '10px', fontWeight: 'bold' }}>Present (Leave Approved)</span>} />
+                                            </div>
+                                        );
+                                    } else {
+                                        return (
+                                            <div className="events" style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '2px' }}>
+                                                <Badge status="warning" text={<span style={{ fontSize: '10px', fontWeight: 'bold', color: '#d97706' }}>Leave</span>} />
+                                            </div>
+                                        );
+                                    }
+                                }
+                                
+                                if (!wardDetails.attendanceList) return info.originNode;
                                 const atts = wardDetails.attendanceList.filter(a => a.date === dateStr);
                                 
                                 return (
@@ -1223,6 +1552,239 @@ const GuardianDashboard = () => {
                     </Card>
                 </Tabs.TabPane>
 
+                <Tabs.TabPane tab={<span><CalendarOutlined /> Leave Application</span>} key="7">
+                    <Card bordered={false} style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                        {leaveView === 'list' ? (
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                    <Title level={4} style={{ margin: 0 }}>My Leave Applications</Title>
+                                    <Button type="primary" onClick={() => {
+                                        setLeaveEditing(null);
+                                        setLeaveForm({
+                                            student: wardProfile?.name || '',
+                                            from_date: new Date().toISOString().split('T')[0],
+                                            to_date: new Date().toISOString().split('T')[0],
+                                            attendance_based_on: 'Student Group',
+                                            student_group: wardDetails.studentGroups?.[0] || '',
+                                            mark_as_present: 0,
+                                            reason: '',
+                                            docstatus: 0
+                                        });
+                                        setLeaveView('form');
+                                    }}>
+                                        + Apply for Leave
+                                    </Button>
+                                </div>
+
+                                <Table
+                                    dataSource={leavesList}
+                                    rowKey="name"
+                                    loading={leavesLoading}
+                                    pagination={{ pageSize: 10 }}
+                                    scroll={{ x: 'max-content' }}
+                                    columns={[
+                                        { title: 'Application ID', dataIndex: 'name', key: 'name' },
+                                        { title: 'Student Group', dataIndex: 'student_group', key: 'student_group' },
+                                        { title: 'From Date', dataIndex: 'from_date', key: 'from_date' },
+                                        { title: 'To Date', dataIndex: 'to_date', key: 'to_date' },
+                                        { 
+                                            title: 'Reason', 
+                                            dataIndex: 'reason', 
+                                            key: 'reason',
+                                            ellipsis: true
+                                        },
+                                        {
+                                            title: 'Status',
+                                            dataIndex: 'docstatus',
+                                            key: 'status',
+                                            render: (docstatus) => (
+                                                docstatus === 1 ? (
+                                                    <Tag color="green">Approved</Tag>
+                                                ) : docstatus === 2 ? (
+                                                    <Tag color="red">Cancelled</Tag>
+                                                ) : (
+                                                    <Tag color="amber">Draft</Tag>
+                                                )
+                                            )
+                                        },
+                                        {
+                                            title: 'Actions',
+                                            key: 'actions',
+                                            align: 'center',
+                                            render: (_, record) => (
+                                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                                    <Button size="small" onClick={() => {
+                                                        setLeaveEditing(record.name);
+                                                        setLeaveForm({
+                                                            student: record.student || '',
+                                                            from_date: record.from_date || '',
+                                                            to_date: record.to_date || '',
+                                                            attendance_based_on: record.attendance_based_on || 'Student Group',
+                                                            student_group: record.student_group || '',
+                                                            mark_as_present: record.mark_as_present || 0,
+                                                            reason: record.reason || '',
+                                                            docstatus: record.docstatus
+                                                        });
+                                                        setLeaveView('form');
+                                                    }}>
+                                                        {record.docstatus === 0 ? 'Edit' : 'View'}
+                                                    </Button>
+                                                    {record.docstatus === 0 && (
+                                                        <Button size="small" style={{ borderColor: '#52c41a', color: '#52c41a' }} onClick={() => handleSubmitLeave(record.name)}>
+                                                            Submit
+                                                        </Button>
+                                                    )}
+                                                    {record.docstatus === 0 && (
+                                                        <Button size="small" danger onClick={() => handleDeleteLeave(record.name)}>
+                                                            Delete
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            )
+                                        }
+                                    ]}
+                                />
+                            </div>
+                        ) : (
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid #f0f0f0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Title level={4} style={{ margin: 0 }}>
+                                            {leaveEditing ? `Leave Application: ${leaveEditing}` : 'New Leave Application'}
+                                        </Title>
+                                        {leaveEditing && (
+                                            leaveForm.docstatus === 1 ? (
+                                                <Tag color="green">Approved</Tag>
+                                            ) : leaveForm.docstatus === 2 ? (
+                                                <Tag color="red">Cancelled</Tag>
+                                            ) : (
+                                                <Tag color="amber">Draft</Tag>
+                                            )
+                                        )}
+                                        {!leaveEditing && <Tag color="red">Not Saved (Draft)</Tag>}
+                                    </div>
+                                    <Button onClick={() => setLeaveView('list')}>Back to List</Button>
+                                </div>
+
+                                <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px 0' }}>
+                                    {/* Readonly indicators for submitted states */}
+                                    {leaveEditing && leaveForm.docstatus === 1 && (
+                                        <Alert 
+                                            message="Submitted Document" 
+                                            description="This leave application has been submitted and is read-only. It cannot be modified." 
+                                            type="info" 
+                                            showIcon 
+                                            style={{ marginBottom: '20px', borderRadius: '8px' }}
+                                        />
+                                    )}
+                                    
+                                    <Row gutter={[16, 16]}>
+                                        <Col xs={24} sm={12}>
+                                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>Student ID</label>
+                                            <input 
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed" 
+                                                value={wardProfile?.name || ''} 
+                                                disabled 
+                                            />
+                                        </Col>
+
+                                        <Col xs={24} sm={12}>
+                                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>Student Name</label>
+                                            <input 
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed" 
+                                                value={wardProfile?.student_name || ''} 
+                                                disabled 
+                                            />
+                                        </Col>
+                                        
+                                        <Col span={24}>
+                                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>Student Group *</label>
+                                            <select 
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                                                value={leaveForm.student_group} 
+                                                onChange={e => setLeaveForm({ ...leaveForm, student_group: e.target.value })}
+                                                disabled={leaveForm.docstatus === 1}
+                                            >
+                                                <option value="">Select Student Group</option>
+                                                {wardDetails.studentGroups?.map(sg => (
+                                                    <option key={sg} value={sg}>{sg}</option>
+                                                ))}
+                                            </select>
+                                        </Col>
+
+                                        <Col xs={24} sm={12}>
+                                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>From Date *</label>
+                                            <input 
+                                                type="date"
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                                                value={leaveForm.from_date} 
+                                                onChange={e => setLeaveForm({ ...leaveForm, from_date: e.target.value })} 
+                                                disabled={leaveForm.docstatus === 1}
+                                            />
+                                        </Col>
+
+                                        <Col xs={24} sm={12}>
+                                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>To Date *</label>
+                                            <input 
+                                                type="date"
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                                                value={leaveForm.to_date} 
+                                                onChange={e => setLeaveForm({ ...leaveForm, to_date: e.target.value })} 
+                                                disabled={leaveForm.docstatus === 1}
+                                            />
+                                        </Col>
+
+                                        <Col span={24}>
+                                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>Attendance Based On</label>
+                                            <select 
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                                                value={leaveForm.attendance_based_on} 
+                                                onChange={e => setLeaveForm({ ...leaveForm, attendance_based_on: e.target.value })}
+                                                disabled={leaveForm.docstatus === 1}
+                                            >
+                                                <option value="Student Group">Student Group</option>
+                                                <option value="Course">Course</option>
+                                            </select>
+                                        </Col>
+
+                                        <Col span={24}>
+                                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#595959' }}>Reason</label>
+                                            <textarea 
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white h-28 resize-none"
+                                                placeholder="Please state the reason for leave..."
+                                                value={leaveForm.reason} 
+                                                onChange={e => setLeaveForm({ ...leaveForm, reason: e.target.value })}
+                                                disabled={leaveForm.docstatus === 1}
+                                            />
+                                        </Col>
+
+                                        <Col span={24} style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
+                                            <Button onClick={() => setLeaveView('list')}>Cancel</Button>
+                                            {(!leaveEditing || leaveForm.docstatus === 0) && (
+                                                <>
+                                                    {leaveEditing && (
+                                                        <Button 
+                                                            style={{ backgroundColor: '#52c41a', borderColor: '#52c41a', color: '#fff' }} 
+                                                            loading={savingLeave} 
+                                                            onClick={() => handleSubmitLeave(leaveEditing)}
+                                                        >
+                                                            Submit Leave
+                                                        </Button>
+                                                    )}
+                                                    <Button type="primary" loading={savingLeave} onClick={handleSaveLeave}>
+                                                        {leaveEditing ? 'Save Draft' : 'Create Draft'}
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </Col>
+                                    </Row>
+                                </div>
+                            </div>
+                        )}
+                    </Card>
+                </Tabs.TabPane>
+
+                {enableOnlineFeePayment && (
                 <Tabs.TabPane tab={<span><WalletOutlined /> Fee Details</span>} key="4">
                     <Card className="rounded-2xl border-gray-100">
                         {wardDetails.feeRecords && wardDetails.feeRecords.length > 0 ? (
@@ -1336,8 +1898,8 @@ const GuardianDashboard = () => {
                                                 const isPaid = !!paidTerms[category];
                                                 
                                                 return (
-                                                    <div className="flex items-center justify-end gap-3">
-                                                        <div className="flex flex-col items-end">
+                                                    <div className="flex items-center justify-start sm:justify-end gap-3 mt-2 sm:mt-0 flex-wrap">
+                                                        <div className="flex flex-col items-start sm:items-end">
                                                             {record.discount_amount > 0 && (
                                                                 <span className="text-[10px] line-through text-gray-400">₹{record.original_fee?.toLocaleString()}</span>
                                                             )}
@@ -1347,7 +1909,7 @@ const GuardianDashboard = () => {
                                                             )}
                                                         </div>
                                                         {isPaid ? (
-                                                            <>
+                                                            <div className="flex items-center gap-1">
                                                                 <Tag color="green" className="text-[10px] font-bold rounded-md uppercase m-0 border-none px-2 py-0">
                                                                     <CheckCircleOutlined className="mr-1" />Paid
                                                                 </Tag>
@@ -1359,9 +1921,9 @@ const GuardianDashboard = () => {
                                                                 >
                                                                     <CheckCircleOutlined /> PAID
                                                                 </Button>
-                                                            </>
+                                                            </div>
                                                         ) : (
-                                                            <>
+                                                            <div className="flex items-center gap-1">
                                                                 <Tag color="red" className="text-[10px] font-bold rounded-md uppercase m-0 border-none px-2 py-0">Unpaid</Tag>
                                                                 <Button 
                                                                     type="primary" 
@@ -1371,7 +1933,7 @@ const GuardianDashboard = () => {
                                                                 >
                                                                     PAY NOW
                                                                 </Button>
-                                                            </>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 );
@@ -1380,12 +1942,12 @@ const GuardianDashboard = () => {
                                     ]}
                                 />
                                 
-                                <div className="mt-4 pt-4 border-t-2 border-dashed border-gray-100 flex justify-between items-center px-6 pb-6 bg-indigo-50/20 rounded-b-2xl">
+                                <div className="mt-4 pt-4 border-t-2 border-dashed border-gray-100 flex justify-between items-center px-6 pb-6 bg-indigo-50/20 rounded-b-2xl flex-wrap gap-4">
                                     <div className="flex flex-col">
                                         <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Grand Total</span>
                                         <span className="text-sm font-black text-gray-700">TOTAL ACADEMIC FEES</span>
                                     </div>
-                                    <div className="flex flex-col items-end">
+                                    <div className="flex flex-col items-start sm:items-end">
                                         <div className="text-xl font-black text-gray-500 line-through decoration-gray-400">
                                             ₹{originalAcademicFees.toLocaleString()}
                                         </div>
@@ -1399,7 +1961,7 @@ const GuardianDashboard = () => {
                                                 <CheckCircleOutlined /> - ₹{totalPaidAmount.toLocaleString()} Paid
                                             </div>
                                         )}
-                                        <div className="text-2xl font-black text-indigo-600 mt-2 border-t border-indigo-200/50 pt-2 min-w-[120px] text-right">
+                                        <div className="text-2xl font-black text-indigo-600 mt-2 border-t border-indigo-200/50 pt-2 min-w-[120px] text-left sm:text-right">
                                             ₹{remainingPendingFees.toLocaleString()}
                                             <span className="text-[10px] block text-gray-500 font-bold mt-0.5">REMAINING DUE</span>
                                         </div>
@@ -1411,6 +1973,8 @@ const GuardianDashboard = () => {
                         )}
                     </Card>
                 </Tabs.TabPane>
+                )}
+                {enableOnlineFeePayment && (
                 <Tabs.TabPane tab={<span><WalletOutlined /> Fees Receipt Transaction</span>} key="5">
                     <Card className="rounded-2xl border-gray-100 shadow-sm">
                         <Table 
@@ -1442,7 +2006,26 @@ const GuardianDashboard = () => {
                                     }
                                 },
                                 { title: 'Receipt No', dataIndex: 'payment_id', key: 'receipt_no', render: text => text || 'N/A' },
-                                { title: 'Amount', dataIndex: 'amount', key: 'amount', render: text => `₹ ${text?.toLocaleString()}` },
+                                { 
+                                  title: 'Amount', 
+                                  dataIndex: 'amount', 
+                                  key: 'amount', 
+                                  render: (text, rec) => (
+                                    <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                                        {rec.discount_amount > 0 && (
+                                            <div style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 11, marginBottom: '-2px' }}>
+                                                ₹{rec.original_fee?.toLocaleString()}
+                                            </div>
+                                        )}
+                                        <span className="font-semibold text-gray-800">₹{text?.toLocaleString()}</span>
+                                        {rec.discount_amount > 0 && (
+                                            <span style={{ color: '#a855f7', fontSize: 10, fontWeight: 700, background: '#f3e8ff', padding: '0 6px', borderRadius: 4, marginTop: 2 }}>
+                                                -₹{rec.discount_amount.toLocaleString()} Off {rec.discount_name ? `(${rec.discount_name})` : ''}
+                                            </span>
+                                        )}
+                                    </div>
+                                  ) 
+                                },
                                 { title: 'Payment Type', key: 'type', render: () => 'ONLINE PAYMENT' },
                                 { 
                                     title: 'Download', 
@@ -1460,6 +2043,7 @@ const GuardianDashboard = () => {
                         />
                     </Card>
                 </Tabs.TabPane>
+                )}
                 <Tabs.TabPane tab={<span><BookOutlined /> Academic Progress</span>} key="6">
                     <Card className="rounded-2xl border-gray-100">
                         <Table 
@@ -1522,7 +2106,7 @@ const GuardianDashboard = () => {
                             </div>
 
                             {/* Detail Grid */}
-                            <div className="grid grid-cols-3 gap-x-6 gap-y-3 mb-4 px-2">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 mb-4 px-2">
                                 <div>
                                     <span className="text-[10px] text-gray-400 font-black uppercase block tracking-tighter">Student ID</span>
                                     <span className="text-sm font-bold text-gray-800">{wardProfile.name}</span>
@@ -1561,8 +2145,8 @@ const GuardianDashboard = () => {
                             </div>
 
                             {/* Payment Footer Bar */}
-                            <div className="flex items-center justify-between gap-6 border-t pt-6">
-                                <div className="flex-1">
+                            <div className="flex flex-wrap items-center justify-between gap-6 border-t pt-6">
+                                <div className="flex-1 min-w-[200px]">
                                     <Checkbox 
                                         checked={termsAccepted} 
                                         onChange={(e) => setTermsAccepted(e.target.checked)}
@@ -1571,7 +2155,7 @@ const GuardianDashboard = () => {
                                         I confirm that all details are correct. I agree to the <span className="text-indigo-600 underline">Terms</span>.
                                     </Checkbox>
                                 </div>
-                                <div className="flex items-center gap-4">
+                                <div className="flex flex-wrap items-center gap-4">
                                     <div className="text-right">
                                         <span className="text-[10px] text-gray-400 font-black uppercase block leading-none mb-1">Payable Amount</span>
                                         <span className="text-3xl font-black text-indigo-600 leading-none">₹{(selectedFee.amount || selectedFee.outstanding_amount || 0).toLocaleString()}</span>

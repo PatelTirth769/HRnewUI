@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 import * as XLSX from 'xlsx';
 import { db } from '../../config/firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
@@ -116,6 +119,9 @@ const generateUniqueGuardianEmail = (guardianName, existingGuardiansList, extraE
 };
 
 const Student = () => {
+    const userRole = localStorage.getItem('userRole');
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     const [api, contextHolder] = notification.useNotification();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form' or 'import'
@@ -184,6 +190,7 @@ const Student = () => {
     const [academicYears, setAcademicYears] = useState([]);
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchStudents();
             fetchDropdownData(); // For filter dropdown
@@ -202,15 +209,37 @@ const Student = () => {
             };
             loadData();
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
 
     const fetchStudents = async () => {
         try {
             setLoadingList(true);
+            const userEmail = localStorage.getItem('user');
+
             const url = '/api/resource/Student?fields=["name","first_name","middle_name","last_name","student_email_id","student_mobile_number","joining_date","enabled","gender","program","gr_number","roll_number","custom_board"]&limit_page_length=None&order_by=modified desc';
             const response = await API.get(url);
-            setStudents(response.data.data || []);
+            let rawStudents = response.data.data || [];
+
+            if (userRole === 'Instructor') {
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    rawStudents = rawStudents.filter(s => groupDetails.studentIds.includes(s.name));
+                } else {
+                    rawStudents = [];
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    rawStudents = rawStudents.filter(s => ctPrograms.includes(s.program));
+                } else if (ctBoards.length > 0) {
+                    rawStudents = rawStudents.filter(s => ctBoards.includes(s.custom_board));
+                }
+            }
+
+            setStudents(rawStudents);
         } catch (err) {
             console.error('Error fetching students:', err);
         } finally {
@@ -2185,6 +2214,54 @@ const Student = () => {
     }
 
 
+    // Export logic
+    const handleExport = (format) => {
+        const filtered = students.filter(s => {
+            const matchesSearch = !search || (
+                (s.name || '').toLowerCase().includes(search.toLowerCase()) ||
+                (s.first_name || '').toLowerCase().includes(search.toLowerCase()) ||
+                (s.last_name || '').toLowerCase().includes(search.toLowerCase()) ||
+                (s.student_email_id || '').toLowerCase().includes(search.toLowerCase()) ||
+                (s.gr_number || '').toLowerCase().includes(search.toLowerCase()) ||
+                (s.roll_number || '').toLowerCase().includes(search.toLowerCase())
+            );
+            const matchesProgram = !selectedProgram || s.program === selectedProgram;
+            const matchesAcademicYear = !filterAcademicYear || s.academic_year === filterAcademicYear;
+            const matchesBoard = !filterBoard || s.custom_board === filterBoard;
+            const matchesStatus = !filterStatus || (filterStatus === 'Active' ? s.enabled === 1 : s.enabled === 0);
+            return matchesSearch && matchesProgram && matchesAcademicYear && matchesBoard && matchesStatus;
+        });
+
+        if (!filtered || filtered.length === 0) {
+            notification.warning({ message: 'No data to export' });
+            return;
+        }
+
+        const exportData = filtered.map(row => ({
+            ID: row.name,
+            Status: row.enabled ? 'ACTIVE' : 'DISABLED',
+            GR_No: row.gr_number || '-',
+            Roll_No: row.roll_number || '-',
+            First_Name: row.first_name || '',
+            Last_Name: row.last_name || '',
+            Email: row.student_email_id || '-',
+            Mobile: row.student_mobile_number || '-',
+            Joining_Date: row.joining_date || '-'
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Students");
+
+        if (format === 'csv') {
+            XLSX.writeFile(workbook, `Students_${new Date().toISOString().split('T')[0]}.csv`);
+        } else {
+            XLSX.writeFile(workbook, `Students_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+        
+        notification.success({ message: `Exported as ${format.toUpperCase()} successfully` });
+    };
+
     // --- Styles (Standard App UI) ---
     const inputStyle = "w-full border border-gray-200 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 disabled:bg-gray-50";
     const labelStyle = "block text-[13px] text-gray-500 mb-1";
@@ -2226,15 +2303,25 @@ const Student = () => {
                         </div>
                     </div>
                     <div className="flex gap-3">
-                        <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95 cursor-pointer" onClick={() => setView('import')}>
-                            Data Import
+                        {userRole !== 'Instructor' && (
+                            <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95 cursor-pointer" onClick={() => setView('import')}>
+                                Data Import
+                            </button>
+                        )}
+                        <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95 cursor-pointer" onClick={() => handleExport('csv')} disabled={loadingList}>
+                            <FiDownload className="w-4 h-4 text-blue-600" /> CSV
+                        </button>
+                        <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95 cursor-pointer" onClick={() => handleExport('excel')} disabled={loadingList}>
+                            <FiDownload className="w-4 h-4 text-green-600" /> Excel
                         </button>
                         <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95 cursor-pointer" onClick={fetchStudents} disabled={loadingList}>
                             <FiRefreshCw className={`w-4 h-4 ${loadingList ? 'animate-spin' : ''}`} /> Refresh
                         </button>
-                        <button className="px-5 py-2 bg-[#8C3A3A] text-white rounded-lg text-sm font-black hover:bg-[#732929] transition-all shadow-lg shadow-black/10 flex items-center gap-2 active:scale-95 cursor-pointer" onClick={() => { setEditingRecord(null); setView('form'); }}>
-                            <FiPlus className="w-4 h-4" /> Add Student
-                        </button>
+                        {userRole !== 'Instructor' && (
+                            <button className="px-5 py-2 bg-[#8C3A3A] text-white rounded-lg text-sm font-black hover:bg-[#732929] transition-all shadow-lg shadow-black/10 flex items-center gap-2 active:scale-95 cursor-pointer" onClick={() => { setEditingRecord(null); setView('form'); }}>
+                                <FiPlus className="w-4 h-4" /> Add Student
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -2379,13 +2466,15 @@ const Student = () => {
                                                     >
                                                         <FiEdit2 className="w-4 h-4" />
                                                     </button>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); handleDelete(row.name); }} 
-                                                        className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors cursor-pointer border border-red-100"
-                                                        title="Delete"
-                                                    >
-                                                        <FiTrash2 className="w-4 h-4" />
-                                                    </button>
+                                                    {userRole !== 'Instructor' && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(row.name); }} 
+                                                            className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors cursor-pointer border border-red-100"
+                                                            title="Delete"
+                                                        >
+                                                            <FiTrash2 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -2459,12 +2548,14 @@ const Student = () => {
                     <button className="p-2 border border-blue-400 bg-white text-blue-600 rounded-md hover:bg-blue-50 transition" onClick={() => setView('list')} title="Go Back">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                     </button>
-                    {editingRecord && (
+                    {editingRecord && userRole !== 'Instructor' && (
                         <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition shadow-sm" onClick={handleDelete}>Delete</button>
                     )}
-                    <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving}>
-                        {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save'}
-                    </button>
+                    {userRole !== 'Instructor' && (
+                        <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving}>
+                            {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save'}
+                        </button>
+                    )}
                 </div>
             </div>
 

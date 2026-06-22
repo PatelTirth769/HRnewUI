@@ -3,14 +3,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Typography, notification, Spin, Modal } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
 
-import api from '../../utility/api';
 import { useAuth } from '../../context/auth.jsx';
-import Config from '../../utility/Config';
 import { FaUser, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
 import './style.css';
 import API, { setActiveSystem } from '../../services/api';
-import axios from 'axios';
 import ssvLogo from '../../assets/images/SSVLOGO.png';
+import axios from 'axios';
 
 const { Title, Text } = Typography;
 
@@ -51,31 +49,6 @@ const LoginPage = () => {
     const timeoutId = setTimeout(fetchDiscoveredAccounts, 500); // 500ms debounce
     return () => clearTimeout(timeoutId);
   }, [emailInputValue]);
-
-  const apiAuthenticate = async () => {
-    const data = {
-      user: Config.user,
-      pass: Config.pass,
-      key: Config.key,
-    };
-    try {
-      const response = await api.post(`common/apiAuth`, data);
-      if (response.data.responseStatus === 'Ok') {
-        localStorage.setItem('apiToken', response.data.token);
-      }
-    } catch (error) {
-      console.error('Authentication error:', error);
-      notification.error({
-        message: 'API Error',
-        description: 'API Server not connected',
-        duration: 0,
-      });
-    }
-  };
-
-  useEffect(() => {
-    apiAuthenticate();
-  }, []);
 
   const handleGuardianSelectionConfirm = () => {
     if (selectedGuardianStudent) {
@@ -145,6 +118,7 @@ const LoginPage = () => {
         localStorage.setItem('userIsHRAdmin', isHRAdmin ? 'true' : 'false');
         localStorage.setItem('activeSystem', 'schooler');
         localStorage.setItem('activeSystemName', 'Schooler');
+        localStorage.setItem('login_input', values.email);
 
         if (mongoRole) {
           localStorage.setItem('mongoRole', mongoRole);
@@ -153,16 +127,22 @@ const LoginPage = () => {
         // Redirect based on role
         if (isHRAdmin) {
           navigate('/home');
+        } else if (mongoRole === 'Attendance manager') {
+          navigate('/education/student-attendance');
         } else if (mongoRole === 'Student') {
           navigate('/student-dashboard');
         } else if (mongoRole === 'Instructor') {
           navigate('/instructor-dashboard');
+        } else if (mongoRole === 'Coordinator') {
+          navigate('/coordinator-dashboard');
         } else if (mongoRole === 'Guardian') {
           // Fetch Guardian profile to check for multiple students
           try {
-            const guardRes = await API.get(`/api/resource/Guardian?or_filters=[["email_address","=","${resolvedUserId}"],["mobile_number","=","${resolvedUserId}"]]&fields=["name"]`);
+            const loginInput = values.email;
+            const guardRes = await API.get(`/api/resource/Guardian?or_filters=[["email_address","=","${resolvedUserId}"],["mobile_number","=","${resolvedUserId}"],["email_address","=","${loginInput}"],["mobile_number","=","${loginInput}"]]&fields=["name"]`);
             if (guardRes.data?.data?.length > 0) {
                 const guardianId = guardRes.data.data[0].name;
+                localStorage.setItem('guardian_profile_id', guardianId);
                 const fullGuard = await API.get(`/api/resource/Guardian/${encodeURIComponent(guardianId)}`);
                 const students = fullGuard.data?.data?.students || [];
                 
@@ -251,7 +231,7 @@ const LoginPage = () => {
                 <div style={{ marginTop: '4px' }}>
                   {discoveredAccounts.length === 1 && (
                     <div style={{ fontSize: '12px', color: '#10b981', fontWeight: '500' }}>
-                      Schooler User | Role: {discoveredAccounts[0].role}
+                      System: {discoveredAccounts[0].system ? (discoveredAccounts[0].system.charAt(0).toUpperCase() + discoveredAccounts[0].system.slice(1)) : 'Schooler'} | Role: {discoveredAccounts[0].role}
                     </div>
                   )}
                   {discoveredAccounts.length > 1 && (
@@ -269,7 +249,7 @@ const LoginPage = () => {
                               onChange={() => setSelectedAccountIndex(index)}
                               style={{ accentColor: '#10b981', width: '16px', height: '16px', margin: 0 }}
                             />
-                            <span>Login as <strong>{acc.role}</strong> {acc.name ? <span style={{ color: '#64748b' }}>({acc.name})</span> : ''}</span>
+                            <span>Login as <strong>{acc.role}</strong> (System: {acc.system ? (acc.system.charAt(0).toUpperCase() + acc.system.slice(1)) : 'Schooler'}) {acc.name ? <span style={{ color: '#64748b' }}>({acc.name})</span> : ''}</span>
                           </label>
                         ))}
                       </div>

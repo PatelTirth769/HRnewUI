@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const emptyForm = () => ({
     student: '',
@@ -22,6 +24,8 @@ const emptyForm = () => ({
 });
 
 const Fees = () => {
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -51,6 +55,7 @@ const Fees = () => {
     });
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         if (view === 'list') {
             fetchFeesList();
         } else {
@@ -61,32 +66,51 @@ const Fees = () => {
                 setForm(emptyForm());
             }
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     const fetchDropdowns = async () => {
         try {
             const safeGet = (url) => API.get(url).catch(err => { console.error(`Error fetching ${url}:`, err); return { data: { data: [] } }; });
             const [sRes, pRes, yRes, tRes, fsRes, fshRes, aRes, coRes, ccRes, fcRes] = await Promise.all([
-                safeGet('/api/resource/Student?fields=["name","first_name","last_name"]&limit_page_length=None'),
-                safeGet('/api/resource/Program?limit_page_length=None'),
+                safeGet('/api/resource/Student?fields=["name","first_name","last_name","program","custom_board"]&limit_page_length=None'),
+                safeGet('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None'),
                 safeGet('/api/resource/Academic Year?limit_page_length=None'),
                 safeGet('/api/resource/Academic Term?limit_page_length=None'),
-                safeGet('/api/resource/Fee Structure?limit_page_length=None'),
+                safeGet('/api/resource/Fee Structure?fields=["name","program","company"]&limit_page_length=None'),
                 safeGet('/api/resource/Fee Schedule?limit_page_length=None'),
                 safeGet('/api/resource/Account?limit_page_length=None'),
                 safeGet('/api/resource/Company?limit_page_length=None'),
                 safeGet('/api/resource/Cost Center?limit_page_length=None'),
                 safeGet('/api/resource/Fee Category?limit_page_length=None'),
             ]);
+
+            let studentsList = sRes.data.data || [];
+            let programsList = pRes.data.data || [];
+            let feeStructuresList = fsRes.data.data || [];
+
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    studentsList = studentsList.filter(s => ctPrograms.includes(s.program));
+                    programsList = programsList.filter(p => ctPrograms.includes(p.name));
+                    feeStructuresList = feeStructuresList.filter(fs => ctPrograms.includes(fs.program));
+                } else if (ctBoards.length > 0) {
+                    studentsList = studentsList.filter(s => ctBoards.includes(s.custom_board));
+                    programsList = programsList.filter(p => ctBoards.includes(p.custom_board));
+                    feeStructuresList = feeStructuresList.filter(fs => ctBoards.includes(fs.company));
+                }
+            }
+
             setDropdowns({
-                students: sRes.data.data?.map(d => ({
+                students: studentsList.map(d => ({
                     id: d.name,
                     name: `${d.first_name || ''} ${d.last_name || ''}`.trim()
                 })) || [],
-                programs: pRes.data.data?.map(d => d.name) || [],
+                programs: programsList.map(d => d.name) || [],
                 academicYears: yRes.data.data?.map(d => d.name) || [],
                 academicTerms: tRes.data.data?.map(d => d.name) || [],
-                feeStructures: fsRes.data.data?.map(d => d.name) || [],
+                feeStructures: feeStructuresList.map(d => d.name) || [],
                 feeSchedules: fshRes.data.data?.map(d => d.name) || [],
                 accounts: aRes.data.data?.map(d => d.name) || [],
                 companies: coRes.data.data?.map(d => d.name) || [],
@@ -103,7 +127,24 @@ const Fees = () => {
             setLoadingList(true);
             const url = '/api/resource/Fees?fields=["name","student","student_name","program","grand_total","outstanding_amount","posting_date"]&limit_page_length=None&order_by=creation desc';
             const response = await API.get(url);
-            setFeesList(response.data.data || []);
+            let feesData = response.data.data || [];
+            
+            if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                     feesData = feesData.filter(f => ctPrograms.includes(f.program));
+                } else if (ctBoards.length > 0) {
+                     // Since Fees doesn't have custom_board, fetch Student to filter
+                     const safeGet = (u) => API.get(u).catch(() => ({ data: { data: [] } }));
+                     const stuRes = await safeGet('/api/resource/Student?fields=["name","custom_board"]&limit_page_length=None');
+                     const studentsList = stuRes.data.data || [];
+                     const allowedStudents = studentsList.filter(s => ctBoards.includes(s.custom_board)).map(s => s.name);
+                     feesData = feesData.filter(f => allowedStudents.includes(f.student));
+                }
+            }
+            
+            setFeesList(feesData);
         } catch (err) {
             console.error('Error fetching fees list:', err);
         } finally {

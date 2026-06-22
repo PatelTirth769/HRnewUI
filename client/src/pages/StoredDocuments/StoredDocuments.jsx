@@ -3,6 +3,9 @@ import { FiDownload, FiEye, FiFile, FiFileText, FiImage, FiSearch, FiChevronDown
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getSystemQueryParam } from '../../services/api';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useInstructorGroups } from '../../hooks/useInstructorGroups';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const getFileIcon = (fileName) => {
     if (!fileName) return <FiFile className="text-gray-500" />;
@@ -15,6 +18,9 @@ const getFileIcon = (fileName) => {
 const REGISTRATIONS_PATH = 'schooler_system/enquiry_management/registrations';
 
 const StoredDocuments = () => {
+    const { isInstructor, isCoordinator } = useUserRole();
+    const instructorData = useInstructorGroups();
+    const coordinatorScope = useCoordinatorScope();
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -30,8 +36,9 @@ const StoredDocuments = () => {
     const [pageSize, setPageSize] = useState(20);
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         fetchStudentDocuments();
-    }, []);
+    }, [isCoordinator, coordinatorScope.loading]);
 
     const fetchStudentDocuments = async () => {
         try {
@@ -128,16 +135,39 @@ const StoredDocuments = () => {
     const toggleStudent = (id) => {
         setExpandedStudentId(prev => prev === id ? null : id);
     };
+    const visibleStudentsList = useMemo(() => {
+        if (isCoordinator) {
+            if (coordinatorScope.loading) return [];
+            return students.filter(student => coordinatorScope.programs.includes(student.program));
+        } else if (isInstructor) {
+            if (instructorData.loading) return [];
+            return students.filter(student => {
+                return instructorData.studentMobiles.includes(student.mobileNumber) ||
+                    instructorData.studentNames.some(name => student.fullName.toLowerCase() === name.toLowerCase()) ||
+                    instructorData.studentIds.includes(student.registrationNo) ||
+                    instructorData.studentIds.includes(student.id);
+            });
+        }
+        return students;
+    }, [students, isInstructor, instructorData, isCoordinator, coordinatorScope]);
 
     // Extract unique filter options from the fetched data
-    const availablePrograms = [...new Set(students.map(s => s.program))].filter(p => p !== 'N/A');
-    const availableAcademicYears = [...new Set(students.map(s => s.academicYear))].filter(y => y !== 'N/A');
-    const availableBoards = [...new Set(students.map(s => s.board))].filter(b => b && b !== 'N/A');
+    const availablePrograms = useMemo(() => {
+        return [...new Set(visibleStudentsList.map(s => s.program))].filter(p => p !== 'N/A');
+    }, [visibleStudentsList]);
+
+    const availableAcademicYears = useMemo(() => {
+        return [...new Set(visibleStudentsList.map(s => s.academicYear))].filter(y => y !== 'N/A');
+    }, [visibleStudentsList]);
+
+    const availableBoards = useMemo(() => {
+        return [...new Set(visibleStudentsList.map(s => s.board))].filter(b => b && b !== 'N/A');
+    }, [visibleStudentsList]);
 
     // Apply Filters
     const filteredStudents = useMemo(() => {
         const term = searchQuery.trim().toLowerCase();
-        return students.filter(student => {
+        return visibleStudentsList.filter(student => {
             // Text Search
             const matchesSearch = !term || 
                 student.fullName.toLowerCase().includes(term) ||
@@ -164,8 +194,7 @@ const StoredDocuments = () => {
 
             return true;
         });
-    }, [students, searchQuery, filterProgram, filterBoard, filterAcademicYear, filterDateFrom, filterDateTo]);
-
+    }, [visibleStudentsList, searchQuery, filterProgram, filterBoard, filterAcademicYear, filterDateFrom, filterDateTo]);
     const displayedStudents = useMemo(() => {
         return filteredStudents.slice(0, pageSize);
     }, [filteredStudents, pageSize]);

@@ -123,7 +123,7 @@ const Icon = ({ name, className }) => {
 const Sidebar = ({ isOpen, onClose, activeModule }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { isAdmin, isStudent, isInstructor, isGuardian } = useUserRole();
+    const { isAdmin, isStudent, isInstructor, isGuardian, isAttendanceManager, isCoordinator } = useUserRole();
     const branding = getBranding();
     const [expandedSections, setExpandedSections] = useState({});
     const [firebaseConfig, setFirebaseConfig] = useState(null);
@@ -356,25 +356,52 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                             </div>
                         )}
                         {config.sections && config.sections.map((section) => {
+                            if (isAttendanceManager) {
+                                if (activeModule !== 'education' || section.title !== 'ATTENDANCE') {
+                                    return null;
+                                }
+                            }
+
                             // Filter items based on admin/student/instructor status
                             const filteredItems = (section.items || []).filter(item => {
+                                if (isAttendanceManager) {
+                                    const allowedPaths = [
+                                        '/education/student-attendance',
+                                        '/education/quick-attendance',
+                                        '/education/student-leave-application',
+                                        '/education/student-monthly-attendance-sheet',
+                                        '/education/absent-student-report',
+                                        '/education/student-batch-wise-attendance'
+                                    ];
+                                    return allowedPaths.includes(item.path);
+                                }
                                 if (isAdmin) return !item.hideFromAdmin;
                                 if (isStudent) return item.studentAccess === true;
                                 if (isGuardian) return item.guardianAccess === true;
                                 // Instructors get full access to everything in Education module, 
                                 // but we only show the relevant dashboard in the Overview section.
-                                if (isInstructor && activeModule === 'education') {
+                                if ((isInstructor || isCoordinator) && activeModule === 'education') {
                                     if (section.title === 'Overview') return item.instructorAccess === true;
                                     return true;
                                 }
-                                if (isInstructor) return item.instructorAccess === true;
+                                if (isInstructor || isCoordinator) return item.instructorAccess === true;
                                 return !item.adminOnly;
                             });
 
                             // If no items left after filtering, and this is NOT a dynamic module (or it's Firebase and explicitly empty)
                             if (filteredItems.length === 0 && activeModule !== 'transport') return null;
 
-                            const isDisabled = section.disabled;
+                            let isDisabled = section.disabled;
+                            if ((isInstructor || isCoordinator) && activeModule === 'education') {
+                                if (
+                                    section.title === 'ADMISSION' ||
+                                    section.title === 'ASSESSMENT' ||
+                                    section.title === 'Assessment Reports' ||
+                                    section.title === 'SETTINGS'
+                                ) {
+                                    isDisabled = true;
+                                }
+                            }
 
                             return (
                                 <div key={section.title} className={`bg-white rounded-xl overflow-hidden border border-gray-50 shadow-sm ${isDisabled ? 'opacity-50 blur-[1.5px] pointer-events-none select-none grayscale' : ''}`}>
@@ -407,7 +434,25 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                                             )}
                                             {filteredItems.map((item) => {
                                                 const isActive = location.pathname === item.path;
-                                                const isItemDisabled = item.disabled;
+                                                let isItemDisabled = item.disabled;
+                                                if ((isInstructor || isCoordinator) && activeModule === 'education') {
+                                                    // 1. Student Log
+                                                    if (item.label === 'Student Log') {
+                                                        isItemDisabled = true;
+                                                    }
+                                                    // 2. Tools section - class wise subject allocation only, others disabled
+                                                    if (section.title === 'Tools' && item.label !== 'Classwise Subject Allocation') {
+                                                        isItemDisabled = true;
+                                                    }
+                                                    // 3. Other Reports - Student and Guardian Contact Details disabled
+                                                    if (item.label === 'Student and Guardian Contact Details') {
+                                                        isItemDisabled = true;
+                                                    }
+                                                    // 4. Fees section - only Fees report enabled, others disabled
+                                                    if (section.title === 'FEES' && item.label !== 'Fees report') {
+                                                        isItemDisabled = true;
+                                                    }
+                                                }
                                                 return (
                                                     <div
                                                         key={item.label}

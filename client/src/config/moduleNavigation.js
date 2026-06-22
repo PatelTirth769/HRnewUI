@@ -878,6 +878,7 @@ export const moduleNavigation = {
                 icon: 'cog',
                 items: [
                     { label: 'Class Restriction Setup', path: '/enquiry/setup/class-restriction' },
+                    { label: 'Announcement', path: '/enquiry/announcement' },
                 ],
             },
         ],

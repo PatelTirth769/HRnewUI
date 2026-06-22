@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import { FiEdit2, FiTrash2 } from 'react-icons/fi';
 import API from '../../services/api';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const emptyForm = () => ({
     program_name: '',
@@ -12,6 +15,9 @@ const emptyForm = () => ({
 });
 
 const Program = () => {
+    const userRole = localStorage.getItem('userRole');
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -33,6 +39,7 @@ const Program = () => {
     const [companies, setCompanies] = useState([]);
 
     useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
         // Fetch companies once for the filter dropdown
         if (companies.length === 0) {
             API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc')
@@ -50,14 +57,39 @@ const Program = () => {
                 setForm(emptyForm());
             }
         }
-    }, [view, editingRecord]);
+    }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
 
     const fetchPrograms = async () => {
         try {
             setLoadingList(true);
+            const userRole = localStorage.getItem('userRole');
+            const userEmail = localStorage.getItem('user');
+
             const url = '/api/resource/Program?fields=["name","program_abbreviation","department","custom_board"]&limit_page_length=None&order_by=name asc';
             const response = await API.get(url);
-            setPrograms(response.data.data || []);
+            let rawPrograms = response.data.data || [];
+
+            if (userRole === 'Instructor') {
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const classTeacherPrograms = groupDetails.classTeacherGroups.map(g => g.program).filter(Boolean);
+                    const uniqueCTPrograms = Array.from(new Set(classTeacherPrograms));
+                    rawPrograms = rawPrograms.filter(p => uniqueCTPrograms.includes(p.name));
+                } else {
+                    rawPrograms = [];
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    rawPrograms = rawPrograms.filter(p => ctPrograms.includes(p.name));
+                } else if (ctBoards.length > 0) {
+                    rawPrograms = rawPrograms.filter(p => ctBoards.includes(p.custom_board));
+                }
+            }
+
+            setPrograms(rawPrograms);
         } catch (err) {
             console.error('Error fetching programs:', err);
         } finally {
@@ -228,9 +260,11 @@ const Program = () => {
                         <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 flex items-center gap-2 transition" onClick={fetchPrograms} disabled={loadingList}>
                             {loadingList ? '⟳ Loading...' : '⟳ Refresh'}
                         </button>
-                        <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium" onClick={() => { setEditingRecord(null); setView('form'); }}>
-                            + Add Program
-                        </button>
+                        {userRole !== 'Instructor' && (
+                            <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium" onClick={() => { setEditingRecord(null); setView('form'); }}>
+                                + Add Program
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -293,7 +327,9 @@ const Program = () => {
                                         <td className="px-4 py-3 text-right">
                                             <div className="flex items-center justify-end gap-2 transition-all">
                                                 <button onClick={(e) => { e.stopPropagation(); setEditingRecord(row.name); setView('form'); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title="Edit"><FiEdit2 className="w-4 h-4" /></button>
-                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteRow(row.name); }} className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors" title="Delete"><FiTrash2 className="w-4 h-4" /></button>
+                                                {userRole !== 'Instructor' && (
+                                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteRow(row.name); }} className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors" title="Delete"><FiTrash2 className="w-4 h-4" /></button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -328,12 +364,14 @@ const Program = () => {
                     <button className="p-2 border border-blue-400 bg-white text-blue-600 rounded-md hover:bg-blue-50 transition" onClick={() => setView('list')} title="Go Back">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                     </button>
-                    {editingRecord && (
+                    {editingRecord && userRole !== 'Instructor' && (
                         <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm font-medium hover:bg-red-100 transition shadow-sm" onClick={handleDelete}>Delete</button>
                     )}
-                    <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving}>
-                        {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save'}
-                    </button>
+                    {userRole !== 'Instructor' && (
+                        <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-800 transition shadow-sm disabled:opacity-70 flex items-center gap-2" onClick={handleSave} disabled={saving}>
+                            {saving ? <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Save'}
+                        </button>
+                    )}
                 </div>
             </div>
 

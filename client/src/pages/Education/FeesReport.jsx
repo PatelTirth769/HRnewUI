@@ -9,11 +9,16 @@ import {
 import API from '../../services/api';
 import axios from 'axios';
 import dayjs from 'dayjs';
+import { resolveInstructorId } from '../../utility/instructorHelper';
+import { useUserRole } from '../../hooks/useUserRole';
+import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
 const FeesReport = () => {
+    const { isCoordinator } = useUserRole();
+    const coordinatorScope = useCoordinatorScope();
     const [loading, setLoading] = useState(false);
     const [allData, setAllData] = useState([]);
     const [filters, setFilters] = useState({
@@ -33,7 +38,10 @@ const FeesReport = () => {
     });
     const [showFilters, setShowFilters] = useState(true);
 
-    useEffect(() => { fetchInitialData(); }, []);
+    useEffect(() => {
+        if (isCoordinator && coordinatorScope.loading) return;
+        fetchInitialData();
+    }, [isCoordinator, coordinatorScope.loading]);
 
     const fetchInitialData = async () => {
         setLoading(true);
@@ -43,9 +51,34 @@ const FeesReport = () => {
                 API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Term?limit_page_length=None').catch(() => ({ data: { data: [] } })),
             ]);
+
+            let programs = pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || [];
+            
+            const userRole = localStorage.getItem('userRole');
+            if (userRole === 'Instructor') {
+                const userEmail = localStorage.getItem('user');
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","program"]&limit_page_length=None`);
+                    const ctGroups = ctRes.data.data || [];
+                    const ctPrograms = Array.from(new Set(ctGroups.map(g => g.program).filter(Boolean)));
+                    programs = programs.filter(p => ctPrograms.includes(p.value));
+                } else {
+                    programs = [];
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    programs = programs.filter(p => ctPrograms.includes(p.value));
+                } else if (ctBoards.length > 0) {
+                    programs = programs.filter(p => ctBoards.includes(p.custom_board));
+                }
+            }
+
             setDropdowns({
                 academicYears: yRes.data.data?.map(d => d.name) || [],
-                programs: pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || [],
+                programs: programs,
                 terms: tRes.data.data?.map(d => d.name) || [],
             });
             await fetchData();
@@ -61,7 +94,7 @@ const FeesReport = () => {
         try {
             // 1. Fetch Firebase payments (only students who initiated/completed payment)
             const payRes = await axios.get('/local-api/payment/history-all');
-            const paymentList = payRes.data.success ? payRes.data.data : [];
+            let paymentList = payRes.data.success ? payRes.data.data : [];
 
             // 2. Fetch ALL Fees records from ERPNext (invoices for ALL students)
             let erpFeesList = [];
@@ -135,6 +168,56 @@ const FeesReport = () => {
                 });
                 enrollments = enrRes.data?.data || [];
             } catch (e) { console.warn('[FeesReport] Could not fetch enrollments:', e.message); }
+
+            const userRole = localStorage.getItem('userRole');
+            if (userRole === 'Instructor') {
+                const userEmail = localStorage.getItem('user');
+                const instructorId = await resolveInstructorId(userEmail);
+                if (instructorId) {
+                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name"]&limit_page_length=None`);
+                    const ctGroups = ctRes.data.data || [];
+                    const ctGroupNames = ctGroups.map(g => g.name);
+                    
+                    let ctStudentIds = [];
+                    if (ctGroupNames.length > 0) {
+                        const groupDetailPromises = ctGroupNames.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
+                        const groupDetails = await Promise.all(groupDetailPromises);
+                        ctStudentIds = Array.from(new Set(
+                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
+                        ));
+                    }
+                    
+                    paymentList = paymentList.filter(p => ctStudentIds.includes(p.student_id));
+                    erpFeesList = erpFeesList.filter(fee => ctStudentIds.includes(fee.student));
+                    allStudents = allStudents.filter(s => ctStudentIds.includes(s.name));
+                    enrollments = enrollments.filter(e => ctStudentIds.includes(e.student));
+                } else {
+                    paymentList = [];
+                    erpFeesList = [];
+                    allStudents = [];
+                    enrollments = [];
+                }
+            } else if (isCoordinator && !coordinatorScope.loading) {
+                const ctPrograms = coordinatorScope.programs || [];
+                const ctBoards = coordinatorScope.boards || [];
+                if (ctPrograms.length > 0) {
+                    const allowedStudents = enrollments.filter(e => ctPrograms.includes(e.program)).map(e => e.student);
+                    // Also check allStudents directly
+                    const moreAllowed = allStudents.filter(s => ctPrograms.includes(s.program)).map(s => s.name);
+                    const finalAllowed = Array.from(new Set([...allowedStudents, ...moreAllowed]));
+                    
+                    paymentList = paymentList.filter(p => finalAllowed.includes(p.student_id));
+                    erpFeesList = erpFeesList.filter(fee => finalAllowed.includes(fee.student));
+                    allStudents = allStudents.filter(s => finalAllowed.includes(s.name));
+                    enrollments = enrollments.filter(e => finalAllowed.includes(e.student));
+                } else if (ctBoards.length > 0) {
+                    const finalAllowed = allStudents.filter(s => ctBoards.includes(s.custom_board)).map(s => s.name);
+                    paymentList = paymentList.filter(p => finalAllowed.includes(p.student_id));
+                    erpFeesList = erpFeesList.filter(fee => finalAllowed.includes(fee.student));
+                    allStudents = allStudents.filter(s => finalAllowed.includes(s.name));
+                    enrollments = enrollments.filter(e => finalAllowed.includes(e.student));
+                }
+            }
 
             // Build a map: student_id -> { student_name, program }
             // Priority: Program Enrollment > Student.program
@@ -215,6 +298,9 @@ const FeesReport = () => {
                         academic_term: termName,
                         academic_year: fee.academic_year || '-',
                         total_fee: totalFee,
+                        original_fee: verifiedPayment?.original_fee || totalFee,
+                        discount_amount: verifiedPayment?.discount_amount || 0,
+                        discount_name: verifiedPayment?.discount_name || '',
                         paid_amount: paidAmount > 0 ? paidAmount : (verifiedPayment ? parseFloat(verifiedPayment.amount) || 0 : 0),
                         outstanding: outstanding,
                         status: status,
@@ -253,6 +339,9 @@ const FeesReport = () => {
                     academic_term: termName,
                     academic_year: '-',
                     total_fee: paidAmt,
+                    original_fee: p.original_fee || paidAmt,
+                    discount_amount: p.discount_amount || 0,
+                    discount_name: p.discount_name || '',
                     paid_amount: currentStatus === 'PAID' ? paidAmt : 0,
                     outstanding: currentStatus === 'PAID' ? 0 : paidAmt,
                     status: currentStatus,
@@ -310,6 +399,9 @@ const FeesReport = () => {
                             academic_term: termName,
                             academic_year: '-',
                             total_fee: termAmount,
+                            original_fee: verifiedPayment?.original_fee || termAmount,
+                            discount_amount: verifiedPayment?.discount_amount || 0,
+                            discount_name: verifiedPayment?.discount_name || '',
                             paid_amount: paidAmount,
                             outstanding: status === 'PAID' ? 0 : termAmount,
                             status: status,
@@ -388,8 +480,11 @@ const FeesReport = () => {
     }, [allData, filters]);
 
     const stats = useMemo(() => ({
-        totalProjected: filteredData.reduce((s, r) => s + r.total_fee, 0),
-        totalCollected: filteredData.reduce((s, r) => s + r.paid_amount, 0),
+        totalProjected: filteredData.reduce((s, r) => s + (r.original_fee || r.total_fee || 0), 0),
+        totalCollected: filteredData.reduce((s, r) => {
+            if (r.status === 'PAID') return s + (r.original_fee || r.total_fee || r.paid_amount || 0);
+            return s + (r.paid_amount || 0);
+        }, 0),
         totalOutstanding: filteredData.reduce((s, r) => s + r.outstanding, 0),
         paidCount: filteredData.filter(r => r.status === 'PAID').length,
         unpaidCount: filteredData.filter(r => r.status !== 'PAID').length,
@@ -445,12 +540,28 @@ const FeesReport = () => {
         },
         {
             title: 'TOTAL FEE', dataIndex: 'total_fee', key: 'total_fee', align: 'right',
-            render: v => <span style={{ fontWeight: 600, color: '#64748b', fontSize: 13 }}>₹{v.toLocaleString()}</span>,
+            render: (v, r) => (
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    {r.discount_amount > 0 && (
+                        <div style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 11, marginBottom: '-2px' }}>
+                            ₹{r.original_fee?.toLocaleString()}
+                        </div>
+                    )}
+                    <span style={{ fontWeight: 600, color: '#64748b', fontSize: 13 }}>
+                        ₹{v?.toLocaleString()}
+                    </span>
+                    {r.discount_amount > 0 && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#7e22ce', backgroundColor: '#faf5ff', padding: '0 4px', borderRadius: 2, marginTop: 2 }}>
+                            -₹{r.discount_amount.toLocaleString()} Off {r.discount_name ? `(${r.discount_name})` : ''}
+                        </span>
+                    )}
+                </div>
+            ),
             sorter: (a, b) => a.total_fee - b.total_fee,
         },
         {
             title: 'PAID', dataIndex: 'paid_amount', key: 'paid_amount', align: 'right',
-            render: v => <span style={{ fontWeight: 700, color: '#16a34a', fontSize: 13 }}>₹{v.toLocaleString()}</span>,
+            render: (v, r) => <span style={{ fontWeight: 700, color: '#16a34a', fontSize: 13 }}>₹{(r.status === 'PAID' ? (r.original_fee || r.total_fee || v) : v).toLocaleString()}</span>,
             sorter: (a, b) => a.paid_amount - b.paid_amount,
         },
         {

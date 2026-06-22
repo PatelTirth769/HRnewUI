@@ -11,6 +11,7 @@ const LoginPage = React.lazy(() => import('./pages/auth/LoginPage'));
 const Register = React.lazy(() => import('./pages/auth/Register'));
 const StudentDashboard = React.lazy(() => import('./pages/Education/StudentDashboard'));
 const InstructorDashboard = React.lazy(() => import('./pages/Education/InstructorDashboard'));
+const CoordinatorDashboard = React.lazy(() => import('./pages/Education/CoordinatorDashboard'));
 const GuardianDashboard = React.lazy(() => import('./pages/Education/GuardianDashboard'));
 const ImportLogs = React.lazy(() => import('./pages/Education/ImportLogs'));
 const RegistrationImportLogs = React.lazy(() => import('./pages/Enquiry/RegistrationImportLogs'));
@@ -343,6 +344,8 @@ const StudentBatchName = React.lazy(() => import('./pages/Education/StudentBatch
 const GradingScale = React.lazy(() => import('./pages/Education/GradingScale'));
 const AcademicYear = React.lazy(() => import('./pages/Education/AcademicYear'));
 const AcademicTerm = React.lazy(() => import('./pages/Education/AcademicTerm'));
+const RollGRAssign = React.lazy(() => import('./pages/Education/RollGRAssign'));
+const DashboardFeesManage = React.lazy(() => import('./pages/Education/DashboardFeesManage'));
 
 // Enquiry Module
 const AddEnquiry = React.lazy(() => import('./pages/Enquiry/AddEnquiry'));
@@ -361,6 +364,8 @@ const AdmissionFeesReport = React.lazy(() => import('./pages/Enquiry/AdmissionFe
 const EnquiryCustomReport = React.lazy(() => import('./pages/Enquiry/EnquiryCustomReport'));
 const RegistrationCustomReport = React.lazy(() => import('./pages/Enquiry/RegistrationCustomReport'));
 const ClassRestrictionSetup = React.lazy(() => import('./pages/Enquiry/ClassRestrictionSetup'));
+const Announcement = React.lazy(() => import('./pages/Enquiry/Announcement'));
+const CoordinatorSetup = React.lazy(() => import('./pages/Enquiry/CoordinatorSetup'));
 
 
 
@@ -403,9 +408,11 @@ const ModuleProfileList = React.lazy(() => import('./pages/masters/ModuleProfile
 const StoredDocuments = React.lazy(() => import('./pages/StoredDocuments/StoredDocuments'));
 
 const RootRedirect = () => {
-  const { isAdmin, isStudent, isInstructor, isGuardian } = useUserRole();
+  const { isAdmin, isStudent, isInstructor, isGuardian, isAttendanceManager, isCoordinator } = useUserRole();
+  if (isAttendanceManager) return <Navigate to="/education/student-attendance" replace />;
   if (isAdmin) return <Navigate to="/home" replace />;
   if (isStudent) return <Navigate to="/student-dashboard" replace />;
+  if (isCoordinator) return <Navigate to="/coordinator-dashboard" replace />;
   if (isInstructor) return <Navigate to="/instructor-dashboard" replace />;
   if (isGuardian) return <Navigate to="/guardian-dashboard" replace />;
   return <Navigate to="/employee-self-service" replace />;
@@ -414,9 +421,35 @@ const RootRedirect = () => {
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAdmin, isStudent, isInstructor, isGuardian } = useUserRole();
+  const { isAdmin, isStudent, isInstructor, isGuardian, isAttendanceManager, isCoordinator } = useUserRole();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [activeModule, setActiveModule] = React.useState(null);
+
+  // Sync activeModule and keep sidebar open for Attendance Manager
+  React.useEffect(() => {
+    if (isAttendanceManager) {
+      setActiveModule('education');
+      setIsSidebarOpen(true);
+    }
+  }, [isAttendanceManager]);
+
+  // Strict route protection for Attendance Manager
+  React.useEffect(() => {
+    const isLogged = localStorage.getItem('isLogged') === 'true';
+    const allowedAttendancePaths = [
+      '/',
+      '/education/student-attendance',
+      '/education/quick-attendance',
+      '/education/student-leave-application',
+      '/education/student-monthly-attendance-sheet',
+      '/education/absent-student-report',
+      '/education/student-batch-wise-attendance'
+    ];
+
+    if (isLogged && isAttendanceManager && !allowedAttendancePaths.includes(location.pathname)) {
+      navigate('/education/student-attendance', { replace: true });
+    }
+  }, [location.pathname, isAttendanceManager, navigate]);
 
   const handleModuleClick = (moduleKey) => {
     if (moduleKey === 'approvers') {
@@ -434,7 +467,9 @@ function App() {
     } else if (moduleKey === 'assets') {
         navigate('/assets/asset');
     } else if (moduleKey === 'education') {
-        if (isStudent) navigate('/student-dashboard');
+        if (isAttendanceManager) navigate('/education/student-attendance');
+        else if (isStudent) navigate('/student-dashboard');
+        else if (isCoordinator) navigate('/coordinator-dashboard');
         else if (isInstructor) navigate('/instructor-dashboard');
         else if (isGuardian) navigate('/guardian-dashboard');
         else navigate('/education/student');
@@ -501,6 +536,7 @@ function App() {
                 <Route path="/employee-self-service/*" element={<EmployeeSelfService />} />
                 <Route path="/student-dashboard" element={<StudentDashboard />} />
                 <Route path="/instructor-dashboard" element={<InstructorDashboard />} />
+                <Route path="/coordinator-dashboard" element={<CoordinatorDashboard />} />
                 <Route path="/guardian-dashboard" element={<GuardianDashboard />} />
                 <Route path="/approver/*" element={<Approver />} />
                 
@@ -758,6 +794,8 @@ function App() {
                 <Route path="/education/grading-scale" element={<GradingScale />} />
                 <Route path="/education/academic-year" element={<AcademicYear />} />
                 <Route path="/education/academic-term" element={<AcademicTerm />} />
+                <Route path="/education/roll-gr-assign" element={<RollGRAssign />} />
+                <Route path="/education/dashboard-fees-manage" element={<DashboardFeesManage />} />
                 <Route path="/education/article" element={<Article />} />
                 <Route path="/education/video" element={<Video />} />
                 <Route path="/education/quiz" element={<Quiz />} />
@@ -785,6 +823,7 @@ function App() {
                 <Route path="/education/absent-student-report" element={<AbsentStudentReport />} />
                 <Route path="/education/student-batch-wise-attendance" element={<StudentBatchWiseAttendance />} />
                 <Route path="/education/course-activity" element={<CourseActivity />} />
+                <Route path="/education/roll-gr-assign" element={<RollGRAssign />} />
                 <Route path="/education/quiz-activity" element={<QuizActivity />} />
                 <Route path="/education/assessment-plan" element={<AssessmentPlan />} />
                 <Route path="/education/assessment-group" element={<AssessmentGroup />} />
@@ -920,6 +959,8 @@ function App() {
                 <Route path="/enquiry/reports/enquiry-custom" element={<EnquiryCustomReport />} />
                 <Route path="/enquiry/reports/registration-custom" element={<RegistrationCustomReport />} />
                 <Route path="/enquiry/setup/class-restriction" element={<ClassRestrictionSetup />} />
+                <Route path="/enquiry/announcement" element={<Announcement />} />
+                <Route path="/enquiry/coordinator-setup" element={<CoordinatorSetup />} />
                 {/* Import Logs Routes */}
                 <Route path="/import-logs/students" element={<ImportLogs />} />
                 <Route path="/import-logs/registrations" element={<RegistrationImportLogs />} />
