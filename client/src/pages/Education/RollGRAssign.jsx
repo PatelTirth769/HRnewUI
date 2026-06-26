@@ -4,10 +4,9 @@ import API from '../../services/api';
 import { collection, getDocs, updateDoc, doc, query, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { FiArrowLeft, FiSave, FiList, FiCheckCircle, FiRefreshCw, FiUsers } from 'react-icons/fi';
-import { toast as antdToast } from 'antd'; // Fallback if custom toast fails, but we'll use custom toast
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
-import { resolveInstructorId } from '../../utility/instructorHelper';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
 
 const RollGRAssign = () => {
     const navigate = useNavigate();
@@ -68,7 +67,9 @@ const RollGRAssign = () => {
                 if (userRole === 'Instructor') {
                     const instructorId = await resolveInstructorId(userEmail);
                     if (instructorId) {
-                        groups = groups.filter(sg => sg.custom_class_teacher === instructorId);
+                        const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                        const validGroupNames = groupDetails.allGroups.map(g => g.name);
+                        groups = groups.filter(sg => validGroupNames.includes(sg.value));
                     } else {
                         groups = [];
                     }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../services/api';
-import { resolveInstructorId } from '../../utility/instructorHelper';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
+import { sortEducationalLevels } from '../../utility/sortHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 import * as XLSX from 'xlsx';
@@ -11,6 +12,7 @@ const QuickAttendance = () => {
     const userRole = localStorage.getItem('userRole');
     const { isInstructor, isCoordinator } = useUserRole();
     const coordinatorScope = useCoordinatorScope();
+    const canEdit = !isInstructor && !isCoordinator;
 
     // Filter states
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -26,6 +28,7 @@ const QuickAttendance = () => {
 
     // Student table
     const [students, setStudents] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
     const [existingMap, setExistingMap] = useState({}); // studentId → { docName, docstatus }
 
     // Loading states
@@ -57,15 +60,15 @@ const QuickAttendance = () => {
                 if (isInstructor) {
                     const instructorId = await resolveInstructorId(userEmail);
                     if (instructorId) {
-                        const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","program","custom_board"]&limit_page_length=None`);
-                        const ctGroups = ctRes.data.data || [];
+                        const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                        const ctGroups = groupDetails.allGroups || [];
 
-                        const groups = ctGroups.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board }));
+                        const groups = ctGroups.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board })).sort((a, b) => sortEducationalLevels(a, b, item => item.program || item.label));
                         setAllStudentGroups(groups);
                         setFilteredGroups(groups);
 
                         const ctPrograms = Array.from(new Set(ctGroups.map(d => d.program).filter(Boolean)));
-                        setPrograms(ctPrograms.map(p => ({ value: p, label: p, custom_board: ctGroups.find(g => g.program === p)?.custom_board })));
+                        setPrograms(ctPrograms.map(p => ({ value: p, label: p, custom_board: ctGroups.find(g => g.program === p)?.custom_board })).sort((a, b) => sortEducationalLevels(a, b, item => item.value || item.label)));
 
                         const ctBoards = Array.from(new Set(ctGroups.map(d => d.custom_board).filter(Boolean)));
                         setBoards(ctBoards.sort());
@@ -92,11 +95,11 @@ const QuickAttendance = () => {
                          ctGroupsData = ctRes.data.data || [];
                     }
 
-                    const groups = ctGroupsData.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board }));
+                    const groups = ctGroupsData.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board })).sort((a, b) => sortEducationalLevels(a, b, item => item.program || item.label));
                     setAllStudentGroups(groups);
                     setFilteredGroups(groups);
 
-                    setPrograms(ctPrograms.map(p => ({ value: p, label: p, custom_board: ctGroupsData.find(g => g.program === p)?.custom_board })));
+                    setPrograms(ctPrograms.map(p => ({ value: p, label: p, custom_board: ctGroupsData.find(g => g.program === p)?.custom_board })).sort((a, b) => sortEducationalLevels(a, b, item => item.value || item.label)));
                     setBoards(ctBoards.sort());
                 } else {
                     const [pRes, sgRes, bRes] = await Promise.all([
@@ -104,8 +107,8 @@ const QuickAttendance = () => {
                         API.get('/api/resource/Student Group?fields=["name","program","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
                         API.get('/api/resource/Company?limit_page_length=None').catch(() => ({ data: { data: [] } })),
                     ]);
-                    setPrograms(pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || []);
-                    const groups = sgRes.data.data?.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board })) || [];
+                    setPrograms((pRes.data.data?.map(d => ({ value: d.name, label: d.name, custom_board: d.custom_board })) || []).sort((a, b) => sortEducationalLevels(a, b, item => item.value || item.label)));
+                    const groups = (sgRes.data.data?.map(d => ({ value: d.name, label: d.name, program: d.program, custom_board: d.custom_board })) || []).sort((a, b) => sortEducationalLevels(a, b, item => item.program || item.label));
                     setAllStudentGroups(groups);
                     setFilteredGroups(groups);
                     
@@ -256,6 +259,7 @@ const QuickAttendance = () => {
 
     // ─── Toggle student status ───
     const setStudentStatus = (studentId, status) => {
+        if (!canEdit) return;
         setStudents(prev => prev.map(s =>
             s.student === studentId ? { ...s, status } : s
         ));
@@ -263,6 +267,7 @@ const QuickAttendance = () => {
 
     // ─── Bulk actions ───
     const markAll = (status) => {
+        if (!canEdit) return;
         setStudents(prev => prev.map(s => ({ ...s, status })));
     };
 
@@ -461,13 +466,15 @@ const QuickAttendance = () => {
                             📤 Download
                         </button>
                     )}
-                    <button
-                        className="h-9 px-6 rounded-md font-bold text-sm shadow-sm transition-colors bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
-                        onClick={handleSave}
-                        disabled={students.length === 0 || saving}
-                    >
-                        {saving ? 'Saving...' : 'Save Attendance'}
-                    </button>
+                    {canEdit && (
+                        <button
+                            className="h-9 px-6 rounded-md font-bold text-sm shadow-sm transition-colors bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                            onClick={handleSave}
+                            disabled={students.length === 0 || saving}
+                        >
+                            {saving ? 'Saving...' : 'Save Attendance'}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -576,24 +583,37 @@ const QuickAttendance = () => {
                 {/* Student Table */}
                 {students.length > 0 && (
                     <div className="px-6 py-4">
-                        {/* Bulk Actions */}
-                        <div className="flex justify-between items-center mb-3">
-                            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                        {/* Bulk Actions & Search */}
+                        <div className="flex justify-between items-center mb-4">
+                            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-3">
                                 Student List ({students.length})
                             </label>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    className="text-[11px] font-semibold border border-green-200 text-green-600 hover:bg-green-50 px-3 py-1 rounded transition-colors"
-                                    onClick={() => markAll('Present')}
-                                >
-                                    All Present
-                                </button>
-                                <button
-                                    className="text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1 rounded transition-colors"
-                                    onClick={() => markAll('Absent')}
-                                >
-                                    All Absent
-                                </button>
+                            
+                            <div className="flex items-center gap-4">
+                                <input
+                                    type="text"
+                                    placeholder="Search by ID or Name..."
+                                    className="border border-gray-200 rounded px-3 py-1 text-[13px] focus:outline-none focus:border-gray-400"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    style={{ width: '250px' }}
+                                />
+                                {canEdit && (
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            className="text-[11px] font-semibold border border-green-200 text-green-600 hover:bg-green-50 px-3 py-1 rounded transition-colors"
+                                            onClick={() => markAll('Present')}
+                                        >
+                                            All Present
+                                        </button>
+                                        <button
+                                            className="text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1 rounded transition-colors"
+                                            onClick={() => markAll('Absent')}
+                                        >
+                                            All Absent
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -611,7 +631,12 @@ const QuickAttendance = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {students.map((s, idx) => (
+                                    {students.filter(s => {
+                                        if (!searchQuery) return true;
+                                        const q = searchQuery.toLowerCase();
+                                        return (s.student_name && s.student_name.toLowerCase().includes(q)) || 
+                                               (s.student && s.student.toLowerCase().includes(q));
+                                    }).map((s, idx) => (
                                         <tr
                                             key={s.student}
                                             className={`border-b border-gray-100 transition-colors ${
@@ -626,11 +651,12 @@ const QuickAttendance = () => {
                                             <td className="px-4 py-2.5 text-center">
                                                 <button
                                                     onClick={() => setStudentStatus(s.student, 'Present')}
+                                                    disabled={!canEdit}
                                                     className={`w-8 h-8 rounded-md border-2 text-sm font-bold transition-all duration-150 ${
                                                         s.status === 'Present'
                                                             ? 'bg-green-500 border-green-500 text-white shadow-sm shadow-green-200 scale-110'
-                                                            : 'bg-white border-gray-300 text-gray-400 hover:border-green-400 hover:text-green-500'
-                                                    }`}
+                                                            : 'bg-white border-gray-300 text-gray-400'
+                                                    } ${canEdit && s.status !== 'Present' ? 'hover:border-green-400 hover:text-green-500' : ''} ${!canEdit && s.status !== 'Present' ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                     title="Mark Present"
                                                 >
                                                     P
@@ -639,11 +665,12 @@ const QuickAttendance = () => {
                                             <td className="px-4 py-2.5 text-center">
                                                 <button
                                                     onClick={() => setStudentStatus(s.student, 'Absent')}
+                                                    disabled={!canEdit}
                                                     className={`w-8 h-8 rounded-md border-2 text-sm font-bold transition-all duration-150 ${
                                                         s.status === 'Absent'
                                                             ? 'bg-red-500 border-red-500 text-white shadow-sm shadow-red-200 scale-110'
-                                                            : 'bg-white border-gray-300 text-gray-400 hover:border-red-400 hover:text-red-500'
-                                                    }`}
+                                                            : 'bg-white border-gray-300 text-gray-400'
+                                                    } ${canEdit && s.status !== 'Absent' ? 'hover:border-red-400 hover:text-red-500' : ''} ${!canEdit && s.status !== 'Absent' ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                     title="Mark Absent"
                                                 >
                                                     A
@@ -680,13 +707,15 @@ const QuickAttendance = () => {
                                         />
                                     </div>
                                 )}
-                                <button
-                                    className="h-9 px-6 rounded-md font-bold text-sm shadow-sm transition-colors bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
-                                    onClick={handleSave}
-                                    disabled={students.length === 0 || saving}
-                                >
-                                    {saving ? `Saving ${saveProgress.done}/${saveProgress.total}...` : 'Save Attendance'}
-                                </button>
+                                {canEdit && (
+                                    <button
+                                        className="h-9 px-6 rounded-md font-bold text-sm shadow-sm transition-colors bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        onClick={handleSave}
+                                        disabled={students.length === 0 || saving}
+                                    >
+                                        {saving ? `Saving ${saveProgress.done}/${saveProgress.total}...` : 'Save Attendance'}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>

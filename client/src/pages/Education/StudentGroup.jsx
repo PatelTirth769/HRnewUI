@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { notification as staticNotification, Select } from 'antd';
 import API from '../../services/api';
-import { resolveInstructorId } from '../../utility/instructorHelper';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
+import { sortEducationalLevels } from '../../utility/sortHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
@@ -173,11 +174,15 @@ const StudentGroup = () => {
             const url = '/api/resource/Student Group?fields=["name","student_group_name","academic_year","academic_term","group_based_on","program","custom_board","batch","max_strength","disabled","custom_class_teacher"]&limit_page_length=None&order_by=modified desc';
             const response = await API.get(url);
             let groupData = response.data.data || [];
+            
+            groupData.sort((a, b) => sortEducationalLevels(a, b, item => item.program || item.name));
 
             if (userRole === 'Instructor') {
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
-                    groupData = groupData.filter(g => g.custom_class_teacher === instructorId);
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const validGroupNames = groupDetails.allGroups.map(g => g.name);
+                    groupData = groupData.filter(g => validGroupNames.includes(g.name));
                 } else {
                     groupData = [];
                 }
@@ -259,7 +264,8 @@ const StudentGroup = () => {
             ]);
             setAcademicYears((yearRes.data.data || []).map(y => y.name));
             setAcademicTerms((termRes.data.data || []).map(t => t.name));
-            setPrograms(programRes.data.data || []);
+            const sortedPrograms = (programRes.data.data || []).sort((a, b) => sortEducationalLevels(a, b, item => item.name));
+            setPrograms(sortedPrograms);
             setBatches((batchRes.data.data || []).map(b => b.name));
             setBoards((boardRes.data.data || []).map(b => b.name));
             setStudentCategories((categoryRes.data.data || []).map(c => c.name));
@@ -557,7 +563,7 @@ const StudentGroup = () => {
         });
 
         const programOptionsGroups = filterBoard !== 'All' ? groups.filter(g => g.custom_board === filterBoard) : groups;
-        const programOptions = [...new Set(programOptionsGroups.map(g => g.program).filter(Boolean))].sort();
+        const programOptions = [...new Set(programOptionsGroups.map(g => g.program).filter(Boolean))].sort((a, b) => sortEducationalLevels(a, b));
         const yearOptions = [...new Set(groups.map(g => g.academic_year).filter(Boolean))].sort();
         const boardOptions = boards.length > 0 ? boards : [...new Set(groups.map(g => g.custom_board).filter(Boolean))].sort();
 

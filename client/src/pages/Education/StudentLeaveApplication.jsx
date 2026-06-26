@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
-import { resolveInstructorId } from '../../utility/instructorHelper';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
@@ -87,17 +87,9 @@ const StudentLeaveApplication = () => {
             if (userRole === 'Instructor') {
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
-                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name"]&limit_page_length=None`);
-                    const ctGroups = (ctRes.data.data || []).map(g => g.name);
-                    
-                    let ctStudentIds = [];
-                    if (ctGroups.length > 0) {
-                        const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
-                        const groupDetails = await Promise.all(groupDetailPromises);
-                        ctStudentIds = Array.from(new Set(
-                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
-                        ));
-                    }
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const ctGroups = (groupDetails.allGroups || []).map(g => g.name);
+                    const ctStudentIds = groupDetails.studentIds || [];
                     
                     students = students.filter(s => ctStudentIds.includes(s));
                     studentGroups = studentGroups.filter(g => ctGroups.includes(g));
@@ -145,17 +137,9 @@ const StudentLeaveApplication = () => {
             if (userRole === 'Instructor') {
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
-                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name"]&limit_page_length=None`);
-                    const ctGroups = (ctRes.data.data || []).map(g => g.name);
-                    
-                    let ctStudentIds = [];
-                    if (ctGroups.length > 0) {
-                        const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
-                        const groupDetails = await Promise.all(groupDetailPromises);
-                        ctStudentIds = Array.from(new Set(
-                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
-                        ));
-                    }
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const ctGroups = (groupDetails.allGroups || []).map(g => g.name);
+                    const ctStudentIds = groupDetails.studentIds || [];
                     
                     leaves = leaves.filter(row => 
                         (row.student_group && ctGroups.includes(row.student_group)) ||
@@ -222,17 +206,9 @@ const StudentLeaveApplication = () => {
                     setSaving(false);
                     return;
                 }
-                const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name"]&limit_page_length=None`);
-                const ctGroups = (ctRes.data.data || []).map(g => g.name);
-                
-                let ctStudentIds = [];
-                if (ctGroups.length > 0) {
-                    const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
-                    const groupDetails = await Promise.all(groupDetailPromises);
-                    ctStudentIds = Array.from(new Set(
-                        groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
-                    ));
-                }
+                const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                const ctGroups = groupDetails.allGroups.map(g => g.name);
+                const ctStudentIds = groupDetails.studentIds;
                 
                 if (form.student_group && !ctGroups.includes(form.student_group)) {
                     notification.error({ message: 'Access Denied', description: 'You are not the class teacher of this student group.' });

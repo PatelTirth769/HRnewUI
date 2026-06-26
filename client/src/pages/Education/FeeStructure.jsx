@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
+import { sortEducationalLevels } from '../../utility/sortHelper';
+import { FiEdit2, FiTrash2, FiXCircle } from 'react-icons/fi';
 
 const emptyForm = () => ({
     naming_series: 'EDU-FST-.YYYY.-',
@@ -32,6 +34,8 @@ const FeeStructure = () => {
     const [structures, setStructures] = useState([]);
     const [loadingList, setLoadingList] = useState(true);
     const [search, setSearch] = useState('');
+    const [boardFilter, setBoardFilter] = useState('');
+    const [programFilter, setProgramFilter] = useState('');
 
     // Form states
     const [form, setForm] = useState(emptyForm());
@@ -69,7 +73,7 @@ const FeeStructure = () => {
             const safeGet = (url) => API.get(url).catch(err => { console.error(`Error fetching ${url}:`, err); return { data: { data: [] } }; });
             const [yRes, pRes, tRes, cRes, fRes, aRes, coRes, ccRes] = await Promise.all([
                 safeGet('/api/resource/Academic Year?limit_page_length=None'),
-                safeGet('/api/resource/Program?limit_page_length=None'),
+                safeGet('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None'),
                 safeGet('/api/resource/Academic Term?limit_page_length=None'),
                 safeGet('/api/resource/Student Category?limit_page_length=None'),
                 safeGet('/api/resource/Fee Category?limit_page_length=None'),
@@ -83,7 +87,7 @@ const FeeStructure = () => {
 
             setDropdowns({
                 academicYears: yRes.data.data?.map(d => d.name) || [],
-                programs: pRes.data.data?.map(d => d.name) || [],
+                programs: pRes.data.data?.map(d => ({ name: d.name, custom_board: d.custom_board })) || [],
                 academicTerms: tRes.data.data?.map(d => d.name) || [],
                 studentCategories: cRes.data.data?.map(d => d.name) || [],
                 feesCategories: fRes.data.data?.map(d => d.name) || [],
@@ -124,6 +128,8 @@ const FeeStructure = () => {
                     }
                     return { ...prev, ...updates };
                 });
+            } else {
+                // Also set default program list if no companies are present or just standard loading
             }
         } catch (err) {
             console.error('Error fetching dropdowns', err);
@@ -133,7 +139,7 @@ const FeeStructure = () => {
     const fetchStructures = async () => {
         try {
             setLoadingList(true);
-            const url = '/api/resource/Fee Structure?fields=["name","academic_year","program","academic_term","student_category","docstatus"]&limit_page_length=None&order_by=creation desc';
+            const url = '/api/resource/Fee Structure?fields=["name","academic_year","program","academic_term","student_category","docstatus","total_amount","company"]&limit_page_length=None&order_by=creation desc';
             const response = await API.get(url);
             setStructures(response.data.data || []);
         } catch (err) {
@@ -235,20 +241,25 @@ const FeeStructure = () => {
         }
     };
 
-    const handleAction = async (action) => {
-        if (!editingRecord) return;
-        if (!window.confirm(`Are you sure you want to ${action} ${editingRecord}?`)) return;
+    const handleAction = async (action, id = null) => {
+        const targetId = id || editingRecord;
+        if (!targetId) return;
+        if (!window.confirm(`Are you sure you want to ${action} ${targetId}?`)) return;
         setSubmitting(true);
         try {
             if (action === 'submit') {
-                const res = await API.get(`/api/resource/Fee Structure/${encodeURIComponent(editingRecord)}`);
+                const res = await API.get(`/api/resource/Fee Structure/${encodeURIComponent(targetId)}`);
                 const latestDoc = res.data.data;
                 await API.post('/api/method/frappe.client.submit', { doc: { ...latestDoc, doctype: 'Fee Structure' } });
             } else {
-                await API.post('/api/method/frappe.client.cancel', { doctype: 'Fee Structure', name: editingRecord });
+                await API.post('/api/method/frappe.client.cancel', { doctype: 'Fee Structure', name: targetId });
             }
             api.success({ message: `Fee Structure ${action === 'submit' ? 'submitted' : 'cancelled'} successfully.` });
-            setView('list');
+            if (id) {
+                fetchStructures();
+            } else {
+                setView('list');
+            }
         } catch (err) {
             console.error(`${action} error:`, err);
             let errMsg = err.response?.data?._server_messages || err.response?.data?.message || err.message;
@@ -261,12 +272,18 @@ const FeeStructure = () => {
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = async (id = null) => {
+        const targetId = id || editingRecord;
+        if (!targetId) return;
         if (!window.confirm('Are you sure you want to delete this fee structure?')) return;
         try {
-            await API.delete(`/api/resource/Fee Structure/${encodeURIComponent(editingRecord)}`);
+            await API.delete(`/api/resource/Fee Structure/${encodeURIComponent(targetId)}`);
             api.success({ message: 'Fee Structure deleted.' });
-            setView('list');
+            if (id) {
+                fetchStructures();
+            } else {
+                setView('list');
+            }
         } catch (err) {
             api.error({ message: 'Delete Failed', description: err.message });
         }
@@ -277,7 +294,13 @@ const FeeStructure = () => {
     const labelStyle = "block text-[13px] text-gray-500 mb-1 font-medium";
 
     if (view === 'list') {
+        const uniqueBoards = [...new Set(structures.map(s => s.company).filter(Boolean))].sort();
+        const uniquePrograms = [...new Set(structures.map(s => s.program).filter(Boolean))].sort((a, b) => sortEducationalLevels(a, b));
+
         const filtered = structures.filter(s => {
+            if (boardFilter && s.company !== boardFilter) return false;
+            if (programFilter && s.program !== programFilter) return false;
+            
             if (!search) return true;
             const q = search.toLowerCase();
             return (
@@ -304,6 +327,16 @@ const FeeStructure = () => {
                     </div>
 
                     <div className="flex items-center gap-3 mb-4 flex-wrap">
+                        <select className="border border-gray-300 rounded px-3 py-2 text-sm bg-white shadow-sm focus:ring-1 focus:ring-blue-400" value={boardFilter} onChange={(e) => { setBoardFilter(e.target.value); setProgramFilter(''); }}>
+                            <option value="">All Boards</option>
+                            {uniqueBoards.map(b => <option key={b} value={b}>{b}</option>)}
+                        </select>
+                        <select className="border border-gray-300 rounded px-3 py-2 text-sm bg-white shadow-sm focus:ring-1 focus:ring-blue-400" value={programFilter} onChange={(e) => setProgramFilter(e.target.value)}>
+                            <option value="">All Programs</option>
+                            {uniquePrograms
+                                .filter(p => !boardFilter || structures.some(s => s.program === p && s.company === boardFilter))
+                                .map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
                         <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-80 shadow-sm focus:ring-1 focus:ring-blue-400" placeholder="Search Program, Year or ID..." value={search} onChange={(e) => setSearch(e.target.value)} />
                         <div className="ml-auto text-xs text-gray-400 font-medium tracking-wide uppercase">
                             {!loadingList && `${filtered.length} Total Fee Structures`}
@@ -320,13 +353,15 @@ const FeeStructure = () => {
                                     <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Program (Class)</th>
                                     <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Academic Term</th>
                                     <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px]">Student Category</th>
+                                    <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px] text-right">Total Fees</th>
+                                    <th className="px-4 py-3 font-medium text-gray-600 uppercase tracking-wider text-[11px] text-right">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {loadingList ? (
-                                    <tr><td colSpan="6" className="text-center py-10 text-gray-400 italic">Loading...</td></tr>
+                                    <tr><td colSpan="8" className="text-center py-10 text-gray-400 italic">Loading...</td></tr>
                                 ) : filtered.length === 0 ? (
-                                    <tr><td colSpan="6" className="text-center py-10 text-gray-400 italic font-medium">No structures found.</td></tr>
+                                    <tr><td colSpan="8" className="text-center py-10 text-gray-400 italic font-medium">No structures found.</td></tr>
                                 ) : (
                                     filtered.map((row) => (
                                         <tr key={row.name} className="border-b hover:bg-gray-50 transition-colors">
@@ -342,6 +377,38 @@ const FeeStructure = () => {
                                             <td className="px-4 py-3 text-gray-600">{row.program || '-'}</td>
                                             <td className="px-4 py-3 text-gray-600">{row.academic_term || '-'}</td>
                                             <td className="px-4 py-3 text-gray-600">{row.student_category || '-'}</td>
+                                            <td className="px-4 py-3 text-gray-900 font-semibold text-right">
+                                                ₹ {row.total_amount ? row.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setEditingRecord(row.name); setView('form'); }} 
+                                                        className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors cursor-pointer border border-blue-100"
+                                                        title="Edit"
+                                                    >
+                                                        <FiEdit2 className="w-4 h-4" />
+                                                    </button>
+                                                    {row.docstatus === 1 && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleAction('cancel', row.name); }} 
+                                                            className="p-1.5 text-orange-500 hover:bg-orange-100 rounded-md transition-colors cursor-pointer border border-orange-100"
+                                                            title="Cancel"
+                                                        >
+                                                            <FiXCircle className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    {(row.docstatus === 0 || row.docstatus === 2) && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(row.name); }} 
+                                                            className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors cursor-pointer border border-red-100"
+                                                            title="Delete"
+                                                        >
+                                                            <FiTrash2 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
                                         </tr>
                                     ))
                                 )}
@@ -403,10 +470,24 @@ const FeeStructure = () => {
                                 <input type="text" className={inputStyle} value={form.naming_series} onChange={e => updateField('naming_series', e.target.value)} disabled={!isEditable} />
                             </div>
                             <div>
+                                <label className={labelStyle}>Company (Board)</label>
+                                <select className={inputStyle} value={form.company} onChange={e => {
+                                    updateField('company', e.target.value);
+                                    updateField('program', ''); // Reset program on board change
+                                }} disabled={!isEditable}>
+                                    <option value="">Select Company</option>
+                                    {dropdowns.companies.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            <div>
                                 <label className={labelStyle}>Program (Class) *</label>
                                 <select className={inputStyle} value={form.program} onChange={e => updateField('program', e.target.value)} disabled={!isEditable}>
                                     <option value="">Select Program</option>
-                                    {dropdowns.programs.map(p => <option key={p} value={p}>{p}</option>)}
+                                    {dropdowns.programs
+                                        .filter(p => !form.company || p.custom_board === form.company)
+                                        .map(p => p.name)
+                                        .sort((a, b) => sortEducationalLevels(a, b))
+                                        .map(p => <option key={p} value={p}>{p}</option>)}
                                 </select>
                             </div>
                             <div>
@@ -499,12 +580,7 @@ const FeeStructure = () => {
                             </select>
                         </div>
                         <div>
-                            <label className={labelStyle}>Company (Board)</label>
-                            <select className={inputStyle} value={form.company} onChange={e => updateField('company', e.target.value)} disabled={!isEditable}>
-                                <option value="">Select Company</option>
-                                {dropdowns.companies.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                            <p className="text-[11px] text-gray-400 mt-1">Ledger Entries will be created against the company mentioned here.</p>
+                            {/* Company dropdown moved to top */}
                         </div>
                     </div>
 

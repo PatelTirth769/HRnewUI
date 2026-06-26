@@ -3,7 +3,7 @@ import { notification } from 'antd';
 import { FiEdit2, FiTrash2 } from 'react-icons/fi';
 import API from '../../services/api';
 import * as XLSX from 'xlsx';
-import { resolveInstructorId } from '../../utility/instructorHelper';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
@@ -21,6 +21,7 @@ const StudentAttendance = () => {
     const userRole = localStorage.getItem('userRole');
     const { isInstructor, isCoordinator } = useUserRole();
     const coordinatorScope = useCoordinatorScope();
+    const canEdit = !isInstructor && !isCoordinator;
     // View state
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [editingRecord, setEditingRecord] = useState(null);
@@ -907,20 +908,12 @@ const StudentAttendance = () => {
             if (isInstructor) {
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
-                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","program","custom_board"]&limit_page_length=None`);
-                    const ctGroupsData = ctRes.data.data || [];
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const ctGroupsData = groupDetails.allGroups || [];
                     const ctGroups = ctGroupsData.map(g => g.name);
-                    const ctPrograms = Array.from(new Set(ctGroupsData.map(g => g.program).filter(Boolean)));
+                    const ctPrograms = groupDetails.allPrograms || [];
                     const ctBoards = Array.from(new Set(ctGroupsData.map(g => g.custom_board).filter(Boolean)));
-
-                    let ctStudentIds = [];
-                    if (ctGroups.length > 0) {
-                        const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
-                        const groupDetails = await Promise.all(groupDetailPromises);
-                        ctStudentIds = Array.from(new Set(
-                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
-                        ));
-                    }
+                    const ctStudentIds = groupDetails.studentIds || [];
 
                     studentsList = studentsList.filter(s => ctStudentIds.includes(s.value));
                     studentGroupsList = studentGroupsList.filter(g => ctGroups.includes(g.value));
@@ -1079,17 +1072,9 @@ const StudentAttendance = () => {
             if (userRole === 'Instructor') {
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
-                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name"]&limit_page_length=None`);
-                    const ctGroups = (ctRes.data.data || []).map(g => g.name);
-                    
-                    let ctStudentIds = [];
-                    if (ctGroups.length > 0) {
-                        const groupDetailPromises = ctGroups.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
-                        const groupDetails = await Promise.all(groupDetailPromises);
-                        ctStudentIds = Array.from(new Set(
-                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
-                        ));
-                    }
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const ctGroups = (groupDetails.allGroups || []).map(g => g.name);
+                    const ctStudentIds = groupDetails.studentIds || [];
                     
                     filteredMappedData = mappedData.filter(row => 
                         (row.student_group && ctGroups.includes(row.student_group)) ||
@@ -1847,7 +1832,7 @@ const StudentAttendance = () => {
                         >
                             📤 Download
                         </button>
-                        {userRole !== 'Instructor' && (
+                        {canEdit && (
                             <button 
                                 className="px-4 py-2 bg-white text-gray-700 text-sm rounded border border-gray-300 hover:bg-gray-50 flex items-center gap-1.5 transition font-semibold" 
                                 onClick={() => { setView('import'); setImportView('list'); }}
@@ -1855,9 +1840,11 @@ const StudentAttendance = () => {
                                 📥 Import
                             </button>
                         )}
-                        <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium" onClick={() => { setEditingRecord(null); setView('form'); }}>
-                            + Mark Attendance
-                        </button>
+                        {canEdit && (
+                            <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition font-medium" onClick={() => { setEditingRecord(null); setView('form'); }}>
+                                + Mark Attendance
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -2017,14 +2004,16 @@ const StudentAttendance = () => {
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="flex items-center justify-end gap-2">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); setEditingRecord(row.name); setView('form'); }}
-                                                    className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors cursor-pointer border border-blue-100"
-                                                    title="Edit"
-                                                >
-                                                    <FiEdit2 className="w-4 h-4" />
-                                                </button>
-                                                {userRole !== 'Instructor' && (
+                                                {canEdit && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setEditingRecord(row.name); setView('form'); }}
+                                                        className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors cursor-pointer border border-blue-100"
+                                                        title="Edit"
+                                                    >
+                                                        <FiEdit2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                {canEdit && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleDeleteRecord(row.name); }}
                                                         className="p-1.5 text-red-500 hover:bg-red-100 rounded-md transition-colors cursor-pointer border border-red-100"
@@ -2075,7 +2064,7 @@ const StudentAttendance = () => {
 
     if (loadingForm) return <div className="p-6 text-center text-gray-400 italic py-20">Loading record...</div>;
 
-    const isDocDisabled = form.docstatus > 0;
+    const isDocDisabled = form.docstatus > 0 || !canEdit;
 
     return (
         <div className="p-6 max-w-4xl mx-auto pb-32">
@@ -2095,23 +2084,23 @@ const StudentAttendance = () => {
                 <div className="flex gap-2">
                     <button className="px-4 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50" onClick={() => setView('list')}>Back</button>
                     
-                    {userRole !== 'Instructor' && editingRecord && form.docstatus === 0 && (
+                    {canEdit && editingRecord && form.docstatus === 0 && (
                         <button className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm hover:bg-red-100" onClick={handleDelete}>Delete</button>
                     )}
 
-                    {!isDocDisabled && (
+                    {canEdit && !isDocDisabled && (
                         <button className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 shadow-sm" onClick={handleSave} disabled={saving}>
                             {saving ? 'Saving...' : 'Save'}
                         </button>
                     )}
 
-                    {editingRecord && form.docstatus === 0 && (
+                    {canEdit && editingRecord && form.docstatus === 0 && (
                         <button className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 shadow-sm" onClick={handleSubmitDoc} disabled={saving}>
                             {saving ? 'Submitting...' : 'Submit'}
                         </button>
                     )}
 
-                    {editingRecord && form.docstatus === 1 && form.status !== originalStatus && (
+                    {canEdit && editingRecord && form.docstatus === 1 && form.status !== originalStatus && (
                         <button
                             className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 shadow-sm flex items-center gap-2"
                             onClick={handleUpdateStatus}
@@ -2121,7 +2110,7 @@ const StudentAttendance = () => {
                         </button>
                     )}
 
-                    {userRole !== 'Instructor' && editingRecord && form.docstatus === 1 && form.status === originalStatus && (
+                    {canEdit && editingRecord && form.docstatus === 1 && form.status === originalStatus && (
                         <button className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:bg-red-700 disabled:opacity-50 shadow-sm" onClick={handleCancelDoc} disabled={saving}>
                             {saving ? 'Cancelling...' : 'Cancel'}
                         </button>
@@ -2158,7 +2147,7 @@ const StudentAttendance = () => {
                             className={inputStyle}
                             value={form.status}
                             onChange={e => setForm({ ...form, status: e.target.value })}
-                            disabled={form.docstatus === 2} // only disable if Cancelled
+                            disabled={form.docstatus === 2 || !canEdit}
                         >
                             {dropdowns.statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>

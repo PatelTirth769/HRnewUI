@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { notification } from 'antd';
 import API from '../../services/api';
 import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
+import { sortEducationalLevels } from '../../utility/sortHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 import * as XLSX from 'xlsx';
@@ -185,6 +186,7 @@ const Student = () => {
     const [countries, setCountries] = useState([]);
     const [customerGroups, setCustomerGroups] = useState([]);
     const [guardiansList, setGuardiansList] = useState([]);
+    const [rawPrograms, setRawPrograms] = useState([]);
     const [programs, setPrograms] = useState([]);
     const [boards, setBoards] = useState([]);
     const [academicYears, setAcademicYears] = useState([]);
@@ -253,14 +255,16 @@ const Student = () => {
                 API.get('/api/resource/Country?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Customer Group?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Guardian?fields=["name","guardian_name","email_address","mobile_number"]&limit_page_length=None&order_by=name asc'),
-                API.get('/api/resource/Program?fields=["name"]&limit_page_length=None&order_by=name asc'),
+                API.get('/api/resource/Program?fields=["name","custom_board"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Academic Year?fields=["name"]&limit_page_length=None&order_by=name asc'),
                 API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc'),
             ]);
             setCountries((countryRes.data.data || []).map(c => c.name));
             setCustomerGroups((custGroupRes.data.data || []).map(c => c.name));
             setGuardiansList((guardianRes.data.data || []).map(g => ({ name: g.name, guardian_name: g.guardian_name || g.name, email_address: g.email_address || '', mobile_number: g.mobile_number || '' })));
-            setPrograms((programRes.data.data || []).map(p => p.name));
+            const sortedPrograms = (programRes.data.data || []).sort((a, b) => sortEducationalLevels(a, b, item => item.name));
+            setRawPrograms(sortedPrograms);
+            setPrograms(sortedPrograms.map(p => p.name));
             setBoards((companyRes.data.data || []).map(c => c.name));
             setAcademicYears((academicYearRes.data.data || []).map(ay => ay.name));
         } catch (err) {
@@ -2345,7 +2349,9 @@ const Student = () => {
                                     onChange={(e) => setSelectedProgram(e.target.value)}
                                 >
                                     <option value="">Filter by Program...</option>
-                                    {programs.map(p => <option key={p} value={p}>{p}</option>)}
+                                    {rawPrograms
+                                        .filter(p => !filterBoard || p.custom_board === filterBoard)
+                                        .map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
                                 </select>
                                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
                                     <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
@@ -2368,7 +2374,10 @@ const Student = () => {
                                 <select 
                                     className="bg-white border border-gray-200 rounded-xl pl-4 pr-8 py-2 text-sm focus:border-blue-400 focus:outline-none transition-all font-semibold text-gray-700 appearance-none cursor-pointer"
                                     value={filterBoard} 
-                                    onChange={(e) => setFilterBoard(e.target.value)}
+                                    onChange={(e) => {
+                                        setFilterBoard(e.target.value);
+                                        setSelectedProgram('');
+                                    }}
                                 >
                                     <option value="">Filter by Board...</option>
                                     {boards.map(b => <option key={b} value={b}>{b}</option>)}
@@ -2632,12 +2641,17 @@ const Student = () => {
                                 <label className={labelStyle}>Program (Class)</label>
                                 <select className={inputStyle} value={form.program || ''} onChange={e => updateField('program', e.target.value)}>
                                     <option value="">Select Program (Class)...</option>
-                                    {programs.map(p => <option key={p} value={p}>{p}</option>)}
+                                    {rawPrograms
+                                        .filter(p => !form.custom_board || p.custom_board === form.custom_board)
+                                        .map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
                                 </select>
                             </div>
                             <div>
                                 <label className={labelStyle}>Board</label>
-                                <select className={inputStyle} value={form.custom_board || ''} onChange={e => updateField('custom_board', e.target.value)}>
+                                <select className={inputStyle} value={form.custom_board || ''} onChange={e => {
+                                    updateField('custom_board', e.target.value);
+                                    updateField('program', '');
+                                }}>
                                     <option value="">Select Board...</option>
                                     {boards.map(b => <option key={b} value={b}>{b}</option>)}
                                 </select>

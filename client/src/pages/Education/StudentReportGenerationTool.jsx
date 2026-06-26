@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, Select, Checkbox, Button, Space, Breadcrumb, notification, Divider } from 'antd';
 import { PrinterOutlined, FileTextOutlined, TeamOutlined, SettingOutlined } from '@ant-design/icons';
 import API from '../../services/api';
-import { resolveInstructorId } from '../../utility/instructorHelper';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
 
 const { Option } = Select;
 
@@ -59,19 +59,11 @@ const StudentReportGenerationTool = () => {
                 const userEmail = localStorage.getItem('user');
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
-                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","program"]&limit_page_length=None`);
-                    const ctGroups = ctRes.data.data || [];
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const ctGroups = groupDetails.allGroups || [];
                     const ctGroupNames = ctGroups.map(g => g.name);
-                    const ctPrograms = Array.from(new Set(ctGroups.map(g => g.program).filter(Boolean)));
-                    
-                    let ctStudentIds = [];
-                    if (ctGroupNames.length > 0) {
-                        const groupDetailPromises = ctGroupNames.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
-                        const groupDetails = await Promise.all(groupDetailPromises);
-                        ctStudentIds = Array.from(new Set(
-                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
-                        ));
-                    }
+                    const ctPrograms = groupDetails.allPrograms || [];
+                    const ctStudentIds = groupDetails.studentIds || [];
                     
                     students = students.filter(s => ctStudentIds.includes(s.name));
                     programs = programs.filter(p => ctPrograms.includes(p));
@@ -109,19 +101,11 @@ const StudentReportGenerationTool = () => {
             const userEmail = localStorage.getItem('user');
             const instructorId = await resolveInstructorId(userEmail);
             if (instructorId) {
-                const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","program"]&limit_page_length=None`);
-                const ctGroups = ctRes.data.data || [];
+                const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                const ctGroups = groupDetails.allGroups || [];
                 const ctGroupNames = ctGroups.map(g => g.name);
-                const ctPrograms = Array.from(new Set(ctGroups.map(g => g.program).filter(Boolean)));
-                
-                let ctStudentIds = [];
-                if (ctGroupNames.length > 0) {
-                    const groupDetailPromises = ctGroupNames.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
-                    const groupDetails = await Promise.all(groupDetailPromises);
-                    ctStudentIds = Array.from(new Set(
-                        groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
-                    ));
-                }
+                const ctPrograms = groupDetails.allPrograms || [];
+                const ctStudentIds = groupDetails.studentIds || [];
                 
                 if (form.student && !ctStudentIds.includes(form.student)) {
                     notification.error({ message: 'Access Denied', description: 'This student does not belong to your class-teacher groups.' });

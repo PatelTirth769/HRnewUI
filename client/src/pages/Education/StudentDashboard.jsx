@@ -27,7 +27,7 @@ import html2pdf from 'html2pdf.js';
 import FeeReceiptTemplate from './FeeReceiptTemplate';
 import { generateAdmissionReceipt } from '../Enquiry/AdmissionFeeReceipt';
 import { useRef } from 'react';
-import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import dayjs from 'dayjs';
 
@@ -464,6 +464,46 @@ const StudentDashboard = () => {
         }
       }
 
+      // --- Coordinator Fetching ---
+      let coordinatorName = '';
+      if (profile.program) {
+        try {
+          const coordRef = collection(db, 'schooler_system', 'coordinators', 'data');
+          const qCoord = query(coordRef, where('programs', 'array-contains', profile.program));
+          const coordSnap = await getDocs(qCoord);
+          if (!coordSnap.empty) {
+            const data = coordSnap.docs[0].data();
+            let cName = data.name || data.coordinator_name;
+            const cEmail = data.email;
+            
+            if (!cName && cEmail) {
+              try {
+                // Attempt ERPNext User API first
+                const userRes = await API.get(`/api/resource/User/${encodeURIComponent(cEmail)}`);
+                if (userRes.data?.data?.full_name) {
+                  cName = userRes.data.data.full_name;
+                }
+              } catch (userErr) {
+                console.warn('[StudentDashboard] ERPNext User fetch failed, falling back to Firebase:', userErr.message);
+                try {
+                  // Fallback to Firebase schooler_users
+                  const userSnap = await getDocs(query(collection(db, 'schooler_users'), where('email', '==', cEmail)));
+                  if (!userSnap.empty) {
+                    const userData = userSnap.docs[0].data();
+                    cName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.username;
+                  }
+                } catch (err) {
+                  console.warn('[StudentDashboard] Failed to fetch user name from schooler_users:', err.message);
+                }
+              }
+            }
+            coordinatorName = cName || cEmail;
+          }
+        } catch (e) {
+          console.warn('[StudentDashboard] Failed to fetch Coordinator details:', e.message);
+        }
+      }
+
       let linkedFeeStructure = (enrollmentData.length > 0 && enrollmentData[0].fee_structure) 
         ? enrollmentData[0].fee_structure 
         : (profile.fee_structure || null);
@@ -697,6 +737,7 @@ const StudentDashboard = () => {
         profile,
         studentGroups,
         classTeacher: classTeacherName,
+        coordinator: coordinatorName,
         permissions,
         feeStructure: linkedFeeStructure,
         feeStructureDetails,
@@ -1094,6 +1135,11 @@ const StudentDashboard = () => {
                       <Descriptions.Item label="Class Teacher">
                         <span className="font-semibold text-blue-600 flex items-center gap-1.5">
                           <UserOutlined /> {studentData.classTeacher || 'Not Assigned'}
+                        </span>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Coordinator">
+                        <span className="font-semibold text-purple-600 flex items-center gap-1.5">
+                          <UserOutlined /> {studentData.coordinator || 'Not Assigned'}
                         </span>
                       </Descriptions.Item>
                       <Descriptions.Item label="Fee Structure">

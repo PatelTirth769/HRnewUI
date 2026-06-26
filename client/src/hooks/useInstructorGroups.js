@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import API from '../services/api';
 import { useUserRole } from './useUserRole';
+import { fetchInstructorGroupDetails } from '../utility/instructorHelper';
 
 export function useInstructorGroups() {
     const { isInstructor } = useUserRole();
@@ -36,49 +37,19 @@ export function useInstructorGroups() {
                     return;
                 }
 
-                // 2. Fetch student groups (Class teacher or Subject teacher)
-                const [sgCtRes, sgStRes] = await Promise.all([
-                    API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","program"]&limit_page_length=None`),
-                    API.get(`/api/resource/Student Group?filters=[["Student Group Instructor","instructor","=","${instructorId}"]]&fields=["name","program"]&limit_page_length=None`)
-                ]);
+                // 2. Use our centralized helper
+                const groupDetails = await fetchInstructorGroupDetails(instructorId);
 
                 if (!active) return;
 
-                const groupsMap = new Map();
-                const programsSet = new Set();
-
-                const addGroup = (sg) => {
-                    groupsMap.set(sg.name, sg);
-                    if (sg.program) programsSet.add(sg.program);
-                };
-
-                (sgCtRes.data?.data || []).forEach(addGroup);
-                (sgStRes.data?.data || []).forEach(addGroup);
-
-                const uniqueGroups = Array.from(groupsMap.values());
-                const uniqueGroupNames = uniqueGroups.map(g => g.name);
-
-                // 3. Fetch details for each group to get student IDs
-                const studentIdsSet = new Set();
-                await Promise.all(uniqueGroupNames.map(async (groupName) => {
-                    try {
-                        const detailRes = await API.get(`/api/resource/Student Group/${encodeURIComponent(groupName)}`);
-                        const students = detailRes.data?.data?.students || [];
-                        students.forEach(s => {
-                            if (s.student) studentIdsSet.add(s.student);
-                        });
-                    } catch (err) {
-                        console.error('Error fetching student group details:', groupName, err);
-                    }
-                }));
-
-                if (!active) return;
-
-                const studentIds = Array.from(studentIdsSet);
+                const uniqueGroupNames = groupDetails.allGroups.map(g => g.name);
+                const programsSet = new Set(groupDetails.allPrograms);
+                const studentIds = groupDetails.studentIds;
+                
                 let studentMobiles = [];
                 let studentNames = [];
 
-                // 4. Fetch student details (mobile, name) for matching
+                // 3. Fetch student details (mobile, name) for matching
                 if (studentIds.length > 0) {
                     const studentDetailsRes = await API.get(`/api/resource/Student?filters=[["name","in",${JSON.stringify(studentIds)}]]&fields=["name","student_name","student_mobile_number","student_email_id"]&limit_page_length=None`);
                     const studentDetails = studentDetailsRes.data?.data || [];

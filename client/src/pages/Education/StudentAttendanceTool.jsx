@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Select, Button, Table, Radio, Space, notification, Typography } from 'antd';
 import API from '../../services/api';
-import { resolveInstructorId } from '../../utility/instructorHelper';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
@@ -50,8 +50,9 @@ const StudentAttendanceTool = () => {
             if (userRole === 'Instructor') {
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
-                    const ctGroups = studentGroups.filter(g => g.custom_class_teacher === instructorId).map(g => g.name);
-                    studentGroups = studentGroups.filter(g => g.custom_class_teacher === instructorId);
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const ctGroups = groupDetails.allGroups.map(g => g.name);
+                    studentGroups = studentGroups.filter(g => ctGroups.includes(g.name));
                     courseSchedules = courseSchedules.filter(cs => ctGroups.includes(cs.student_group));
                 } else {
                     studentGroups = [];

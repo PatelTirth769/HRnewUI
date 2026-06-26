@@ -25,7 +25,7 @@ import API from '../../services/api';
 import axios from 'axios';
 import html2pdf from 'html2pdf.js';
 import FeeReceiptTemplate from './FeeReceiptTemplate';
-import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { generateAdmissionReceipt } from '../Enquiry/AdmissionFeeReceipt';
 import dayjs from 'dayjs';
@@ -49,6 +49,7 @@ const GuardianDashboard = () => {
         assessmentList: [],
         studentGroups: [],
         classTeacher: '',
+        coordinator: '',
         homework: [],
         classwork: [],
         fullSchedule: [],
@@ -442,6 +443,44 @@ const GuardianDashboard = () => {
                 }
             }
 
+            // --- Coordinator Fetching ---
+            let coordinatorName = '';
+            if (wardProf?.program) {
+                try {
+                    const coordRef = collection(db, 'schooler_system', 'coordinators', 'data');
+                    const qCoord = query(coordRef, where('programs', 'array-contains', wardProf.program));
+                    const coordSnap = await getDocs(qCoord);
+                    if (!coordSnap.empty) {
+                        const data = coordSnap.docs[0].data();
+                        let cName = data.name || data.coordinator_name;
+                        const cEmail = data.email;
+                        
+                        if (!cName && cEmail) {
+                            try {
+                                const userRes = await API.get(`/api/resource/User/${encodeURIComponent(cEmail)}`);
+                                if (userRes.data?.data?.full_name) {
+                                    cName = userRes.data.data.full_name;
+                                }
+                            } catch (userErr) {
+                                console.warn('[GuardianDashboard] ERPNext User fetch failed, falling back to Firebase:', userErr.message);
+                                try {
+                                    const userSnap = await getDocs(query(collection(db, 'schooler_users'), where('email', '==', cEmail)));
+                                    if (!userSnap.empty) {
+                                        const userData = userSnap.docs[0].data();
+                                        cName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.username;
+                                    }
+                                } catch (err) {
+                                    console.warn('[GuardianDashboard] Failed to fetch user name from schooler_users:', err.message);
+                                }
+                            }
+                        }
+                        coordinatorName = cName || cEmail;
+                    }
+                } catch (e) {
+                    console.warn('[GuardianDashboard] Failed to fetch Coordinator details:', e.message);
+                }
+            }
+
             let fullSchedule = [];
             if (studentGroups.length > 0) {
                 try {
@@ -604,6 +643,7 @@ const GuardianDashboard = () => {
                 feeStructureDetails,
                 studentGroups,
                 classTeacher: classTeacherName,
+                coordinator: coordinatorName,
                 homework,
                 classwork,
                 fullSchedule,
@@ -1169,6 +1209,12 @@ const GuardianDashboard = () => {
                             <span className="text-gray-400 font-medium">Class Teacher</span>
                             <span className="font-bold text-indigo-600 flex items-center gap-1">
                                 <UserOutlined /> {wardDetails.classTeacher || 'Not Assigned'}
+                            </span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-50 pb-3">
+                            <span className="text-gray-400 font-medium">Coordinator</span>
+                            <span className="font-bold text-purple-600 flex items-center gap-1">
+                                <UserOutlined /> {wardDetails.coordinator || 'Not Assigned'}
                             </span>
                         </div>
                         <div className="flex justify-between">

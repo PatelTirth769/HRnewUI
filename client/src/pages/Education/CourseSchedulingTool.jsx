@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notification, Select } from 'antd';
 import API from '../../services/api';
-import { resolveInstructorId } from '../../utility/instructorHelper';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 import axios from 'axios';
@@ -185,7 +185,9 @@ const CourseSchedulingTool = () => {
             if (userRole === 'Instructor') {
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
-                    studentGroups = studentGroups.filter(sg => sg.custom_class_teacher === instructorId);
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const validGroups = groupDetails.allGroups.map(g => g.name);
+                    studentGroups = studentGroups.filter(sg => validGroups.includes(sg.name));
                 } else {
                     studentGroups = [];
                 }
@@ -255,8 +257,9 @@ const CourseSchedulingTool = () => {
             const userEmail = localStorage.getItem('user');
             const instructorId = await resolveInstructorId(userEmail);
             if (instructorId) {
-                const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"],["name","=","${studentGroup}"]]&fields=["name"]&limit_page_length=1`);
-                if (!ctRes.data.data || ctRes.data.data.length === 0) {
+                const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                const validGroups = groupDetails.allGroups.map(g => g.name);
+                if (!validGroups.includes(studentGroup)) {
                     notification.error({ message: 'Access Denied', description: 'You are not the class teacher of this student group.' });
                     return;
                 }

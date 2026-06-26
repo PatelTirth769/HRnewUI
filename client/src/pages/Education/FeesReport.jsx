@@ -9,7 +9,7 @@ import {
 import API from '../../services/api';
 import axios from 'axios';
 import dayjs from 'dayjs';
-import { resolveInstructorId } from '../../utility/instructorHelper';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
@@ -59,9 +59,8 @@ const FeesReport = () => {
                 const userEmail = localStorage.getItem('user');
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
-                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","program"]&limit_page_length=None`);
-                    const ctGroups = ctRes.data.data || [];
-                    const ctPrograms = Array.from(new Set(ctGroups.map(g => g.program).filter(Boolean)));
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const ctPrograms = groupDetails.allPrograms || [];
                     programs = programs.filter(p => ctPrograms.includes(p.value));
                 } else {
                     programs = [];
@@ -174,18 +173,8 @@ const FeesReport = () => {
                 const userEmail = localStorage.getItem('user');
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
-                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name"]&limit_page_length=None`);
-                    const ctGroups = ctRes.data.data || [];
-                    const ctGroupNames = ctGroups.map(g => g.name);
-                    
-                    let ctStudentIds = [];
-                    if (ctGroupNames.length > 0) {
-                        const groupDetailPromises = ctGroupNames.map(gName => API.get(`/api/resource/Student Group/${encodeURIComponent(gName)}`).catch(() => ({ data: { data: { students: [] } } })));
-                        const groupDetails = await Promise.all(groupDetailPromises);
-                        ctStudentIds = Array.from(new Set(
-                            groupDetails.flatMap(res => (res.data.data?.students || []).map(s => s.student).filter(Boolean))
-                        ));
-                    }
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const ctStudentIds = groupDetails.studentIds || [];
                     
                     paymentList = paymentList.filter(p => ctStudentIds.includes(p.student_id));
                     erpFeesList = erpFeesList.filter(fee => ctStudentIds.includes(fee.student));

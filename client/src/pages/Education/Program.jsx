@@ -3,6 +3,7 @@ import { notification } from 'antd';
 import { FiEdit2, FiTrash2 } from 'react-icons/fi';
 import API from '../../services/api';
 import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
+import { sortEducationalLevels } from '../../utility/sortHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
@@ -68,13 +69,14 @@ const Program = () => {
             const url = '/api/resource/Program?fields=["name","program_abbreviation","department","custom_board"]&limit_page_length=None&order_by=name asc';
             const response = await API.get(url);
             let rawPrograms = response.data.data || [];
+            
+            rawPrograms.sort((a, b) => sortEducationalLevels(a, b, item => item.name));
 
             if (userRole === 'Instructor') {
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
                     const groupDetails = await fetchInstructorGroupDetails(instructorId);
-                    const classTeacherPrograms = groupDetails.classTeacherGroups.map(g => g.program).filter(Boolean);
-                    const uniqueCTPrograms = Array.from(new Set(classTeacherPrograms));
+                    const uniqueCTPrograms = groupDetails.allPrograms || [];
                     rawPrograms = rawPrograms.filter(p => uniqueCTPrograms.includes(p.name));
                 } else {
                     rawPrograms = [];

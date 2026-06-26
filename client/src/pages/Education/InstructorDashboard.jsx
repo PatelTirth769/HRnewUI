@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import API from '../../services/api';
+import { fetchInstructorGroupDetails } from '../../utility/instructorHelper';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 
@@ -113,24 +114,12 @@ const InstructorDashboard = () => {
                 }
                 setInstructorData(fullInstructor);
 
-                // Fetch Student Groups where this instructor is Class Teacher
-                let classTeacherGroups = [];
-                try {
-                    const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructor.name}"]]&fields=["name","student_group_name","program"]&limit_page_length=None`);
-                    classTeacherGroups = ctRes.data.data || [];
-                } catch (ctErr) {
-                    console.error("Error fetching class teacher groups", ctErr);
-                }
+                // Use instructorHelper to fetch all valid groups
+                const groupDetails = await fetchInstructorGroupDetails(instructor.name);
+                const classTeacherGroups = groupDetails.classTeacherGroups || [];
+                const subjectTeacherGroups = groupDetails.subjectTeacherGroups || [];
+                const customGroup = groupDetails.customGroup;
                 setMyClassTeacherGroups(classTeacherGroups);
-
-                // Fetch Student Groups where this instructor is assigned in instructors child table
-                let subjectTeacherGroups = [];
-                try {
-                    const stRes = await API.get(`/api/resource/Student Group?filters=[["Student Group Instructor","instructor","=","${instructor.name}"]]&fields=["name","student_group_name","program"]&limit_page_length=None`);
-                    subjectTeacherGroups = stRes.data.data || [];
-                } catch (stErr) {
-                    console.error("Error fetching subject teacher groups", stErr);
-                }
                 
                 // 2. Fetch Schedule (including student_group and schedule_date)
                 let schedulesList = [];
@@ -162,6 +151,14 @@ const InstructorDashboard = () => {
                         });
                     }
                 });
+                if (customGroup && !allGroupsMap.has(customGroup.name)) {
+                    allGroupsMap.set(customGroup.name, {
+                        name: customGroup.name,
+                        displayName: customGroup.student_group_name || customGroup.name,
+                        program: customGroup.program || '',
+                        role: 'Class Teacher'
+                    });
+                }
                 schedulesList.forEach(c => {
                     if (c.student_group && !allGroupsMap.has(c.student_group)) {
                         allGroupsMap.set(c.student_group, {
@@ -175,22 +172,8 @@ const InstructorDashboard = () => {
                 const mergedGroups = Array.from(allGroupsMap.values());
                 setMyStudentGroups(mergedGroups);
 
-                // Calculate unique students across all groups
-                let uniqueStudents = new Set();
-                const allGroupNames = mergedGroups.map(g => g.name);
-                if (allGroupNames.length > 0) {
-                    // Fetch each Student Group document individually to avoid the 403 error on Student Group Student child table
-                    for (const groupName of allGroupNames) {
-                        try {
-                            const sgDetailRes = await API.get(`/api/resource/Student Group/${encodeURIComponent(groupName)}`);
-                            sgDetailRes.data.data?.students?.forEach(s => {
-                                if (s.student) uniqueStudents.add(s.student);
-                            });
-                        } catch (sgDetailErr) {
-                            console.error(`Failed to fetch details for Student Group: ${groupName}`, sgDetailErr);
-                        }
-                    }
-                }
+                // Calculate unique students across all groups using the helper's results
+                let uniqueStudents = new Set(groupDetails.studentIds || []);
 
                 // Fetch student name mapping to display name instead of just ID
                 let studentNameMap = {};
@@ -389,6 +372,10 @@ const InstructorDashboard = () => {
                             {myClassTeacherGroups.length > 0 ? (
                                 <span className="text-emerald-700 font-semibold text-sm flex items-center gap-1.5 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
                                     <UserOutlined className="text-xs" /> Class Teacher: {myClassTeacherGroups.map(g => `${g.program} (${g.student_group_name})`).join(', ')}
+                                </span>
+                            ) : myStudentGroups.length > 0 ? (
+                                <span className="text-gray-700 font-semibold text-sm flex items-center gap-1.5 bg-gray-50 px-3 py-1 rounded-full border border-gray-200">
+                                    <UserOutlined className="text-xs" /> Assistant / Subject Teacher: {myStudentGroups.map(g => `${g.program ? g.program + ' ' : ''}(${g.displayName || g.name})`).join(', ')}
                                 </span>
                             ) : (
                                 <span className="text-gray-500 font-medium text-sm flex items-center gap-1.5 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">

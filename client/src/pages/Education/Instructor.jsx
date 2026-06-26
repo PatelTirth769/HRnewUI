@@ -215,16 +215,7 @@ const Instructor = () => {
                 }
             }
 
-            // Explicitly assign class teacher in Student Group in ERP
-            if (form.custom_student_group && instructorId) {
-                try {
-                    await API.put(`/api/resource/Student Group/${encodeURIComponent(form.custom_student_group)}`, {
-                        custom_class_teacher: instructorId
-                    });
-                } catch (sgErr) {
-                    console.warn('[Student Group Sync] Silent fail:', sgErr.message);
-                }
-            }
+
 
             setView('list');
         } catch (err) {

@@ -5,7 +5,7 @@ import API from '../../services/api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { resolveInstructorId } from '../../utility/instructorHelper';
+import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
@@ -56,7 +56,9 @@ export default function StudentMonthlyAttendanceSheet() {
             if (isInstructor) {
                 const instructorId = await resolveInstructorId(userEmail);
                 if (instructorId) {
-                    sgData = sgData.filter(sg => sg.custom_class_teacher === instructorId);
+                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
+                    const validGroupNames = groupDetails.allGroups.map(g => g.name);
+                    sgData = sgData.filter(sg => validGroupNames.includes(sg.name));
                 } else {
                     sgData = [];
                 }

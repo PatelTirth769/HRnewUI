@@ -72,6 +72,15 @@ export async function fetchInstructorGroupDetails(instructorId) {
     }
 
     try {
+        // Fetch Instructor details to get custom_student_group
+        let customStudentGroupName = null;
+        try {
+            const insRes = await API.get(`/api/resource/Instructor/${encodeURIComponent(instructorId)}`);
+            customStudentGroupName = insRes.data.data?.custom_student_group;
+        } catch (insErr) {
+            console.warn("Could not fetch Instructor details for custom_student_group");
+        }
+
         // Fetch groups where Class Teacher
         const ctRes = await API.get(`/api/resource/Student Group?filters=[["custom_class_teacher","=","${instructorId}"]]&fields=["name","student_group_name","program"]&limit_page_length=None`);
         const classTeacherGroups = ctRes.data.data || [];
@@ -80,9 +89,22 @@ export async function fetchInstructorGroupDetails(instructorId) {
         const stRes = await API.get(`/api/resource/Student Group?filters=[["Student Group Instructor","instructor","=","${instructorId}"]]&fields=["name","student_group_name","program"]&limit_page_length=None`);
         const subjectTeacherGroups = stRes.data.data || [];
 
+        // Fetch custom_student_group
+        let customGroup = null;
+        if (customStudentGroupName) {
+            try {
+                const cgRes = await API.get(`/api/resource/Student Group?filters=[["name","=","${customStudentGroupName}"]]&fields=["name","student_group_name","program"]&limit_page_length=None`);
+                if (cgRes.data.data && cgRes.data.data.length > 0) {
+                    customGroup = cgRes.data.data[0];
+                }
+            } catch (cgErr) {}
+        }
+
         // Merge groups uniquely
         const mergedMap = new Map();
         [...classTeacherGroups, ...subjectTeacherGroups].forEach(g => mergedMap.set(g.name, g));
+        if (customGroup) mergedMap.set(customGroup.name, customGroup);
+
         const allGroups = Array.from(mergedMap.values());
 
         // Unique program names
@@ -98,6 +120,7 @@ export async function fetchInstructorGroupDetails(instructorId) {
         return {
             classTeacherGroups,
             subjectTeacherGroups,
+            customGroup,
             allGroups,
             allPrograms,
             studentIds
