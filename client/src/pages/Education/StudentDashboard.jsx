@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Row, Col, Statistic, List, Avatar, Tag, Spin, notification, Empty, Descriptions, Divider, Button, Alert, Badge, Modal, Checkbox, Tabs, Table, Calendar } from 'antd';
+import { Card, Typography, Row, Col, Statistic, List, Avatar, Tag, Spin, notification, Empty, Descriptions, Divider, Button, Alert, Badge, Modal, Checkbox, Tabs, Table, Calendar, InputNumber } from 'antd';
 import { 
   BookOutlined, 
   CalendarOutlined, 
@@ -63,6 +63,7 @@ const StudentDashboard = () => {
   // Payment Modal State
   const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
   const [selectedFee, setSelectedFee] = useState(null);
+  const [customPayAmount, setCustomPayAmount] = useState(0);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [paidTerms, setPaidTerms] = useState({});
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -255,6 +256,8 @@ const StudentDashboard = () => {
 
       // Fetch Student Group memberships
       let studentGroups = [];
+      let paidMap = {};
+      let verifiedHistory = [];
 
       // Fetch paid terms from Firebase (Standard Terms + Admission/Registration Fees)
       try {
@@ -263,21 +266,32 @@ const StudentDashboard = () => {
           axios.get('/local-api/admission-payment/history-all')
         ]);
 
-        const paidMap = {};
-        const verifiedHistory = [];
-
         // 1. Process standard term fee payments
         if (historyRes.status === 'fulfilled' && historyRes.value.data?.success && historyRes.value.data?.data) {
           historyRes.value.data.data.forEach(payment => {
             if (payment.status === 'verified' && payment.fees_category) {
               verifiedHistory.push(payment);
-              paidMap[payment.fees_category] = {
-                payment_id: payment.payment_id,
-                order_id: payment.order_id,
-                amount: payment.amount,
-                paid_at: payment.verified_at || payment.created_at,
-                status: 'paid'
-              };
+              if (!paidMap[payment.fees_category]) {
+                paidMap[payment.fees_category] = {
+                  payment_id: payment.payment_id,
+                  order_id: payment.order_id,
+                  amount: 0,
+                  paid_at: null,
+                  discount_amount: 0,
+                  discount_name: ''
+                };
+              }
+              paidMap[payment.fees_category].amount += parseFloat(payment.amount) || 0;
+              
+              const ptTime = new Date(payment.verified_at || payment.created_at).getTime();
+              const currTime = paidMap[payment.fees_category].paid_at ? new Date(paidMap[payment.fees_category].paid_at).getTime() : 0;
+              if (ptTime >= currTime) {
+                paidMap[payment.fees_category].paid_at = payment.verified_at || payment.created_at;
+                if (payment.discount_amount !== undefined && parseFloat(payment.discount_amount) > 0) {
+                  paidMap[payment.fees_category].discount_amount = parseFloat(payment.discount_amount);
+                  paidMap[payment.fees_category].discount_name = payment.discount_name || 'Discount';
+                }
+              }
             }
           });
         }
@@ -685,6 +699,20 @@ const StudentDashboard = () => {
                 }
             }
         }
+        let paidData = paidMap[fee.academic_term] || paidMap[fee.name];
+        if (paidData) {
+            if (paidData.discount_amount > 0) {
+                discountAmount = paidData.discount_amount;
+                fee.discount_name = paidData.discount_name || 'Discount';
+                fee.grand_total = originalTotal - discountAmount;
+            }
+            fee.outstanding_amount = Math.max(0, originalTotal - discountAmount - paidData.amount);
+            fee.paid_amount = paidData.amount;
+        } else {
+            fee.outstanding_amount = Math.max(0, originalTotal - discountAmount);
+            fee.paid_amount = 0;
+        }
+
         fee.original_fee = originalTotal;
         fee.discount_amount = discountAmount;
       });
@@ -711,6 +739,20 @@ const StudentDashboard = () => {
                       }
                   }
               }
+              let paidData = paidMap[comp.fees_category] || paidMap[comp.name];
+              if (paidData) {
+                  if (paidData.discount_amount > 0) {
+                      discountAmount = paidData.discount_amount;
+                      comp.discount_name = paidData.discount_name || 'Discount';
+                      comp.amount = originalTotal - discountAmount;
+                  }
+                  comp.outstanding_amount = Math.max(0, originalTotal - discountAmount - paidData.amount);
+                  comp.paid_amount = paidData.amount;
+              } else {
+                  comp.outstanding_amount = Math.max(0, originalTotal - discountAmount);
+                  comp.paid_amount = 0;
+              }
+
               comp.original_fee = originalTotal;
               comp.discount_amount = discountAmount;
           });
@@ -768,15 +810,15 @@ const StudentDashboard = () => {
 
   const handlePayNow = (feeItem) => {
     // Prevent paying already paid terms
-    const category = feeItem.fees_category || feeItem.name;
-    if (paidTerms[category]) {
+    if (feeItem.outstanding_amount === 0) {
       notification.info({ 
         message: 'Already Paid', 
-        description: `${category} was already paid on ${new Date(paidTerms[category].paid_at).toLocaleDateString()}.` 
+        description: `This fee has already been fully paid.` 
       });
       return;
     }
     setSelectedFee(feeItem);
+    setCustomPayAmount(feeItem.outstanding_amount || feeItem.amount || 0);
     setTermsAccepted(false);
     setIsPaymentModalVisible(true);
   };
@@ -787,10 +829,15 @@ const StudentDashboard = () => {
       return;
     }
 
+    if (customPayAmount <= 0) {
+      notification.warning({ message: 'Invalid Amount', description: 'Please enter a valid payment amount.' });
+      return;
+    }
+
     setPaymentProcessing(true);
 
     try {
-      const amount = selectedFee.amount || selectedFee.outstanding_amount || 0;
+      const amount = customPayAmount;
       const feesCategory = selectedFee.fees_category || selectedFee.name;
       const payload = {
         student_id: studentData.profile?.name,
@@ -940,25 +987,41 @@ const StudentDashboard = () => {
       return;
     }
 
-    const dateObj = new Date(record.receipt_date || record.verified_at || record.created_at);
+    const dateObj = new Date(record.receipt_date || record.verified_at || record.created_at || new Date());
     const formattedDate = dateObj.toLocaleDateString('en-GB') + ' ' + dateObj.toLocaleTimeString('en-US');
     
+    const previous_payments = paymentHistory
+        .filter(r => r.fees_category === record.fees_category && new Date(r.verified_at || r.created_at || 0).getTime() < dateObj.getTime() - 1000)
+        .map(r => ({
+            amount: parseFloat(r.amount) || 0,
+            date: new Date(r.verified_at || r.created_at || 0).toLocaleDateString('en-GB'),
+            receipt_no: r.receipt_no || r.payment_id || '-'
+        }));
+        
+    const totalPreviousPaid = previous_payments.reduce((sum, p) => sum + p.amount, 0);
+    const originalFee = record.original_fee || record.total_fee || 0;
+    const discountAmount = record.discount_amount || 0;
+    const termAmountToPay = Math.max(0, originalFee - discountAmount);
+    const outstanding = Math.max(0, termAmountToPay - totalPreviousPaid - (parseFloat(record.amount) || 0));
+
     const receiptData = {
       enrollmentNo: profile?.name,
-      studentName: record.student_name || profile?.student_name || `${profile?.first_name} ${profile?.last_name}`,
+      studentName: record.student_name || profile?.student_name || `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim(),
       courseName: profile?.program,
       semester: record.fees_category || 'N/A',
       receiptDate: formattedDate,
       receiptNo: record.payment_id || record.order_id,
-      amount: record.amount,
+      amount: record.amount || 0,
       feeName: record.fees_category,
       paymentMode: record.payment_mode ? `${record.payment_mode} PAYMENT` : 'ONLINE PAYMENT',
       transactionNo: record.payment_id || 'N/A',
-      original_fee: record.original_fee || 0,
-      discount_amount: record.discount_amount || 0,
+      original_fee: originalFee,
+      discount_amount: discountAmount,
       discount_name: record.discount_name || '',
       discount_percentage: record.discount_percentage || 0,
-      studentGroup: profile?.student_group || record.student_group || record.section || ''
+      studentGroup: profile?.student_group || record.student_group || record.section || '',
+      outstanding: outstanding,
+      previous_payments: previous_payments
     };
 
     setSelectedReceipt(receiptData);
@@ -997,31 +1060,24 @@ const StudentDashboard = () => {
   
   let remainingPendingFees = 0;
   let originalRemainingPendingFees = 0;
+  let totalDiscount = 0;
+  let activeDiscountName = '';
   
   if (studentData.feeStructureDetails && studentData.feeStructureDetails.components) {
       studentData.feeStructureDetails.components.forEach(comp => {
-          const cat = comp.fees_category || comp.name;
-          if (!paidTerms[cat]) {
-              remainingPendingFees += (comp.amount || 0);
+          if (comp.outstanding_amount > 0) {
+              remainingPendingFees += (comp.outstanding_amount || 0);
               originalRemainingPendingFees += (comp.original_fee || comp.amount || 0);
+              totalDiscount += (comp.discount_amount || 0);
           }
       });
+      const compWithDiscount = studentData.feeStructureDetails.components.find(c => c.discount_amount > 0);
+      if (compWithDiscount && compWithDiscount.discount_name) activeDiscountName = compWithDiscount.discount_name;
   } else {
       const fallbackTotal = studentData.feeStructureDetails?.total_amount || 0;
       remainingPendingFees = Math.max(0, fallbackTotal - totalPaidAmount);
       originalRemainingPendingFees = remainingPendingFees;
   }
-  
-  let totalDiscount = 0;
-  let activeDiscountName = '';
-  
-  if (studentData.feeStructureDetails) {
-    totalDiscount = originalRemainingPendingFees - remainingPendingFees;
-    if (studentData.feeStructureDetails.components) {
-       const compWithDiscount = studentData.feeStructureDetails.components.find(c => c.discount_amount > 0);
-       if (compWithDiscount && compWithDiscount.discount_name) activeDiscountName = compWithDiscount.discount_name;
-    }
-  } 
   
   if (studentData.feeRecords && studentData.feeRecords.length > 0) {
     const originalPending = studentData.feeRecords.reduce((sum, f) => sum + (f.original_fee || f.outstanding_amount || 0), 0);
@@ -1381,7 +1437,7 @@ const StudentDashboard = () => {
                   <List
                     dataSource={studentData.feeRecords}
                     renderItem={item => {
-                      const isPaid = paidTerms[item.name] || item.outstanding_amount === 0;
+                      const isPaid = item.outstanding_amount === 0;
                       return (
                         <List.Item>
                           <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', gap: '16px', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1397,7 +1453,7 @@ const StudentDashboard = () => {
                                           ₹{item.original_fee?.toLocaleString()}
                                       </div>
                                   )}
-                                  <span className="font-bold">₹{item.outstanding_amount.toLocaleString()}</span>
+                                  <span className="font-bold">₹{(isPaid ? item.amount : item.outstanding_amount).toLocaleString()}</span>
                                   {item.discount_amount > 0 && (
                                       <span style={{ color: '#a855f7', fontSize: 10, fontWeight: 700, background: '#f3e8ff', padding: '0 6px', borderRadius: 4, marginTop: 2 }}>
                                           -₹{item.discount_amount.toLocaleString()} Off {item.discount_name ? `(${item.discount_name})` : ''}
@@ -1435,7 +1491,7 @@ const StudentDashboard = () => {
                       dataSource={studentData.feeStructureDetails.components}
                       renderItem={item => {
                         const t = item.fees_category || "";
-                        const isPaid = paidTerms[t];
+                        const isPaid = item.outstanding_amount === 0;
                         let dueDate = "";
                         if (t.includes("Q1")) dueDate = "Payable by 10th March";
                         else if (t.includes("Q2")) dueDate = "Payable by 10th June";
@@ -1448,7 +1504,7 @@ const StudentDashboard = () => {
                               <List.Item.Meta 
                                 style={{ flex: '1 1 200px' }}
                                 title={t} 
-                                description={isPaid ? <Text type="success" style={{ fontSize: '10px' }}>✓ Paid on {new Date(isPaid.paid_at).toLocaleDateString()}</Text> : (dueDate && <span style={{ fontSize: '10px', color: '#8c8c8c' }}>{dueDate}</span>)}
+                                description={isPaid ? <Text type="success" style={{ fontSize: '10px' }}>✓ Paid on {new Date(paidTerms[t]?.paid_at || Date.now()).toLocaleDateString()}</Text> : (dueDate && <span style={{ fontSize: '10px', color: '#8c8c8c' }}>{dueDate}</span>)}
                               />
                               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                                 <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -1457,7 +1513,7 @@ const StudentDashboard = () => {
                                             ₹{item.original_fee?.toLocaleString()}
                                         </div>
                                     )}
-                                    <span className="font-bold">₹{item.amount.toLocaleString()}</span>
+                                    <span className="font-bold">₹{(isPaid ? item.amount : item.outstanding_amount).toLocaleString()}</span>
                                     {item.discount_amount > 0 && (
                                         <span style={{ color: '#a855f7', fontSize: 10, fontWeight: 700, background: '#f3e8ff', padding: '0 6px', borderRadius: 4, marginTop: 2 }}>
                                             -₹{item.discount_amount.toLocaleString()} Off {item.discount_name ? `(${item.discount_name})` : ''}
@@ -2042,7 +2098,15 @@ const StudentDashboard = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                   <div style={{ textAlign: 'right' }}>
                     <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Payable Amount</span>
-                    <span style={{ fontSize: '28px', fontWeight: 900, color: '#1d4ed8', lineHeight: 1 }}>₹{(selectedFee.amount || selectedFee.outstanding_amount || 0).toLocaleString()}</span>
+                    <InputNumber 
+                        min={1} 
+                        max={selectedFee.outstanding_amount || selectedFee.amount || 0} 
+                        value={customPayAmount} 
+                        onChange={(val) => setCustomPayAmount(val)} 
+                        prefix={<span style={{ fontWeight: 900, color: '#1d4ed8' }}>₹</span>}
+                        style={{ width: '150px', fontSize: '24px', fontWeight: 900, color: '#1d4ed8' }}
+                        size="large"
+                    />
                   </div>
                   <Button 
                     type="primary" 

@@ -8,6 +8,8 @@ import {
 } from '@ant-design/icons';
 import API from '../../services/api';
 import axios from 'axios';
+import { db } from '../../config/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 import dayjs from 'dayjs';
 import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
 import { useUserRole } from '../../hooks/useUserRole';
@@ -93,7 +95,7 @@ const FeesReport = () => {
         try {
             // 1. Fetch Firebase payments (only students who initiated/completed payment)
             const payRes = await axios.get('/local-api/payment/history-all');
-            let paymentList = payRes.data.success ? payRes.data.data : [];
+            const paymentList = payRes.data.success ? payRes.data.data : [];
 
             // 2. Fetch ALL Fees records from ERPNext (invoices for ALL students)
             let erpFeesList = [];
@@ -107,8 +109,7 @@ const FeesReport = () => {
                 });
                 erpFeesList = feesRes.data?.data || [];
             } catch (e) {
-                console.warn('[FeesReport] Could not fetch ERP Fees:', e.message);
-                // Fallback: try with fewer fields
+                console.warn('[Offline Collection] Could not fetch ERP Fees:', e.message);
                 try {
                     const feesRes2 = await API.get('/api/resource/Fees', {
                         params: {
@@ -117,7 +118,7 @@ const FeesReport = () => {
                         }
                     });
                     erpFeesList = feesRes2.data?.data || [];
-                } catch (e2) { console.warn('[FeesReport] Fees fallback also failed:', e2.message); }
+                } catch (e2) { console.warn('[Offline Collection] Fees fallback also failed:', e2.message); }
             }
 
             // 3. Fetch ALL Fee Structures (to get program-level term components)
@@ -130,9 +131,8 @@ const FeesReport = () => {
                     }
                 });
                 allFeeStructures = fsListRes.data?.data || [];
-            } catch (e) { console.warn('[FeesReport] Could not fetch Fee Structures list:', e.message); }
+            } catch (e) { console.warn('[Offline Collection] Could not fetch Fee Structures list:', e.message); }
 
-            // Fetch full details for each Fee Structure (to get term components)
             const structureDetails = {};
             await Promise.all(
                 allFeeStructures.map(async (fs) => {
@@ -154,9 +154,9 @@ const FeesReport = () => {
                     }
                 });
                 allStudents = stuRes.data?.data || [];
-            } catch (e) { console.warn('[FeesReport] Could not fetch students:', e.message); }
+            } catch { console.warn('[Offline Collection] Could not fetch students'); }
 
-            // 5. Fetch ALL Program Enrollments (this is the real student-program link)
+            // 5. Fetch ALL Program Enrollments
             let enrollments = [];
             try {
                 const enrRes = await API.get('/api/resource/Program Enrollment', {
@@ -166,55 +166,12 @@ const FeesReport = () => {
                     }
                 });
                 enrollments = enrRes.data?.data || [];
-            } catch (e) { console.warn('[FeesReport] Could not fetch enrollments:', e.message); }
+            } catch (e) { console.warn('[Offline Collection] Could not fetch enrollments:', e.message); }
 
-            const userRole = localStorage.getItem('userRole');
-            if (userRole === 'Instructor') {
-                const userEmail = localStorage.getItem('user');
-                const instructorId = await resolveInstructorId(userEmail);
-                if (instructorId) {
-                    const groupDetails = await fetchInstructorGroupDetails(instructorId);
-                    const ctStudentIds = groupDetails.studentIds || [];
-                    
-                    paymentList = paymentList.filter(p => ctStudentIds.includes(p.student_id));
-                    erpFeesList = erpFeesList.filter(fee => ctStudentIds.includes(fee.student));
-                    allStudents = allStudents.filter(s => ctStudentIds.includes(s.name));
-                    enrollments = enrollments.filter(e => ctStudentIds.includes(e.student));
-                } else {
-                    paymentList = [];
-                    erpFeesList = [];
-                    allStudents = [];
-                    enrollments = [];
-                }
-            } else if (isCoordinator && !coordinatorScope.loading) {
-                const ctPrograms = coordinatorScope.programs || [];
-                const ctBoards = coordinatorScope.boards || [];
-                if (ctPrograms.length > 0) {
-                    const allowedStudents = enrollments.filter(e => ctPrograms.includes(e.program)).map(e => e.student);
-                    // Also check allStudents directly
-                    const moreAllowed = allStudents.filter(s => ctPrograms.includes(s.program)).map(s => s.name);
-                    const finalAllowed = Array.from(new Set([...allowedStudents, ...moreAllowed]));
-                    
-                    paymentList = paymentList.filter(p => finalAllowed.includes(p.student_id));
-                    erpFeesList = erpFeesList.filter(fee => finalAllowed.includes(fee.student));
-                    allStudents = allStudents.filter(s => finalAllowed.includes(s.name));
-                    enrollments = enrollments.filter(e => finalAllowed.includes(e.student));
-                } else if (ctBoards.length > 0) {
-                    const finalAllowed = allStudents.filter(s => ctBoards.includes(s.custom_board)).map(s => s.name);
-                    paymentList = paymentList.filter(p => finalAllowed.includes(p.student_id));
-                    erpFeesList = erpFeesList.filter(fee => finalAllowed.includes(fee.student));
-                    allStudents = allStudents.filter(s => finalAllowed.includes(s.name));
-                    enrollments = enrollments.filter(e => finalAllowed.includes(e.student));
-                }
-            }
-
-            // Build a map: student_id -> { student_name, program }
-            // Priority: Program Enrollment > Student.program
             const studentInfoMap = {};
             allStudents.forEach(s => {
                 studentInfoMap[s.name] = { student_name: s.student_name || s.name, program: s.program || '', board: s.custom_board || '' };
             });
-            // Override with Program Enrollment data (authoritative)
             enrollments.forEach(e => {
                 if (e.student && e.program) {
                     if (!studentInfoMap[e.student]) {
@@ -225,7 +182,6 @@ const FeesReport = () => {
                     }
                 }
             });
-            // Also add enrolled students that may be missing from student list
             enrollments.forEach(e => {
                 if (e.student && !allStudents.find(s => s.name === e.student)) {
                     allStudents.push({ name: e.student, student_name: e.student_name || e.student, program: e.program, enabled: 1 });
@@ -235,16 +191,42 @@ const FeesReport = () => {
             // Build Firebase payment lookup: key = student_id + term
             const firebasePayments = {};
             paymentList.forEach(p => {
+                if (p.status === 'created' || p.status === 'failed') return;
                 const termName = p.fees_category || '-';
                 const key = `${p.student_id}_${termName}`;
                 if (!firebasePayments[key]) firebasePayments[key] = [];
                 firebasePayments[key].push(p);
             });
 
-            // 5. Build the merged records from ERP Fees (primary source)
+            let studentDiscountsMap = {};
+            let feeDiscountsMap = {};
+            try {
+                // Fetch from 'schooler_system' as that's the main system collection
+                const sysCode = 'schooler_system';
+                const sdSnaps = await getDocs(collection(db, sysCode, 'data', 'student_discounts'));
+                sdSnaps.forEach(doc => {
+                    const data = doc.data();
+                    if (!studentDiscountsMap[data.student_id]) studentDiscountsMap[data.student_id] = [];
+                    studentDiscountsMap[data.student_id].push(data);
+                });
+
+                const fdSnaps = await getDocs(collection(db, sysCode, 'data', 'fees_discounts'));
+                const cats = [];
+                fdSnaps.forEach(doc => { 
+                    feeDiscountsMap[doc.id] = doc.data(); 
+                    cats.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // Fallback fetch from 'schooler' removed as data is migrated
+                
+                console.log('[Discount Debug] Loaded studentDiscountsMap:', studentDiscountsMap);
+                console.log('[Discount Debug] Loaded feeDiscountsMap:', feeDiscountsMap);
+            } catch(e) { console.warn('Could not fetch discounts', e.message); }
+
+            // 5. Build the merged records
             const groupedRecords = {};
 
-            // Process ERP Fees records first (these are authoritative fee invoices)
+            // Process ERP Fees records
             erpFeesList.forEach(fee => {
                 const studentId = fee.student;
                 const studentName = fee.student_name || studentInfoMap[studentId]?.student_name || 'Unknown';
@@ -252,30 +234,94 @@ const FeesReport = () => {
                 const board = studentInfoMap[studentId]?.board || '-';
                 const termName = fee.academic_term || fee.name;
                 const key = `${studentId}_${termName}`;
-                const totalFee = parseFloat(fee.grand_total) || 0;
-                const outstanding = parseFloat(fee.outstanding_amount) || 0;
+                let totalFee = parseFloat(fee.grand_total) || 0;
+                let outstanding = parseFloat(fee.outstanding_amount) || 0;
                 const paidAmount = totalFee - outstanding;
 
-                // Check Firebase for payment details
+                const feeStructureName = fee.fee_structure || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program && (!board || board === '-' || structureDetails[k]?.company === board)) || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program) || '-';
+
+                let originalTotal = totalFee;
+                let discountAmount = 0;
+                let discountName = '';
+                let discountPercentage = 0;
+                if (structureDetails[feeStructureName]) {
+                    const fsData = structureDetails[feeStructureName];
+                    const components = fsData.components || [];
+                    const termComp = components.find(c => c.fees_category === termName || c.name === termName);
+                    if (termComp) {
+                        const originalTermAmount = parseFloat(termComp.amount) || 0;
+                        if (totalFee < originalTermAmount) {
+                            discountAmount = originalTermAmount - totalFee;
+                            originalTotal = originalTermAmount;
+                        }
+                    }
+                }
+
+                if (discountAmount === 0 && studentDiscountsMap[studentId]) {
+                    const activeDiscount = studentDiscountsMap[studentId][0]; // just grab the first assigned discount
+                    if (activeDiscount) {
+                        let fd = feeDiscountsMap[activeDiscount.discount_id];
+                        if (!fd) fd = Object.values(feeDiscountsMap).find(d => d.name === activeDiscount.discount_id || d.name === activeDiscount.discount_name);
+                        
+                        if (fd) {
+                            // Robust terms check
+                            const terms = Array.isArray(activeDiscount.terms) ? activeDiscount.terms : (activeDiscount.terms ? [activeDiscount.terms] : []);
+                            if (terms.length === 0 || terms.includes('All Terms') || terms.includes(termName)) {
+                                const pct = parseFloat(fd.percentage) || 0;
+                                if (pct > 0) {
+                                    discountPercentage = pct;
+                                    discountAmount = (originalTotal * pct) / 100;
+                                    totalFee = originalTotal - discountAmount;
+                                    discountName = fd.name;
+                                    if (outstanding > 0) {
+                                        outstanding = totalFee - paidAmount;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 const fbPayments = firebasePayments[key] || [];
-                const verifiedPayment = fbPayments.find(p => p.status === 'verified');
+                const verifiedPayments = fbPayments.filter(p => ['verified', 'partial', 'successful', 'captured'].includes(p.status)).sort((a, b) => new Date(b.created_at || b.verified_at || 0) - new Date(a.created_at || a.verified_at || 0));
+                
+                const lastPayment = verifiedPayments.length > 0 ? verifiedPayments[0] : null;
+                
+                if (lastPayment && lastPayment.discount_amount !== undefined && parseFloat(lastPayment.discount_amount) > 0) {
+                    discountAmount = parseFloat(lastPayment.discount_amount);
+                    discountName = lastPayment.discount_name || 'Discount';
+                    discountPercentage = lastPayment.discount_percentage || 0;
+                    totalFee = originalTotal - discountAmount;
+                    if (outstanding > 0) {
+                        outstanding = totalFee - paidAmount;
+                    }
+                }
+
+                const totalFbPaid = verifiedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+                let actualPaidAmount = paidAmount;
+                let actualOutstanding = outstanding;
+                if (totalFbPaid > actualPaidAmount) {
+                    actualPaidAmount = totalFbPaid;
+                    actualOutstanding = Math.max(0, totalFee - actualPaidAmount);
+                }
 
                 let status = 'UNPAID';
                 let paidDate = null;
                 let receiptNo = '-';
 
-                if (outstanding <= 0 || verifiedPayment) {
+
+                if (actualOutstanding <= 0) {
                     status = 'PAID';
-                    paidDate = verifiedPayment?.verified_at || verifiedPayment?.receipt_date || fee.posting_date;
-                    receiptNo = verifiedPayment?.payment_id || verifiedPayment?.receipt_no || '-';
-                } else if (paidAmount > 0 && outstanding > 0) {
+                    paidDate = lastPayment?.verified_at || lastPayment?.receipt_date || fee.posting_date;
+                    receiptNo = lastPayment?.payment_id || lastPayment?.receipt_no || '-';
+                } else if (actualPaidAmount > 0 && actualOutstanding > 0) {
                     status = 'PARTIAL';
+                    paidDate = lastPayment?.verified_at || lastPayment?.receipt_date || null;
+                    receiptNo = lastPayment?.payment_id || lastPayment?.receipt_no || '-';
                 }
 
-                // Find fee structure name
-                const feeStructureName = fee.fee_structure || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program && (!board || board === '-' || structureDetails[k]?.company === board)) || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program) || '-';
-
-                if (!groupedRecords[key] || status === 'PAID') {
+                if (!groupedRecords[key] || status === 'PAID' || status === 'PARTIAL') {
                     groupedRecords[key] = {
                         key: key,
                         fee_id: fee.name,
@@ -287,35 +333,54 @@ const FeesReport = () => {
                         academic_term: termName,
                         academic_year: fee.academic_year || '-',
                         total_fee: totalFee,
-                        original_fee: verifiedPayment?.original_fee || totalFee,
-                        discount_amount: verifiedPayment?.discount_amount || 0,
-                        discount_name: verifiedPayment?.discount_name || '',
-                        paid_amount: paidAmount > 0 ? paidAmount : (verifiedPayment ? parseFloat(verifiedPayment.amount) || 0 : 0),
-                        outstanding: outstanding,
+                        original_fee: originalTotal,
+                        discount_amount: discountAmount,
+                        discount_name: discountName,
+                        discount_percentage: discountPercentage,
+                        paid_amount: actualPaidAmount,
+                        outstanding: actualOutstanding,
                         status: status,
                         paid_date: paidDate,
-                        payment_mode: verifiedPayment?.payment_mode || '-',
+                        payment_mode: lastPayment?.payment_mode || '-',
                         receipt_no: receiptNo,
+                        receipts: verifiedPayments
                     };
                 }
             });
 
-            // Also process Firebase-only payments (students who paid via website but may not have ERP Fees record)
-            paymentList.forEach(p => {
-                const termName = p.fees_category || '-';
-                const key = `${p.student_id}_${termName}`;
+            // Process Firebase-only payments
+            Object.keys(firebasePayments).forEach(key => {
+                if (groupedRecords[key]) return;
 
-                if (groupedRecords[key]) return; // Already from ERP
-
+                const fbPayments = firebasePayments[key];
+                const verifiedPayments = fbPayments.filter(p => ['verified', 'partial', 'successful', 'captured'].includes(p.status)).sort((a, b) => new Date(b.created_at || b.verified_at || 0) - new Date(a.created_at || a.verified_at || 0));
+                const totalFbPaid = verifiedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+                
+                const p = fbPayments[0]; // representative record
                 const fsName = p.fee_structure || '';
                 const programName = structureDetails[fsName]?.program || studentInfoMap[p.student_id]?.program || '-';
-                const paidAmt = parseFloat(p.amount) || 0;
+                
+                let originalFee = p.original_fee || parseFloat(p.amount) || 0;
+                let paidAmt = totalFbPaid;
+                
+                const lastPayment = verifiedPayments.length > 0 ? verifiedPayments[0] : null;
+                const paidDate = lastPayment?.verified_at || lastPayment?.receipt_date || null;
+                
+                let discountAmount = 0;
+                let discountName = '';
+                let discountPercentage = 0;
+                let totalFee = originalFee;
+
+                if (lastPayment && lastPayment.discount_amount !== undefined && parseFloat(lastPayment.discount_amount) > 0) {
+                    discountAmount = parseFloat(lastPayment.discount_amount);
+                    discountName = lastPayment.discount_name || 'Discount';
+                    discountPercentage = lastPayment.discount_percentage || 0;
+                    totalFee = originalFee - discountAmount;
+                }
 
                 let currentStatus = 'PENDING';
-                if (p.status === 'verified') currentStatus = 'PAID';
-                else if (p.status === 'failed') currentStatus = 'FAILED';
-
-                const paidDate = p.verified_at || p.receipt_date || (currentStatus === 'PAID' ? p.created_at : null);
+                if (paidAmt >= totalFee) currentStatus = 'PAID';
+                else if (paidAmt > 0) currentStatus = 'PARTIAL';
 
                 groupedRecords[key] = {
                     key: p.payment_id || p.order_id || key,
@@ -325,22 +390,23 @@ const FeesReport = () => {
                     program: programName,
                     board: studentInfoMap[p.student_id]?.board || '-',
                     fee_structure: fsName,
-                    academic_term: termName,
+                    academic_term: p.fees_category || '-',
                     academic_year: '-',
-                    total_fee: paidAmt,
-                    original_fee: p.original_fee || paidAmt,
-                    discount_amount: p.discount_amount || 0,
-                    discount_name: p.discount_name || '',
-                    paid_amount: currentStatus === 'PAID' ? paidAmt : 0,
-                    outstanding: currentStatus === 'PAID' ? 0 : paidAmt,
+                    total_fee: Math.max(totalFee, paidAmt),
+                    original_fee: originalFee,
+                    discount_amount: discountAmount || p.discount_amount || 0,
+                    discount_name: discountName || p.discount_name || '',
+                    discount_percentage: discountPercentage || p.discount_percentage || 0,
+                    paid_amount: paidAmt,
+                    outstanding: Math.max(0, totalFee - paidAmt),
                     status: currentStatus,
-                    paid_date: currentStatus === 'PAID' ? paidDate : null,
-                    payment_mode: p.payment_mode || 'ONLINE',
-                    receipt_no: p.receipt_no || p.payment_id || '-',
+                    paid_date: paidDate,
+                    payment_mode: lastPayment?.payment_mode || p.payment_mode || 'ONLINE',
+                    receipt_no: lastPayment?.receipt_no || lastPayment?.payment_id || p.receipt_no || p.payment_id || '-',
+                    receipts: verifiedPayments
                 };
             });
 
-            // Generate rows from Student + Fee Structure components for students with NO Fees/Payment records
             allStudents.forEach(student => {
                 const studentId = student.name;
                 const studentName = studentInfoMap[studentId]?.student_name || student.student_name || studentId;
@@ -348,7 +414,6 @@ const FeesReport = () => {
                 const board = studentInfoMap[studentId]?.board || student.custom_board || '-';
                 const fsName = Object.keys(structureDetails).find(k => structureDetails[k]?.program === program && (!board || board === '-' || structureDetails[k]?.company === board)) || Object.keys(structureDetails).find(k => structureDetails[k]?.program === program);
 
-                // If student has a fee structure with components, generate term-wise rows
                 if (fsName && structureDetails[fsName]) {
                     const fsData = structureDetails[fsName];
                     const components = fsData.components || [];
@@ -357,24 +422,54 @@ const FeesReport = () => {
                         const termName = comp.fees_category || comp.name || '-';
                         const key = `${studentId}_${termName}`;
 
-                        if (groupedRecords[key]) return; // Already has a record
+                        if (groupedRecords[key]) return;
 
-                        const termAmount = parseFloat(comp.amount) || 0;
+                        let termAmount = parseFloat(comp.amount) || 0;
+                        let originalTotal = termAmount;
+                        let discountAmount = 0;
+                        let discountName = '';
+                        let discountPercentage = 0;
+                        if (studentDiscountsMap[studentId]) {
+                            const activeDiscount = studentDiscountsMap[studentId][0]; 
+                            if (activeDiscount) {
+                                let fd = feeDiscountsMap[activeDiscount.discount_id];
+                                if (!fd) fd = Object.values(feeDiscountsMap).find(d => d.name === activeDiscount.discount_id || d.name === activeDiscount.discount_name);
+                                
+                                if (fd) {
+                                    const terms = Array.isArray(activeDiscount.terms) ? activeDiscount.terms : (activeDiscount.terms ? [activeDiscount.terms] : []);
+                                    if (terms.length === 0 || terms.includes('All Terms') || terms.includes(termName)) {
+                                        const pct = parseFloat(fd.percentage) || 0;
+                                        if (pct > 0) {
+                                            discountPercentage = pct;
+                                            discountAmount = (originalTotal * pct) / 100;
+                                            termAmount = originalTotal - discountAmount;
+                                            discountName = fd.name;
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-                        // Check Firebase for this student+term
                         const fbPayments = firebasePayments[key] || [];
-                        const verifiedPayment = fbPayments.find(p => p.status === 'verified');
+                        const verifiedPayments = fbPayments.filter(p => ['verified', 'partial', 'successful', 'captured'].includes(p.status)).sort((a, b) => new Date(b.created_at || b.verified_at || 0) - new Date(a.created_at || a.verified_at || 0));
+                        const totalFbPaid = verifiedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+                        let actualPaidAmount = totalFbPaid;
+                        let actualOutstanding = Math.max(0, termAmount - actualPaidAmount);
 
                         let status = 'UNPAID';
                         let paidDate = null;
-                        let paidAmount = 0;
                         let receiptNo = '-';
+                        const lastPayment = verifiedPayments.length > 0 ? verifiedPayments[0] : null;
 
-                        if (verifiedPayment) {
+                        if (actualOutstanding <= 0) {
                             status = 'PAID';
-                            paidAmount = parseFloat(verifiedPayment.amount) || termAmount;
-                            paidDate = verifiedPayment.verified_at || verifiedPayment.receipt_date || verifiedPayment.created_at;
-                            receiptNo = verifiedPayment.payment_id || verifiedPayment.receipt_no || '-';
+                            paidDate = lastPayment?.verified_at || lastPayment?.receipt_date || lastPayment?.created_at;
+                            receiptNo = lastPayment?.payment_id || lastPayment?.receipt_no || '-';
+                        } else if (actualPaidAmount > 0) {
+                            status = 'PARTIAL';
+                            paidDate = lastPayment?.verified_at || lastPayment?.receipt_date || lastPayment?.created_at;
+                            receiptNo = lastPayment?.payment_id || lastPayment?.receipt_no || '-';
                         }
 
                         groupedRecords[key] = {
@@ -388,19 +483,20 @@ const FeesReport = () => {
                             academic_term: termName,
                             academic_year: '-',
                             total_fee: termAmount,
-                            original_fee: verifiedPayment?.original_fee || termAmount,
-                            discount_amount: verifiedPayment?.discount_amount || 0,
-                            discount_name: verifiedPayment?.discount_name || '',
-                            paid_amount: paidAmount,
-                            outstanding: status === 'PAID' ? 0 : termAmount,
+                            original_fee: originalTotal,
+                            discount_amount: discountAmount,
+                            discount_name: discountName,
+                            discount_percentage: discountPercentage,
+                            paid_amount: actualPaidAmount,
+                            outstanding: actualOutstanding,
                             status: status,
                             paid_date: paidDate,
-                            payment_mode: verifiedPayment?.payment_mode || '-',
+                            payment_mode: lastPayment?.payment_mode || '-',
                             receipt_no: receiptNo,
+                            receipts: verifiedPayments
                         };
                     });
                 } else {
-                    // Student has no fee structure — still show them with a single row
                     const key = `${studentId}_-`;
                     if (!groupedRecords[key]) {
                         groupedRecords[key] = {
@@ -428,9 +524,8 @@ const FeesReport = () => {
             const mergedData = Object.values(groupedRecords);
             mergedData.sort((a, b) => (a.student_name || '').localeCompare(b.student_name || '') || (a.academic_term || '').localeCompare(b.academic_term || ''));
             setAllData(mergedData);
-            console.log(`[FeesReport] Total records: ${mergedData.length} (ERP Fees: ${erpFeesList.length}, Firebase: ${paymentList.length}, Students: ${allStudents.length}, Enrollments: ${enrollments.length}, Fee Structures: ${Object.keys(structureDetails).length})`);
         } catch (err) {
-            console.error('[FeesReport] Fetch Data Error:', err);
+            console.error('[Offline Collection] Fetch Data Error:', err);
             notification.error({ message: 'Data Fetch Error', description: err.response?.data?.message || err.message });
         } finally {
             setLoading(false);
@@ -474,7 +569,10 @@ const FeesReport = () => {
             if (r.status === 'PAID') return s + (r.original_fee || r.total_fee || r.paid_amount || 0);
             return s + (r.paid_amount || 0);
         }, 0),
-        totalOutstanding: filteredData.reduce((s, r) => s + r.outstanding, 0),
+        totalOutstanding: filteredData.reduce((s, r) => {
+            if (r.status === 'PAID') return s;
+            return s + (r.original_fee || r.outstanding || r.total_fee || 0);
+        }, 0),
         paidCount: filteredData.filter(r => r.status === 'PAID').length,
         unpaidCount: filteredData.filter(r => r.status !== 'PAID').length,
         totalRecords: filteredData.length,
@@ -555,8 +653,15 @@ const FeesReport = () => {
         },
         {
             title: 'DUE', dataIndex: 'outstanding', key: 'outstanding', align: 'right',
-            render: v => <span style={{ fontWeight: 700, color: v > 0 ? '#dc2626' : '#94a3b8', fontSize: 13 }}>₹{v.toLocaleString()}</span>,
-            sorter: (a, b) => a.outstanding - b.outstanding,
+            render: (v, r) => {
+                const actualDue = r.status === 'PAID' ? 0 : r.outstanding;
+                return <span style={{ fontWeight: 700, color: actualDue > 0 ? '#dc2626' : '#94a3b8', fontSize: 13 }}>₹{actualDue.toLocaleString()}</span>;
+            },
+            sorter: (a, b) => {
+                const dueA = a.status === 'PAID' ? 0 : a.outstanding;
+                const dueB = b.status === 'PAID' ? 0 : b.outstanding;
+                return dueA - dueB;
+            },
         },
         {
             title: 'PAID DATE', key: 'paid_date', ellipsis: true,
@@ -570,13 +675,13 @@ const FeesReport = () => {
             render: (status) => {
                 const cfg = {
                     PAID: { color: 'success', icon: <CheckCircleOutlined /> },
-                    PENDING: { color: 'warning', icon: <ClockCircleOutlined /> },
-                    FAILED: { color: 'error', icon: <ExclamationCircleOutlined /> },
+                    PARTIAL: { color: 'processing', icon: <ClockCircleOutlined /> },
+                    UNPAID: { color: 'error', icon: <ExclamationCircleOutlined /> },
                 };
-                const c = cfg[status] || cfg.PENDING;
+                const c = cfg[status] || cfg.UNPAID;
                 return <Tag icon={c.icon} color={c.color} style={{ fontWeight: 700, borderRadius: 20, padding: '2px 10px', fontSize: 11 }}>{status}</Tag>;
             },
-        }
+        },
     ];
 
     // Unique terms extracted from data for filter dropdown

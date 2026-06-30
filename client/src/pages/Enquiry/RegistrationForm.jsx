@@ -959,19 +959,19 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 formData.registrationNo = currentRegNo;
             }
 
-            // Check if we are newly disabling this registration
-            if (formData.isDisabled && editingRecord && !editingRecord.isDisabled) {
+            // Auto sync isDisabled to ERPNext Student enabled status
+            if (editingRecord && formData.isDisabled !== editingRecord.isDisabled) {
                 try {
                     const admsQuery = query(collection(db, 'schooler_system/enquiry_management/final_admissions'), where('registrationId', '==', editingRecord.id));
                     const admsSnap = await getDocs(admsQuery);
                     if (!admsSnap.empty) {
                         const adm = admsSnap.docs[0].data();
                         if (adm.erp_student_id) {
-                            await API.put(`/api/resource/Student/${encodeURIComponent(adm.erp_student_id)}`, { enabled: 0 });
+                            await API.put(`/api/resource/Student/${encodeURIComponent(adm.erp_student_id)}`, { enabled: formData.isDisabled ? 0 : 1 });
                         }
                     }
                 } catch (erpErr) {
-                    console.warn('Failed to auto-disable ERPNext student', erpErr);
+                    console.warn('Failed to auto-sync ERPNext student enabled status', erpErr);
                 }
             }
 
@@ -1032,6 +1032,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                         if (adm.erp_student_id) {
                             // Build the student update payload from matching fields
                             const studentUpdatePayload = {
+                                enabled: formData.isDisabled ? 0 : 1,
                                 first_name: formData.first_name || null,
                                 middle_name: formData.middle_name || null,
                                 last_name: formData.last_name || null,
@@ -1072,7 +1073,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                         mobile_no: formData.student_mobile_number ? String(formData.student_mobile_number).trim() : null,
                                         role_profile_name: 'Student',
                                         module_profile: 'Student',
-                                        enabled: 1,
+                                        enabled: formData.isDisabled ? 0 : 1,
                                         roles: [{ role: 'Student' }]
                                     };
                                     if (cleanStudentUsername) {
@@ -3347,9 +3348,23 @@ export default function RegistrationForm({ initialView = 'list' }) {
         }
         
         const keys = new Set();
+        let hasGuardians = false;
         filteredData.forEach(row => {
             Object.keys(row).forEach(key => keys.add(key));
+            if (row.guardians && row.guardians.length > 0) hasGuardians = true;
         });
+        
+        if (hasGuardians) {
+            keys.add('father_name');
+            keys.add('father_mobile_number');
+            keys.add('father_email');
+            keys.add('mother_name');
+            keys.add('mother_mobile_number');
+            keys.add('mother_email');
+            keys.add('guardian_name');
+            keys.add('guardian_mobile_number');
+            keys.add('guardian_email');
+        }
         
         const fields = Array.from(keys).sort();
         setAvailableExportFields(fields);
@@ -3366,9 +3381,34 @@ export default function RegistrationForm({ initialView = 'list' }) {
 
         const exportArray = filteredData.map(record => {
             const cleanRecord = {};
+            
+            const getGuardianInfo = (relation, field) => {
+                if (!record.guardians || record.guardians.length === 0) return undefined;
+                let guardian = record.guardians.find(g => (g.relation || '').trim().toLowerCase() === relation);
+                if (relation === 'guardian' && !guardian) {
+                     guardian = record.guardians.find(g => !['father', 'mother'].includes((g.relation || '').trim().toLowerCase())) || record.guardians[0];
+                }
+                return guardian ? guardian[field] : undefined;
+            };
+
             selectedExportFields.forEach(field => {
-                if (record[field] !== undefined) {
-                    let val = record[field];
+                let val = record[field];
+                
+                if (val === undefined || val === null || val === '') {
+                    if (field === 'father_name') val = getGuardianInfo('father', 'guardian_name');
+                    else if (field === 'father_mobile_number') val = getGuardianInfo('father', 'mobile_number');
+                    else if (field === 'father_email') val = getGuardianInfo('father', 'email_address');
+                    
+                    else if (field === 'mother_name') val = getGuardianInfo('mother', 'guardian_name');
+                    else if (field === 'mother_mobile_number') val = getGuardianInfo('mother', 'mobile_number');
+                    else if (field === 'mother_email') val = getGuardianInfo('mother', 'email_address');
+                    
+                    else if (field === 'guardian_name') val = getGuardianInfo('guardian', 'guardian_name');
+                    else if (field === 'guardian_mobile_number') val = getGuardianInfo('guardian', 'mobile_number');
+                    else if (field === 'guardian_email') val = getGuardianInfo('guardian', 'email_address');
+                }
+
+                if (val !== undefined) {
                     if (val && val.toDate) {
                         val = val.toDate().toLocaleString();
                     } else if (typeof val === 'object' && val !== null) {

@@ -117,7 +117,7 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
                 <tbody>
                     <tr>
                         <td style={{ padding: '15px 12px', border: '1px solid #e5e7eb', fontWeight: '500' }}>
-                            {feeName}
+                            {feeName} (Total Term Fee)
                             {discount_amount > 0 && (
                                 <div style={{ fontSize: '11px', color: '#a855f7', marginTop: '4px', fontWeight: 'bold' }}>
                                     Includes Discount: {discount_name || 'Special Discount'} 
@@ -136,15 +136,42 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
                                     -₹ {discount_amount.toLocaleString('en-IN')}
                                 </div>
                             )}
-                            ₹ {amount.toLocaleString('en-IN')}
+                            ₹ {Math.max(0, original_fee - discount_amount).toLocaleString('en-IN')}
+                        </td>
+                    </tr>
+
+                    {receiptData.previous_payments && receiptData.previous_payments.length > 0 && receiptData.previous_payments.map((prev, idx) => (
+                        <tr key={idx}>
+                            <td style={{ padding: '15px 12px', border: '1px solid #e5e7eb', fontWeight: '500', color: '#6b7280', fontSize: '13px' }}>
+                                Previous Payment ({prev.date})
+                                <div style={{ fontSize: '11px', color: '#9ca3af' }}>Receipt: {prev.receipt_no}</div>
+                            </td>
+                            <td style={{ padding: '15px 12px', textAlign: 'right', border: '1px solid #e5e7eb', fontWeight: 'bold', fontSize: '14px', color: '#6b7280' }}>
+                                -₹ {prev.amount.toLocaleString('en-IN')}
+                            </td>
+                        </tr>
+                    ))}
+
+                    <tr>
+                        <td style={{ padding: '15px 12px', border: '1px solid #e5e7eb', fontWeight: 'bold', color: '#1e3a8a' }}>
+                            Current Payment
+                        </td>
+                        <td style={{ padding: '15px 12px', textAlign: 'right', border: '1px solid #e5e7eb', fontWeight: 'bold', fontSize: '16px', color: '#1e3a8a' }}>
+                            -₹ {amount.toLocaleString('en-IN')}
                         </td>
                     </tr>
                 </tbody>
                 <tfoot>
                     <tr style={{ backgroundColor: '#f9fafb' }}>
-                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', fontSize: '16px', textTransform: 'uppercase' }}>Grand Total</td>
+                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', fontSize: '16px', textTransform: 'uppercase' }}>Amount Paid (This Receipt)</td>
                         <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', fontSize: '18px', color: '#1e3a8a' }}>₹ {amount.toLocaleString('en-IN')}</td>
                     </tr>
+                    {receiptData.outstanding > 0 && (
+                        <tr style={{ backgroundColor: '#fff5f5' }}>
+                            <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', fontSize: '14px', textTransform: 'uppercase', color: '#dc2626' }}>{feeName} PENDING FEES</td>
+                            <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', fontSize: '16px', color: '#dc2626' }}>₹ {receiptData.outstanding.toLocaleString('en-IN')}</td>
+                        </tr>
+                    )}
                 </tfoot>
             </table>
 

@@ -316,40 +316,39 @@ const QuickAttendance = () => {
         let failCount = 0;
         const errors = [];
 
-        for (let i = 0; i < students.length; i++) {
-            const s = students[i];
-            const payload = {
-                student: s.student,
-                date: date,
-                status: s.status,
-                student_group: selectedGroup,
-                docstatus: 1
-            };
+        const batchSize = 10;
+        for (let i = 0; i < students.length; i += batchSize) {
+            const batch = students.slice(i, i + batchSize);
+            await Promise.all(batch.map(async (s) => {
+                const payload = {
+                    student: s.student,
+                    date: date,
+                    status: s.status,
+                    student_group: selectedGroup,
+                    docstatus: 1
+                };
 
-            try {
-                const existing = existingMap[s.student];
-                if (existing) {
-                    // Update existing record
-                    await API.put(`/api/resource/Student Attendance/${encodeURIComponent(existing.docName)}`, payload);
-                } else {
-                    // Create new record
-                    const res = await API.post('/api/resource/Student Attendance', payload);
-                    // Store the new doc name so re-save won't create duplicates
-                    setExistingMap(prev => ({
-                        ...prev,
-                        [s.student]: { docName: res.data.data.name, docstatus: 1 }
-                    }));
+                try {
+                    const existing = existingMap[s.student];
+                    if (existing) {
+                        await API.put(`/api/resource/Student Attendance/${encodeURIComponent(existing.docName)}`, payload);
+                    } else {
+                        const res = await API.post('/api/resource/Student Attendance', payload);
+                        setExistingMap(prev => ({
+                            ...prev,
+                            [s.student]: { docName: res.data.data.name, docstatus: 1 }
+                        }));
+                    }
+                    successCount++;
+                } catch (err) {
+                    failCount++;
+                    const errMsg = err.response?.data?._server_messages
+                        ? (() => { try { return JSON.parse(JSON.parse(err.response.data._server_messages)[0]).message; } catch { return err.message; } })()
+                        : err.response?.data?.message || err.message;
+                    errors.push(`${s.student_name}: ${errMsg}`);
                 }
-                successCount++;
-            } catch (err) {
-                failCount++;
-                const errMsg = err.response?.data?._server_messages
-                    ? (() => { try { return JSON.parse(JSON.parse(err.response.data._server_messages)[0]).message; } catch { return err.message; } })()
-                    : err.response?.data?.message || err.message;
-                errors.push(`${s.student_name}: ${errMsg}`);
-            }
-
-            setSaveProgress({ done: i + 1, total: students.length });
+            }));
+            setSaveProgress({ done: Math.min(i + batchSize, students.length), total: students.length });
         }
 
         const pCount = students.filter(s => s.status === 'Present').length;
