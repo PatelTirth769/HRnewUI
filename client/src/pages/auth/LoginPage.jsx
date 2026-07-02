@@ -7,7 +7,7 @@ import { useAuth } from '../../context/auth.jsx';
 import { FaUser, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
 import './style.css';
 import API, { setActiveSystem } from '../../services/api';
-import ssvLogo from '../../assets/images/SSVLOGO.png';
+import ssvLogo from '../../assets/images/finalssvloginlogo-removebg-preview.png';
 import axios from 'axios';
 
 const { Title, Text } = Typography;

@@ -1,5 +1,6 @@
 import React, { forwardRef } from 'react';
 import schoolHeader from '../../assets/images/newheader.jpeg';
+import gsebHeader from '../../assets/images/gseb_header.png';
 
 // Convert number to words
 export const numberToWords = (num) => {
@@ -48,7 +49,8 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
         discount_amount = 0,
         discount_name = '',
         discount_percentage = 0,
-        studentGroup = ''
+        studentGroup = '',
+        boardName = ''
     } = receiptData;
 
     const {
@@ -64,7 +66,7 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
             
             {/* Header Section */}
             <div style={{ display: 'flex', justifyContent: 'center', borderBottom: '2px solid #000000', paddingBottom: '10px', marginBottom: '30px', width: '100%' }}>
-                <img src={schoolHeader} alt="School Header" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
+                <img src={(boardName && (boardName.toLowerCase().includes('gseb(eng)') || boardName.toLowerCase().includes('gseb(guj)'))) ? gsebHeader : schoolHeader} alt="School Header" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
             </div>
 
             {/* Title */}

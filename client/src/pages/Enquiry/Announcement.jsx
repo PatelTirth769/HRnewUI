@@ -60,7 +60,7 @@ const Announcement = () => {
   const [form, setForm] = useState({
     title: '',
     message: '',
-    targetType: localStorage.getItem('userRole') === 'Instructor' ? 'StudentGroup' : 'All',
+    targetType: (localStorage.getItem('userRole') === 'Instructor' || localStorage.getItem('userRole') === 'Coordinator') ? 'StudentGroup' : 'All',
     targetValue: '',
   });
   const [submitting, setSubmitting] = useState(false);
@@ -258,6 +258,7 @@ const Announcement = () => {
     }
 
     if (!isInstructor) return announcements;
+    if (isInstructor && instructorData && instructorData.programs.length === 0) return announcements;
     return announcements.filter(item => {
       if (item.createdBy === (localStorage.getItem('user') || '')) return true;
       if (item.targetType === 'All') return true;
@@ -284,7 +285,7 @@ const Announcement = () => {
       if (isCoordinator) {
         return boards.filter(b => coordinatorScope.boards?.includes(b.name)).map(b => b.name);
       }
-      if (isInstructor) {
+      if (isInstructor && instructorData && instructorData.programs.length > 0) {
         const instProgs = programs.filter(p => instructorData?.programs?.includes(p.name));
         const instBoards = instProgs.map(p => p.custom_board).filter(Boolean);
         return boards.filter(b => instBoards.includes(b.name)).map(b => b.name);
@@ -295,7 +296,7 @@ const Announcement = () => {
       if (isCoordinator) {
         return studentGroups.filter(g => coordinatorScope.programs?.includes(g.program)).map(g => g.student_group_name || g.name);
       }
-      if (isInstructor) {
+      if (isInstructor && instructorData && instructorData.studentGroups.length > 0) {
         return studentGroups.filter(g => instructorData?.studentGroups?.includes(g.name)).map(g => g.student_group_name || g.name);
       }
       return studentGroups.map(g => g.student_group_name || g.name);
@@ -304,7 +305,7 @@ const Announcement = () => {
       if (isCoordinator) {
         return programs.filter(p => coordinatorScope.programs?.includes(p.name)).map(p => p.name);
       }
-      if (isInstructor) {
+      if (isInstructor && instructorData && instructorData.programs.length > 0) {
         return programs.filter(p => instructorData?.programs?.includes(p.name)).map(p => p.name);
       }
       return programs.map(p => p.name);
@@ -317,7 +318,7 @@ const Announcement = () => {
     if (isCoordinator) {
         return boards.filter(b => coordinatorScope.boards?.includes(b.name)).map(b => b.name);
     }
-    if (isInstructor) {
+    if (isInstructor && instructorData && instructorData.programs.length > 0) {
       const instProgs = programs.filter(p => instructorData?.programs?.includes(p.name));
       const instBoards = instProgs.map(p => p.custom_board).filter(Boolean);
       return boards.filter(b => instBoards.includes(b.name)).map(b => b.name);
@@ -333,7 +334,7 @@ const Announcement = () => {
         coordinatorScope.programs?.includes(p.name)
       ).map(p => p.name);
     }
-    if (isInstructor) {
+    if (isInstructor && instructorData && instructorData.programs.length > 0) {
       return programs.filter(p => 
         p.custom_board === selectedBoard && 
         instructorData?.programs?.includes(p.name)
@@ -350,7 +351,7 @@ const Announcement = () => {
         coordinatorScope.programs?.includes(g.program)
       ).map(g => g.name);
     }
-    if (isInstructor) {
+    if (isInstructor && instructorData && instructorData.studentGroups.length > 0) {
       return studentGroups.filter(g => 
         g.program === selectedProgram && 
         instructorData?.studentGroups?.includes(g.name)
@@ -439,7 +440,7 @@ const Announcement = () => {
               {/* Target Type */}
               <label style={labelStyle}>Audience</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                {(isInstructor ? TARGET_TYPES.filter(t => t.value !== 'All') : TARGET_TYPES).map(t => (
+                {((isInstructor || isCoordinator) ? TARGET_TYPES.filter(t => t.value !== 'All') : TARGET_TYPES).map(t => (
                   <button
                     key={t.value}
                     type="button"

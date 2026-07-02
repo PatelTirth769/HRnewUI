@@ -12,6 +12,7 @@ import {
 import dayjs from 'dayjs';
 import html2pdf from 'html2pdf.js';
 import schoolHeader from '../../assets/images/newheader.jpeg';
+import gsebHeader from '../../assets/images/gseb_header.png';
 
 const { Title, Text } = Typography;
 const RECORDS_PATH = 'schooler_system/certificates/records';
@@ -904,7 +905,7 @@ export default function BonafideCertificate() {
                         >
                             {/* Header Section */}
                             <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '10px', width: '100%' }}>
-                                <img src={schoolHeader} alt="School Header" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
+                                <img src={(selectedBoard && (selectedBoard.toLowerCase().includes('gseb(eng)') || selectedBoard.toLowerCase().includes('gseb(guj)'))) ? gsebHeader : schoolHeader} alt="School Header" style={{ width: '100%', height: 'auto', objectFit: 'contain' }} />
                             </div>
 
                             {/* Divider Line */}

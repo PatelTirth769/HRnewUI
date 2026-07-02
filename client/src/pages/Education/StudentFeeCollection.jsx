@@ -97,6 +97,7 @@ const StudentFeeCollection = () => {
             discount_name: record.discount_name || '',
             discount_percentage: record.discount_percentage || 0,
             studentGroup: record.student_group || record.section || '',
+            boardName: record.board || '',
             outstanding: dynamicOutstanding,
             previous_payments: previous_payments
         };

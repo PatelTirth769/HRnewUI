@@ -25,7 +25,9 @@ import {
     Popconfirm, 
     Tooltip, 
     Empty,
-    AutoComplete 
+    AutoComplete,
+    Upload,
+    message
 } from 'antd';
 import { 
     PlusOutlined, 
@@ -38,10 +40,13 @@ import {
     FileTextOutlined,
     SearchOutlined,
     ClearOutlined,
-    DownloadOutlined
+    DownloadOutlined,
+    UploadOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
+import axios from 'axios';
+import API from '../../services/api';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useInstructorGroups } from '../../hooks/useInstructorGroups';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
@@ -68,6 +73,9 @@ export default function ClassworkAssignment() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
     const [form] = Form.useForm();
+    const [uploading, setUploading] = useState(false);
+    const [fileList, setFileList] = useState([]);
+    const [uploadedFiles, setUploadedFiles] = useState([]);
 
     // Filter states
     const [filterBoard, setFilterBoard] = useState('');
@@ -143,6 +151,7 @@ export default function ClassworkAssignment() {
                 classworkDate: values.classworkDate.format('YYYY-MM-DD'),
                 status: values.status || 'Assigned',
                 attachmentUrl: values.attachmentUrl || '',
+                uploadedFiles: uploadedFiles || [],
                 estimatedMinutes: values.estimatedMinutes ? Number(values.estimatedMinutes) : null,
                 assignedBy: values.assignedBy || 'Instructor',
                 updatedAt: serverTimestamp()
@@ -180,9 +189,22 @@ export default function ClassworkAssignment() {
     };
 
     // Handle delete
-    const handleDelete = async (id) => {
+    const handleDelete = async (record) => {
         try {
-            await deleteDoc(doc(db, CLASSWORK_PATH, id));
+            // Delete all associated files from S3
+            const filesToDelete = record.uploadedFiles || [];
+            if (record.awsFileKey) {
+                filesToDelete.push({ key: record.awsFileKey });
+            }
+            
+            for (const file of filesToDelete) {
+                if (file.key) {
+                    await axios.delete(`/local-api/api/s3/delete?key=${encodeURIComponent(file.key)}`).catch(err => {
+                        console.error('Failed to delete file from S3', err);
+                    });
+                }
+            }
+            await deleteDoc(doc(db, CLASSWORK_PATH, record.id));
             notification.success({
                 message: 'Success',
                 description: 'Classwork assignment deleted successfully.'
@@ -200,11 +222,13 @@ export default function ClassworkAssignment() {
     // Open Modal for Create
     const handleCreateOpen = () => {
         setEditingRecord(null);
+        setFileList([]);
+        setUploadedFiles([]);
         form.resetFields();
         form.setFieldsValue({
             classworkDate: dayjs(),
             status: 'Assigned',
-            assignedBy: isInstructor ? 'Instructor' : 'Admin'
+            assignedBy: isCoordinator ? 'Coordinator' : (isInstructor ? 'Instructor' : 'Admin')
         });
         setIsModalOpen(true);
     };
@@ -212,6 +236,18 @@ export default function ClassworkAssignment() {
     // Open Modal for Edit
     const handleEditOpen = (record) => {
         setEditingRecord(record);
+        let initialFiles = record.uploadedFiles || [];
+        if (record.uploadedFileUrl && initialFiles.length === 0) {
+            initialFiles = [{ uid: '-1', name: 'Uploaded File', url: record.uploadedFileUrl, key: record.awsFileKey }];
+        }
+        setUploadedFiles(initialFiles);
+        setFileList(initialFiles.map((f, idx) => ({
+            uid: f.uid || `-${idx}`,
+            name: f.name || `Attachment ${idx + 1}`,
+            status: 'done',
+            url: f.url,
+            key: f.key
+        })));
         form.setFieldsValue({
             title: record.title,
             description: record.description,
@@ -260,6 +296,7 @@ export default function ClassworkAssignment() {
             return boards.filter(b => coordinatorScope.boards.includes(b.name));
         }
         if (!isInstructor) return boards;
+        if (!instructorData || instructorData.programs.length === 0) return boards;
         const instProgs = programs.filter(p => instructorData.programs.includes(p.name));
         const instBoards = instProgs.map(p => p.custom_board).filter(Boolean);
         return boards.filter(b => instBoards.includes(b.name));
@@ -272,7 +309,7 @@ export default function ClassworkAssignment() {
         if (isCoordinator) {
             if (coordinatorScope.loading) return [];
             list = list.filter(p => coordinatorScope.programs.includes(p.name));
-        } else if (isInstructor) {
+        } else if (isInstructor && instructorData && instructorData.programs.length > 0) {
             list = list.filter(p => instructorData.programs.includes(p.name));
         }
         if (!selectedBoard) return (isInstructor || isCoordinator) ? list : [];
@@ -288,7 +325,7 @@ export default function ClassworkAssignment() {
         if (isCoordinator) {
             if (coordinatorScope.loading) return [];
             list = list.filter(p => coordinatorScope.programs.includes(p.name));
-        } else if (isInstructor) {
+        } else if (isInstructor && instructorData && instructorData.programs.length > 0) {
             list = list.filter(p => instructorData.programs.includes(p.name));
         }
         if (!filterBoard) return list;
@@ -303,7 +340,10 @@ export default function ClassworkAssignment() {
 
     const filteredStudentGroups = useMemo(() => {
         let groups = studentGroups;
-        if (isInstructor) {
+        if (isCoordinator) {
+            if (coordinatorScope.loading) return [];
+            groups = groups.filter(sg => coordinatorScope.programs.includes(sg.program));
+        } else if (isInstructor && instructorData && instructorData.studentGroups.length > 0) {
             groups = groups.filter(sg => instructorData.studentGroups.includes(sg.name));
         }
         if (selectedProgram) {
@@ -317,11 +357,14 @@ export default function ClassworkAssignment() {
             });
         }
         return groups;
-    }, [studentGroups, programs, selectedBoard, selectedProgram, isInstructor, instructorData]);
+    }, [studentGroups, programs, selectedBoard, selectedProgram, isInstructor, instructorData, isCoordinator, coordinatorScope]);
 
     const filterStudentGroupsList = useMemo(() => {
         let groups = studentGroups;
-        if (isInstructor) {
+        if (isCoordinator) {
+            if (coordinatorScope.loading) return [];
+            groups = groups.filter(sg => coordinatorScope.programs.includes(sg.program));
+        } else if (isInstructor && instructorData && instructorData.studentGroups.length > 0) {
             groups = groups.filter(sg => instructorData.studentGroups.includes(sg.name));
         }
         if (filterProgram) {
@@ -335,7 +378,7 @@ export default function ClassworkAssignment() {
             });
         }
         return groups;
-    }, [studentGroups, programs, filterBoard, filterProgram, isInstructor, instructorData]);
+    }, [studentGroups, programs, filterBoard, filterProgram, isInstructor, instructorData, isCoordinator, coordinatorScope]);
 
     // Reset all filters
     const handleClearFilters = () => {
@@ -393,14 +436,14 @@ export default function ClassworkAssignment() {
                     <span className="text-gray-500 text-xs mt-1 line-clamp-2" title={record.description}>
                         {record.description}
                     </span>
-                    {record.attachmentUrl && (
+                    {(record.attachmentUrl || record.uploadedFileUrl) && (
                         <a 
-                            href={record.attachmentUrl} 
+                            href={record.attachmentUrl || record.uploadedFileUrl} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-800 text-xs mt-2 flex items-center gap-1 w-max"
                         >
-                            <LinkOutlined /> Attachment Link
+                            <LinkOutlined /> {record.attachmentUrl ? 'Attachment Link' : 'View Uploaded File'}
                         </a>
                     )}
                 </div>
@@ -485,9 +528,8 @@ export default function ClassworkAssignment() {
                     </Tooltip>
                     <Tooltip title="Delete Classwork">
                         <Popconfirm
-                            title="Delete Classwork"
-                            description="Are you sure you want to delete this classwork assignment?"
-                            onConfirm={() => handleDelete(record.id)}
+                            title="Delete this classwork?"
+                            onConfirm={() => handleDelete(record)}
                             okText="Yes"
                             cancelText="No"
                             okButtonProps={{ danger: true }}
@@ -679,7 +721,7 @@ export default function ClassworkAssignment() {
                 onCancel={() => setIsModalOpen(false)}
                 footer={null}
                 width={700}
-                destroyOnClose
+                destroyOnHidden
             >
                 <Form
                     form={form}
@@ -813,13 +855,57 @@ export default function ClassworkAssignment() {
                     </div>
 
                     <Form.Item
+                        label="Reference Link (External URL)"
                         name="attachmentUrl"
-                        label="Attachment Link / Reference URL"
                     >
-                        <Input 
-                            prefix={<LinkOutlined className="text-gray-400" />} 
-                            placeholder="e.g., Google Drive or PDF link" 
-                        />
+                        <Input placeholder="https://example.com/materials" prefix={<LinkOutlined className="text-gray-400" />} />
+                    </Form.Item>
+                    
+                    <Form.Item label="Upload Files (PDF, Image, Doc)">
+                        <Upload
+                            customRequest={async ({ file, onSuccess, onError }) => {
+                                try {
+                                    setUploading(true);
+                                    const presignedRes = await axios.post('/local-api/api/s3/presigned-url', {
+                                        fileName: file.name,
+                                        fileType: file.type || 'application/octet-stream'
+                                    });
+                                    const { presignedUrl, fileUrl, key } = presignedRes.data;
+                                    await axios.put(presignedUrl, file, {
+                                        headers: { 'Content-Type': file.type || 'application/octet-stream' }
+                                    });
+                                    
+                                    const newFile = { uid: file.uid, name: file.name, url: fileUrl, key: key };
+                                    setUploadedFiles(prev => [...prev, newFile]);
+                                    setFileList(prev => [...prev, { ...newFile, status: 'done' }]);
+                                    onSuccess("ok");
+                                    message.success(`${file.name} uploaded successfully.`);
+                                } catch (err) {
+                                    console.error("Upload error:", err);
+                                    onError(err);
+                                    message.error(`${file.name} upload failed.`);
+                                } finally {
+                                    setUploading(false);
+                                }
+                            }}
+                            fileList={fileList}
+                            onChange={({ fileList: newFileList }) => {
+                                // Just update fileList for UI, but don't overwrite done files
+                                // handle removal in onRemove
+                            }}
+                            onRemove={(file) => {
+                                setFileList(prev => prev.filter(f => f.uid !== file.uid));
+                                setUploadedFiles(prev => prev.filter(f => f.uid !== file.uid));
+                                if (file.key) {
+                                    axios.delete(`/local-api/api/s3/delete?key=${encodeURIComponent(file.key)}`).catch(err => {
+                                        console.error('Failed to delete file from S3', err);
+                                    });
+                                }
+                            }}
+                            multiple={true}
+                        >
+                            <Button icon={<UploadOutlined />} loading={uploading}>Click to Upload</Button>
+                        </Upload>
                     </Form.Item>
 
                     <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 mt-6">

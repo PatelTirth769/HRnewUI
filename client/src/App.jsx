@@ -329,6 +329,7 @@ const StudentAttendanceTool = React.lazy(() => import('./pages/Education/Student
 const QuickAttendance = React.lazy(() => import('./pages/Education/QuickAttendance'));
 const HomeworkAssignment = React.lazy(() => import('./pages/Homework/HomeworkAssignment'));
 const ClassworkAssignment = React.lazy(() => import('./pages/Homework/ClassworkAssignment'));
+const WeeklyPlan = React.lazy(() => import('./pages/Homework/WeeklyPlan'));
 const AssessmentResultTool = React.lazy(() => import('./pages/Education/AssessmentResultTool'));
 const StudentGroupCreationTool = React.lazy(() => import('./pages/Education/StudentGroupCreationTool'));
 const ProgramEnrollmentTool = React.lazy(() => import('./pages/Education/ProgramEnrollmentTool'));
@@ -912,7 +913,6 @@ function App() {
                 <Route path="/stock/report/purchase-order-analysis" element={<PurchaseOrderAnalysis />} />
                 <Route path="/stock/report/item-shortage-report" element={<ItemShortageReport />} />
                 <Route path="/stock/report/batch-wise-balance-history" element={<BatchWiseBalanceHistory />} />
-                <Route path="/stock/report/requested-items-transfer" element={<RequestedItemsTransfer />} />
                 <Route path="/stock/report/batch-item-expiry-status" element={<BatchItemExpiryStatus />} />
                 <Route path="/stock/report/item-prices" element={<ItemPrices />} />
                 <Route path="/stock/report/recommended-reorder-level" element={<RecommendedReorderLevel />} />
@@ -939,6 +939,7 @@ function App() {
                 {/* Homework Routes */}
                 <Route path="/homework/assignments" element={<HomeworkAssignment />} />
                 <Route path="/homework/classwork" element={<ClassworkAssignment />} />
+                <Route path="/homework/weekly-plan" element={<WeeklyPlan />} />
 
                 {/* Enquiry Routes */}
                 <Route path="/enquiry/dashboard" element={<div className="p-8"><h1 className="text-2xl font-bold">Enquiry Dashboard</h1><p className="mt-4 text-gray-500">Enquiry module content coming soon...</p></div>} />

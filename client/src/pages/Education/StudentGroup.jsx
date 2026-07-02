@@ -217,29 +217,36 @@ const StudentGroup = () => {
 
     const fetchStudentCounts = async (groupData) => {
         try {
-            // Fetch up to 50 groups to avoid overloading the server if the list is huge
-            const groupsToFetch = groupData.slice(0, 100);
-            const countPromises = groupsToFetch.map(g => 
-                API.get(`/api/resource/Student Group/${encodeURIComponent(g.name)}`)
-                   .then(res => ({ name: g.name, count: res.data.data?.students?.length || 0, students: res.data.data?.students || [] }))
-                   .catch(() => ({ name: g.name, count: 0, students: [] }))
-            );
-            
-            const results = await Promise.all(countPromises);
+            // Fetch all groups in chunks to avoid overloading the server
             const countMap = {};
             const allocationMap = {};
-            results.forEach(r => {
-                countMap[r.name] = r.count;
-                if (r.students && Array.isArray(r.students)) {
-                    r.students.forEach(s => {
-                        if (s.active !== 0) {
-                            allocationMap[s.student] = r.name;
-                        }
-                    });
-                }
-            });
-            setStudentCountMap(countMap);
-            setStudentAllocations(allocationMap);
+            
+            const chunkSize = 50;
+            for (let i = 0; i < groupData.length; i += chunkSize) {
+                const chunk = groupData.slice(i, i + chunkSize);
+                const countPromises = chunk.map(g => 
+                    API.get(`/api/resource/Student Group/${encodeURIComponent(g.name)}`)
+                       .then(res => ({ name: g.name, count: res.data.data?.students?.length || 0, students: res.data.data?.students || [] }))
+                       .catch(() => ({ name: g.name, count: 0, students: [] }))
+                );
+                
+                const results = await Promise.all(countPromises);
+                
+                results.forEach(r => {
+                    countMap[r.name] = r.count;
+                    if (r.students && Array.isArray(r.students)) {
+                        r.students.forEach(s => {
+                            if (s.active !== 0) {
+                                allocationMap[s.student] = r.name;
+                            }
+                        });
+                    }
+                });
+                
+                // Update state incrementally so UI updates as chunks load
+                setStudentCountMap(prev => ({ ...prev, ...countMap }));
+                setStudentAllocations(prev => ({ ...prev, ...allocationMap }));
+            }
         } catch (err) {
             console.error('Error fetching student counts:', err);
         }

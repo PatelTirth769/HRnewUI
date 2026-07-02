@@ -51,6 +51,7 @@ const StudentDashboard = () => {
     classTeacher: '',
     homework: [],
     classwork: [],
+    weeklyPlans: [],
     timetablePhoto: null,
     permissions: {
       fees: true,
@@ -582,6 +583,7 @@ const StudentDashboard = () => {
       // Fetch Homework and Classwork from Firestore
       let homework = [];
       let classwork = [];
+      let weeklyPlans = [];
       try {
         const HOMEWORK_PATH = 'schooler_system/homework_management/assignments';
         const hQuery = query(collection(db, HOMEWORK_PATH), orderBy('dueDate', 'asc'));
@@ -599,6 +601,14 @@ const StudentDashboard = () => {
           ...docSnapshot.data()
         }));
 
+        const WEEKLY_PLAN_PATH = 'schooler_system/weekly_plan_management/weekly_plans';
+        const wQuery = query(collection(db, WEEKLY_PLAN_PATH), orderBy('startDate', 'desc'));
+        const wSnapshot = await getDocs(wQuery);
+        const allWeeklyPlans = wSnapshot.docs.map(docSnapshot => ({
+          id: docSnapshot.id,
+          ...docSnapshot.data()
+        }));
+
         const studentProgram = profile?.program;
         
         homework = allHomework.filter(item => {
@@ -608,6 +618,12 @@ const StudentDashboard = () => {
         });
 
         classwork = allClasswork.filter(item => {
+          const matchesProgram = !item.program || item.program === studentProgram;
+          const matchesGroup = !item.studentGroup || studentGroups.includes(item.studentGroup);
+          return matchesProgram && matchesGroup;
+        });
+
+        weeklyPlans = allWeeklyPlans.filter(item => {
           const matchesProgram = !item.program || item.program === studentProgram;
           const matchesGroup = !item.studentGroup || studentGroups.includes(item.studentGroup);
           return matchesProgram && matchesGroup;
@@ -793,6 +809,7 @@ const StudentDashboard = () => {
         fullSchedule,
         homework,
         classwork,
+        weeklyPlans,
         notifications: filteredAnnouncements,
         timetablePhoto: timetablePhotoData,
       });
@@ -982,7 +999,8 @@ const StudentDashboard = () => {
         payment_id: record.payment_id || record.order_id || '',
         receipt_date: record.receipt_date || record.verified_at || record.created_at || new Date().toISOString(),
         parent_name: record.parent_name || activeGuardian || '',
-        parent_mobile: record.parent_mobile || profile?.student_mobile_number || ''
+        parent_mobile: record.parent_mobile || profile?.student_mobile_number || '',
+        board_name: profile?.custom_board || ''
       });
       return;
     }
@@ -1020,6 +1038,7 @@ const StudentDashboard = () => {
       discount_name: record.discount_name || '',
       discount_percentage: record.discount_percentage || 0,
       studentGroup: profile?.student_group || record.student_group || record.section || '',
+      boardName: profile?.custom_board || '',
       outstanding: outstanding,
       previous_payments: previous_payments
     };
@@ -1326,11 +1345,36 @@ const StudentDashboard = () => {
                                       href={item.attachmentUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
+                                      style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', marginRight: '16px' }}
                                     >
-                                      Reference Link / Attachment
+                                      Reference Link
                                     </Button>
                                   )}
+                                  {item.uploadedFileUrl && (
+                                    <Button
+                                      type="link"
+                                      icon={<DownloadOutlined />}
+                                      href={item.uploadedFileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', marginRight: '16px' }}
+                                    >
+                                      View Uploaded File
+                                    </Button>
+                                  )}
+                                  {item.uploadedFiles && item.uploadedFiles.map((file, idx) => (
+                                    <Button
+                                      key={idx}
+                                      type="link"
+                                      icon={<DownloadOutlined />}
+                                      href={file.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', marginRight: '16px' }}
+                                    >
+                                      {file.name || `Attachment ${idx + 1}`}
+                                    </Button>
+                                  ))}
                                 </div>
                               }
                             />
@@ -1398,11 +1442,36 @@ const StudentDashboard = () => {
                                       href={item.attachmentUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
+                                      style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', marginRight: '16px' }}
                                     >
-                                      Reference Link / Attachment
+                                      Reference Link
                                     </Button>
                                   )}
+                                  {item.uploadedFileUrl && (
+                                    <Button
+                                      type="link"
+                                      icon={<DownloadOutlined />}
+                                      href={item.uploadedFileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', marginRight: '16px' }}
+                                    >
+                                      View Uploaded File
+                                    </Button>
+                                  )}
+                                  {item.uploadedFiles && item.uploadedFiles.map((file, idx) => (
+                                    <Button
+                                      key={idx}
+                                      type="link"
+                                      icon={<DownloadOutlined />}
+                                      href={file.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ padding: 0, marginTop: '8px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', marginRight: '16px' }}
+                                    >
+                                      {file.name || `Attachment ${idx + 1}`}
+                                    </Button>
+                                  ))}
                                 </div>
                               }
                             />
@@ -1425,6 +1494,53 @@ const StudentDashboard = () => {
                         );
                       }}
                     />
+                  </Tabs.TabPane>
+                  <Tabs.TabPane tab={<span>Weekly Plan ({studentData.weeklyPlans?.length || 0})</span>} key="weeklyPlans">
+                      {(!studentData.weeklyPlans || studentData.weeklyPlans.length === 0) ? (
+                        <Empty description="No weekly plans found" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      ) : (
+                        <div className="flex flex-col gap-4">
+                          {studentData.weeklyPlans.map(plan => (
+                            <Card key={plan.id} size="small" className="shadow-sm border-gray-200" style={{ marginBottom: '16px' }}>
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <Typography.Text strong className="text-lg">{plan.title}</Typography.Text>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Assigned by: {plan.assignedBy || 'Instructor'} • 
+                                    Subject: {plan.subject || 'N/A'} • 
+                                    Dates: {dayjs(plan.startDate).format('MMM DD, YYYY')} - {dayjs(plan.endDate).format('MMM DD, YYYY')}
+                                  </div>
+                                </div>
+                                <Tag color={plan.status === 'Completed' ? 'success' : plan.status === 'In Progress' ? 'processing' : 'default'}>
+                                  {plan.status || 'Assigned'}
+                                </Tag>
+                              </div>
+                              <div className="text-gray-700 text-sm whitespace-pre-wrap mb-3 mt-2 bg-gray-50 p-3 rounded-md">
+                                {plan.description || 'No description provided.'}
+                              </div>
+                              
+                              {plan.uploadedFiles && plan.uploadedFiles.length > 0 && (
+                                <div className="mt-3">
+                                  <Typography.Text type="secondary" className="text-xs mb-1 block">Attachments:</Typography.Text>
+                                  <div className="flex flex-wrap gap-2">
+                                    {plan.uploadedFiles.map((file, idx) => (
+                                      <a
+                                        key={idx}
+                                        href={file.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs hover:bg-blue-100 transition-colors"
+                                      >
+                                        <LinkOutlined /> {file.name || 'Attachment'}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </Card>
+                          ))}
+                        </div>
+                      )}
                   </Tabs.TabPane>
                 </Tabs>
               </Card>

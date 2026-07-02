@@ -900,6 +900,13 @@ export const moduleNavigation = {
                     { label: 'Classwork Assignments', path: '/homework/classwork', studentAccess: true, instructorAccess: true, guardianAccess: true },
                 ],
             },
+            {
+                title: 'Weekly Plan',
+                icon: 'calendar',
+                items: [
+                    { label: 'Weekly Plans', path: '/homework/weekly-plan', studentAccess: true, instructorAccess: true, guardianAccess: true },
+                ],
+            },
         ],
     },
     importLogs: {

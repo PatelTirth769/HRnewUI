@@ -88,6 +88,7 @@ const AdmissionFeesReport = () => {
             receipt_date: record.receipt_date || record.created_at || new Date().toISOString(),
             parent_name: record.parent_name,
             parent_mobile: record.parent_mobile,
+            board_name: record.board || '',
         });
     };
 

@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import schoolHeader from '../../assets/images/newheader.jpeg';
+import gsebHeader from '../../assets/images/gseb_header.png';
 
 /**
  * Convert number to words (reused from FeeReceiptTemplate)
@@ -67,7 +68,8 @@ export const generateAdmissionReceipt = async (data) => {
 
     // ─── HEADER BANNERS ───
     try {
-        const optimizedHeader = await getOptimizedHeaderUrl(schoolHeader);
+        const isGseb = data.board_name && (data.board_name.toLowerCase().includes('gseb(eng)') || data.board_name.toLowerCase().includes('gseb(guj)'));
+        const optimizedHeader = await getOptimizedHeaderUrl(isGseb ? gsebHeader : schoolHeader);
         const format = optimizedHeader.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
         // school_header has aspect ratio 753:136. Margin 15 on each side, width is pageWidth - 30 (180). Height is 180 * (136/753) = 32.5.
         doc.addImage(optimizedHeader, format, 15, 10, 180, 32.5, undefined, 'FAST');

@@ -51,9 +51,9 @@ import { useUserRole } from '../../hooks/useUserRole';
 import { useInstructorGroups } from '../../hooks/useInstructorGroups';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 
-const HOMEWORK_PATH = 'schooler_system/homework_management/assignments';
+const WEEKLY_PLAN_PATH = 'schooler_system/weekly_plan_management/weekly_plans';
 
-export default function HomeworkAssignment() {
+export default function WeeklyPlan() {
     const { isAdmin, isInstructor, isStudent, isGuardian, isCoordinator } = useUserRole();
     const isWriteAllowed = isAdmin || isInstructor || isCoordinator;
     const instructorData = useInstructorGroups();
@@ -85,26 +85,25 @@ export default function HomeworkAssignment() {
     const [filterStatus, setFilterStatus] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Fetch Homework Assignments from Firestore
+    // Fetch Weekly Plan Assignments from Firestore
     const fetchAssignments = async () => {
         setLoading(true);
         try {
-            const q = query(collection(db, HOMEWORK_PATH), orderBy('dueDate', 'asc'));
+            const q = query(collection(db, WEEKLY_PLAN_PATH), orderBy('startDate', 'desc'));
             const snapshot = await getDocs(q);
             const data = snapshot.docs.map(docSnapshot => ({
                 id: docSnapshot.id,
                 ...docSnapshot.data(),
-                // Convert Firestore timestamps or ISO strings safely
                 created_at: docSnapshot.data().created_at?.toDate 
                     ? docSnapshot.data().created_at.toDate() 
                     : new Date(docSnapshot.data().created_at || Date.now())
             }));
             setAssignments(data);
         } catch (error) {
-            console.error('Error fetching homework:', error);
+            console.error('Error fetching classwork:', error);
             notification.error({
                 message: 'Error',
-                description: 'Failed to fetch homework assignments.'
+                description: 'Failed to fetch weekly plans.'
             });
         } finally {
             setLoading(false);
@@ -149,7 +148,8 @@ export default function HomeworkAssignment() {
                 program: values.program || '',
                 studentGroup: values.studentGroup || '',
                 subject: values.subject || '',
-                dueDate: values.dueDate.format('YYYY-MM-DD'),
+                startDate: values.planDates[0].format('YYYY-MM-DD'),
+                endDate: values.planDates[1].format('YYYY-MM-DD'),
                 status: values.status || 'Assigned',
                 attachmentUrl: values.attachmentUrl || '',
                 uploadedFiles: uploadedFiles || [],
@@ -160,19 +160,19 @@ export default function HomeworkAssignment() {
 
             if (editingRecord) {
                 // Update assignment in Firestore
-                const docRef = doc(db, HOMEWORK_PATH, editingRecord.id);
+                const docRef = doc(db, WEEKLY_PLAN_PATH, editingRecord.id);
                 await updateDoc(docRef, payload);
                 notification.success({
                     message: 'Success',
-                    description: 'Homework assignment updated successfully.'
+                    description: 'Weekly Plan assignment updated successfully.'
                 });
             } else {
                 // Add new assignment to Firestore
                 payload.created_at = serverTimestamp();
-                await addDoc(collection(db, HOMEWORK_PATH), payload);
+                await addDoc(collection(db, WEEKLY_PLAN_PATH), payload);
                 notification.success({
                     message: 'Success',
-                    description: 'Homework assigned successfully.'
+                    description: 'Weekly Plan assigned successfully.'
                 });
             }
             
@@ -181,10 +181,10 @@ export default function HomeworkAssignment() {
             setEditingRecord(null);
             fetchAssignments();
         } catch (error) {
-            console.error('Error saving homework:', error);
+            console.error('Error saving classwork:', error);
             notification.error({
                 message: 'Error',
-                description: 'Failed to save homework assignment.'
+                description: 'Failed to save weekly plan.'
             });
         }
     };
@@ -205,17 +205,17 @@ export default function HomeworkAssignment() {
                     });
                 }
             }
-            await deleteDoc(doc(db, HOMEWORK_PATH, record.id));
+            await deleteDoc(doc(db, WEEKLY_PLAN_PATH, record.id));
             notification.success({
                 message: 'Success',
-                description: 'Homework assignment deleted successfully.'
+                description: 'Weekly Plan assignment deleted successfully.'
             });
             fetchAssignments();
         } catch (error) {
-            console.error('Error deleting homework:', error);
+            console.error('Error deleting classwork:', error);
             notification.error({
                 message: 'Error',
-                description: 'Failed to delete homework assignment.'
+                description: 'Failed to delete weekly plan.'
             });
         }
     };
@@ -227,7 +227,7 @@ export default function HomeworkAssignment() {
         setUploadedFiles([]);
         form.resetFields();
         form.setFieldsValue({
-            dueDate: dayjs().add(1, 'day'),
+            planDates: [dayjs(), dayjs().add(7, 'day')],
             status: 'Assigned',
             assignedBy: isCoordinator ? 'Coordinator' : (isInstructor ? 'Instructor' : 'Admin')
         });
@@ -256,7 +256,7 @@ export default function HomeworkAssignment() {
             program: record.program,
             studentGroup: record.studentGroup,
             subject: record.subject,
-            dueDate: dayjs(record.dueDate),
+            planDates: [dayjs(record.startDate), dayjs(record.endDate)],
             status: record.status,
             attachmentUrl: record.attachmentUrl,
             estimatedMinutes: record.estimatedMinutes,
@@ -270,14 +270,10 @@ export default function HomeworkAssignment() {
         return assignments.filter(item => {
             if (isCoordinator) {
                 if (coordinatorScope.loading) return false;
-                if (!item.program || !coordinatorScope.programs.includes(item.program)) {
-                    return false;
-                }
+                if (!item.program || !coordinatorScope.programs.includes(item.program)) return false;
             } else if (isInstructor) {
                 if (instructorData.loading) return false;
-                if (!item.studentGroup || !instructorData.studentGroups.includes(item.studentGroup)) {
-                    return false;
-                }
+                if (!item.studentGroup || !instructorData.studentGroups.includes(item.studentGroup)) return false;
             }
             const matchesBoard = !filterBoard || item.board === filterBoard;
             const matchesProgram = !filterProgram || item.program === filterProgram;
@@ -385,7 +381,6 @@ export default function HomeworkAssignment() {
         return groups;
     }, [studentGroups, programs, filterBoard, filterProgram, isInstructor, instructorData, isCoordinator, coordinatorScope]);
 
-
     // Reset all filters
     const handleClearFilters = () => {
         setFilterBoard('');
@@ -397,11 +392,11 @@ export default function HomeworkAssignment() {
     };
 
     // Download/Export Excel
-    const handleDownloadHomework = () => {
+    const handleDownloadWeeklyPlan = () => {
         if (filteredAssignments.length === 0) {
             notification.warning({
                 message: 'No Data',
-                description: 'No homework records found to download.'
+                description: 'No classwork records found to download.'
             });
             return;
         }
@@ -413,7 +408,8 @@ export default function HomeworkAssignment() {
             'Board': item.board || 'Any',
             'Program': item.program || 'Any',
             'Student Group': item.studentGroup || 'Any',
-            'Due Date': item.dueDate,
+            'Start Date': item.startDate,
+            'End Date': item.endDate,
             'Status': item.status,
             'Estimated Duration (mins)': item.estimatedMinutes || '',
             'Assigned By': item.assignedBy || 'Instructor'
@@ -421,12 +417,12 @@ export default function HomeworkAssignment() {
 
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Homework');
-        XLSX.writeFile(workbook, `Homework_Assignments_${dayjs().format('YYYY_MM_DD')}.xlsx`);
-
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Weekly Plan');
+        XLSX.writeFile(workbook, `Weekly Plan_Assignments_${dayjs().format('YYYY_MM_DD')}.xlsx`);
+        
         notification.success({
             message: 'Export Successful',
-            description: 'Homework records exported to Excel.'
+            description: 'Weekly Plan records exported to Excel.'
         });
     };
 
@@ -442,14 +438,14 @@ export default function HomeworkAssignment() {
                     <span className="text-gray-500 text-xs mt-1 line-clamp-2" title={record.description}>
                         {record.description}
                     </span>
-                    {record.attachmentUrl && (
+                    {(record.attachmentUrl || record.uploadedFileUrl) && (
                         <a 
-                            href={record.attachmentUrl} 
+                            href={record.attachmentUrl || record.uploadedFileUrl} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-800 text-xs mt-2 flex items-center gap-1 w-max"
                         >
-                            <LinkOutlined /> Attachment Link
+                            <LinkOutlined /> {record.attachmentUrl ? 'Attachment Link' : 'View Uploaded File'}
                         </a>
                     )}
                 </div>
@@ -473,17 +469,17 @@ export default function HomeworkAssignment() {
             )
         },
         {
-            title: 'Due Date',
-            key: 'dueDate',
-            sorter: (a, b) => new Date(a.dueDate) - new Date(b.dueDate),
+            title: 'Weekly Plan Date',
+            key: 'startDate',
+            sorter: (a, b) => new Date(a.startDate) - new Date(b.startDate),
             render: (_, record) => {
-                const isOverdue = dayjs(record.dueDate).isBefore(dayjs(), 'day') && record.status !== 'Completed';
+                const isOverdue = dayjs(record.startDate).isBefore(dayjs(), 'day') && record.status !== 'Completed';
                 return (
                     <div className="flex flex-col">
                         <div className="flex items-center gap-1.5 text-xs font-semibold">
                             <CalendarOutlined className={isOverdue ? 'text-red-500' : 'text-gray-400'} />
                             <span className={isOverdue ? 'text-red-600 font-bold' : 'text-gray-700'}>
-                                {dayjs(record.dueDate).format('DD MMM YYYY')}
+                                {dayjs(record.startDate).format('DD MMM YYYY')}
                             </span>
                         </div>
                         {record.estimatedMinutes && (
@@ -525,16 +521,16 @@ export default function HomeworkAssignment() {
             width: 120,
             render: (_, record) => (
                 <Space size="middle">
-                    <Tooltip title="Edit Assignment">
+                    <Tooltip title="Edit Weekly Plan">
                         <Button 
                             type="text" 
                             icon={<EditOutlined className="text-blue-500" />} 
                             onClick={() => handleEditOpen(record)} 
                         />
                     </Tooltip>
-                    <Tooltip title="Delete Assignment">
+                    <Tooltip title="Delete Weekly Plan">
                         <Popconfirm
-                            title="Delete this assignment?"
+                            title="Delete this classwork?"
                             onConfirm={() => handleDelete(record)}
                             okText="Yes"
                             cancelText="No"
@@ -558,16 +554,16 @@ export default function HomeworkAssignment() {
                 <div>
                     <h2 className="text-[22px] font-bold text-gray-900 tracking-tight flex items-center gap-2">
                         <FileTextOutlined className="text-blue-600" />
-                        Homework
+                        Weekly Plan
                     </h2>
                     <p className="text-xs text-gray-500 mt-1 font-medium">
-                        Assign, track, and manage student homework assignments. Configured in Firebase.
+                        Assign, track, and manage student classwork & activities. Configured in Firebase.
                     </p>
                 </div>
                 <div className="flex gap-3">
                     <Button 
                         icon={<DownloadOutlined />} 
-                        onClick={handleDownloadHomework}
+                        onClick={handleDownloadWeeklyPlan}
                         size="large"
                         className="border-gray-300 text-gray-700 hover:text-blue-600 hover:border-blue-600 font-semibold"
                     >
@@ -581,7 +577,7 @@ export default function HomeworkAssignment() {
                             onClick={handleCreateOpen}
                             size="large"
                         >
-                            Assign Homework
+                            Assign Weekly Plan
                         </Button>
                     )}
                 </div>
@@ -591,7 +587,7 @@ export default function HomeworkAssignment() {
             <div className="bg-white border border-gray-100 rounded-xl p-5 mb-6 shadow-sm">
                 <div className="flex justify-between items-center mb-3">
                     <span className="text-[11px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                        <SearchOutlined /> Filter Assignments
+                        <SearchOutlined /> Filter Weekly Plan
                     </span>
                     {(filterProgram || filterGroup || filterSubject || filterStatus || searchQuery) && (
                         <Button 
@@ -707,22 +703,22 @@ export default function HomeworkAssignment() {
                 <Table
                     columns={columns}
                     dataSource={filteredAssignments}
-                    loading={loading || loadingMasters || (isCoordinator ? coordinatorScope.loading : false)}
+                    loading={loading || loadingMasters || (isCoordinator ? coordinatorScope.loading : false) || (isInstructor ? instructorData.loading : false)}
                     rowKey="id"
                     pagination={{ 
                         pageSize: 10,
                         showSizeChanger: true,
-                        showTotal: (total) => `Total ${total} assignments`
+                        showTotal: (total) => `Total ${total} activities`
                     }}
                     locale={{
-                        emptyText: <Empty description="No homework assignments found." />
+                        emptyText: <Empty description="No weekly plans found." />
                     }}
                 />
             </div>
 
             {/* Form Modal */}
             <Modal
-                title={editingRecord ? "Edit Homework Assignment" : "Assign New Homework"}
+                title={editingRecord ? "Edit Weekly Plan Assignment" : "Assign New Weekly Plan"}
                 open={isModalOpen}
                 onCancel={() => setIsModalOpen(false)}
                 footer={null}
@@ -737,10 +733,10 @@ export default function HomeworkAssignment() {
                 >
                     <Form.Item
                         name="title"
-                        label="Homework Title / Topic"
-                        rules={[{ required: true, message: 'Please enter homework title' }]}
+                        label="Weekly Plan Title / Topic"
+                        rules={[{ required: true, message: 'Please enter classwork title' }]}
                     >
-                        <Input placeholder="e.g., Chapter 3: Quadratic Equations Exercise 3.2" />
+                        <Input placeholder="e.g., Chapter 3: In-Class Practice Exercise 3.2" />
                     </Form.Item>
 
                     <Form.Item
@@ -750,7 +746,7 @@ export default function HomeworkAssignment() {
                     >
                         <Input.TextArea 
                             rows={4} 
-                            placeholder="Detail out the assignments steps, pages to read, or questions to solve..." 
+                            placeholder="Detail out the classwork steps, questions to practice, or group tasks..." 
                         />
                     </Form.Item>
 
@@ -807,27 +803,13 @@ export default function HomeworkAssignment() {
                         </Form.Item>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                         <Form.Item
-                            name="subject"
-                            label="Subject (Course)"
-                            rules={[{ required: true, message: 'Please type or select Subject (Course)' }]}
+                            name="planDates"
+                            label="Plan Dates"
+                            rules={[{ required: true, message: 'Please pick start and end dates' }]}
                         >
-                            <AutoComplete
-                                placeholder="Type or select Subject (Course)"
-                                options={subjects.map(s => ({ value: s.name }))}
-                                filterOption={(inputValue, option) =>
-                                    option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
-                                }
-                            />
-                        </Form.Item>
-
-                        <Form.Item
-                            name="dueDate"
-                            label="Due Date"
-                            rules={[{ required: true, message: 'Please pick a due date' }]}
-                        >
-                            <DatePicker className="w-full" format="YYYY-MM-DD" />
+                            <DatePicker.RangePicker className="w-full" format="YYYY-MM-DD" />
                         </Form.Item>
                     </div>
 

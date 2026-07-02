@@ -722,6 +722,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             receipt_date: record.paymentDate || record.created_at || new Date().toISOString(),
             parent_name: record.guardians?.[0]?.guardian_name || '',
             parent_mobile: record.student_mobile_number || '',
+            board_name: record.custom_board || record.board || '',
         });
     };
 

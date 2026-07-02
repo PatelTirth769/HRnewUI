@@ -228,6 +228,20 @@ export default function CoordinatorDashboard() {
                                 <span style={{ fontWeight: 500, color: '#334155' }}>Review Leave Applications</span>
                                 <RightOutlined style={{ color: '#94a3b8', fontSize: 12 }} />
                             </div>
+                            <div 
+                                onClick={() => navigate('/homework/assignments')}
+                                style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: 8, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                            >
+                                <span style={{ fontWeight: 500, color: '#334155' }}>Assign Homework</span>
+                                <RightOutlined style={{ color: '#94a3b8', fontSize: 12 }} />
+                            </div>
+                            <div 
+                                onClick={() => navigate('/homework/classwork')}
+                                style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: 8, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                            >
+                                <span style={{ fontWeight: 500, color: '#334155' }}>Assign Classwork</span>
+                                <RightOutlined style={{ color: '#94a3b8', fontSize: 12 }} />
+                            </div>
                         </div>
                     </div>
                 </div>
