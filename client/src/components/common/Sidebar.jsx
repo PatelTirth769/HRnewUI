@@ -327,7 +327,7 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
             <div className={`fixed inset-y-0 left-0 w-72 bg-white z-[50] transform transition-transform duration-300 ease-in-out shadow-2xl flex flex-col border-r border-gray-100 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="p-6 border-b border-gray-50 flex flex-col gap-4 bg-white sticky top-0 z-10">
                     <div className="flex justify-between items-center">
-                        <img src={branding.sidebarLogo} alt={`${branding.displayName} logo`} className="h-10 w-auto object-contain" />
+                        <img src={branding.sidebarLogo} alt={`${branding.displayName} logo`} className="h-14 w-auto object-contain" />
                         <button
                             onClick={onClose}
                             className="p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 text-gray-400 hover:text-gray-600 group"
@@ -381,7 +381,11 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
                                 // Instructors get full access to everything in Education module, 
                                 // but we only show the relevant dashboard in the Overview section.
                                 if ((isInstructor || isCoordinator) && activeModule === 'education') {
-                                    if (section.title === 'Overview') return item.instructorAccess === true;
+                                    if (section.title === 'Overview') {
+                                        if (isCoordinator && item.coordinatorAccess) return true;
+                                        if (isInstructor && item.instructorAccess) return true;
+                                        return false;
+                                    }
                                     return true;
                                 }
                                 if (isInstructor || isCoordinator) return item.instructorAccess === true;

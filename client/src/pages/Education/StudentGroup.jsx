@@ -5,6 +5,8 @@ import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/
 import { sortEducationalLevels } from '../../utility/sortHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 const { Option } = Select;
 
@@ -278,9 +280,42 @@ const StudentGroup = () => {
             setStudentCategories((categoryRes.data.data || []).map(c => c.name));
             setInstructorsList((instructorRes.data.data || []).map(i => ({ name: i.name, instructor_name: i.instructor_name || i.name })));
             setCoursesList((courseRes.data.data || []).map(c => c.name));
+
+            // [NEW LOGIC] - Map ERP Student IDs to original full names from Registrations database
+            let studentFullNameMap = {};
+            try {
+                const admissionsRef = collection(db, 'schooler_system/enquiry_management/final_admissions');
+                const admissionsSnap = await getDocs(admissionsRef);
+                const admissions = admissionsSnap.docs.map(d => d.data());
+
+                const registrationsRef = collection(db, 'schooler_system/enquiry_management/registrations');
+                const registrationsSnap = await getDocs(registrationsRef);
+                const registrations = registrationsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+
+                const regMap = {};
+                for (const r of registrations) {
+                    if (r.id) regMap[r.id] = r.student_full_name;
+                }
+
+                for (const adm of admissions) {
+                    if (adm.erp_student_id && adm.registrationId) {
+                        const fullName = regMap[adm.registrationId];
+                        if (fullName) {
+                            studentFullNameMap[adm.erp_student_id] = fullName;
+                        } else if (adm.student_full_name) {
+                            studentFullNameMap[adm.erp_student_id] = adm.student_full_name;
+                        }
+                    } else if (adm.erp_student_id && adm.student_full_name) {
+                        studentFullNameMap[adm.erp_student_id] = adm.student_full_name;
+                    }
+                }
+            } catch (fbErr) {
+                console.error("Error fetching firebase data for full names:", fbErr);
+            }
+
             setStudentsList((studentRes.data.data || []).map(s => ({
                 name: s.name,
-                student_name: `${s.first_name || ''} ${s.last_name || ''}`.trim(),
+                student_name: studentFullNameMap[s.name] || `${s.first_name || ''} ${s.last_name || ''}`.trim(),
                 custom_board: s.custom_board || ''
             })));
         } catch (err) {
@@ -967,7 +1002,9 @@ const StudentGroup = () => {
                                                                 ))}
                                                             </Select>
                                                         </td>
-                                                        <td className="px-3 py-2.5 text-gray-500">{s.student_name || '-'}</td>
+                                                        <td className="px-3 py-2.5 text-gray-500">
+                                                            {studentsList.find(sl => sl.name === s.student)?.student_name || s.student_name || '-'}
+                                                        </td>
                                                         <td className="px-3 py-2.5">
                                                             <input type="text" className="w-full border border-gray-200 rounded px-2 py-1 text-sm bg-white focus:outline-none focus:border-blue-400"
                                                                 value={s.group_roll_number || ''} onChange={e => updateStudentRow(idx, 'group_roll_number', e.target.value)} />

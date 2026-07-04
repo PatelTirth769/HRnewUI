@@ -829,6 +829,31 @@ router.post('/assign-discount', requireAdminAuth, async (req, res) => {
     }
 });
 
+
+// Added Delete Route
+router.delete('/receipt/:id', requireAdminAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const systemCode = req.query.systemCode || 'schooler';
+        const col = feePaymentsCol(systemCode);
+        await col.doc(id).delete();
+        
+        // Also delete from fee_receipts if it exists
+        const receiptsCol = getCollection(db, systemCode, 'fee_receipts');
+        const q = await receiptsCol.where('payment_id', '==', id).get();
+        if (!q.empty) {
+            const batch = db.batch();
+            q.docs.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+        }
+
+        res.json({ success: true, message: 'Receipt deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting receipt:', error);
+        res.status(500).json({ success: false, message: 'Failed to delete receipt' });
+    }
+});
+
 module.exports = router;
 
 /**

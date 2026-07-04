@@ -207,16 +207,32 @@ export const generateAdmissionReceipt = async (data) => {
     let afterFeeY = doc.lastAutoTable.finalY + 6;
     const pageHeight = doc.internal.pageSize.getHeight();
 
+    const hasRef = data.manual_receipt_ref && data.manual_receipt_ref.trim() !== '';
+    const hasRemarks = data.remarks && data.remarks.trim() !== '';
+    let boxHeight = 28;
+    if (hasRef) boxHeight += 8;
+    if (hasRemarks) boxHeight += 8;
+
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(15, afterFeeY, pageWidth - 30, 28, 3, 3, 'F');
+    doc.roundedRect(15, afterFeeY, pageWidth - 30, boxHeight, 3, 3, 'F');
     doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(15, afterFeeY, pageWidth - 30, 28, 3, 3, 'S');
+    doc.roundedRect(15, afterFeeY, pageWidth - 30, boxHeight, 3, 3, 'S');
 
     doc.setTextColor(71, 85, 105);
     doc.setFontSize(8.5);
     doc.setFont('helvetica', 'bold');
     doc.text('Payment Mode:', 20, afterFeeY + 7);
     doc.text('Transaction ID:', 20, afterFeeY + 15);
+    
+    let labelY = afterFeeY + 23;
+    if (hasRef) {
+        doc.text('Reference No:', 20, labelY);
+        labelY += 8;
+    }
+    if (hasRemarks) {
+        doc.text('Remarks:', 20, labelY);
+        labelY += 8;
+    }
 
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(9.5);
@@ -225,17 +241,29 @@ export const generateAdmissionReceipt = async (data) => {
         ? 'ONLINE PAYMENT (Razorpay)'
         : (data.payment_mode || '').toUpperCase();
     doc.text(paymentModeDisplay, 60, afterFeeY + 7);
-    doc.text(data.payment_id || data.manual_receipt_ref || 'N/A', 60, afterFeeY + 15);
+    
+    const displayTxId = data.payment_id && !data.payment_id.startsWith('manual_') ? data.payment_id : (data.payment_id || 'N/A');
+    doc.text(displayTxId, 60, afterFeeY + 15);
+
+    let valY = afterFeeY + 23;
+    if (hasRef) {
+        doc.text(data.manual_receipt_ref.trim(), 60, valY);
+        valY += 8;
+    }
+    if (hasRemarks) {
+        doc.text(data.remarks.trim(), 60, valY);
+        valY += 8;
+    }
 
     // Amount in words
     doc.setTextColor(30, 58, 138);
     doc.setFontSize(9.5);
     doc.setFont('helvetica', 'bolditalic');
-    doc.text(`Amount in Words: ${numberToWords(Math.round(amount))}`, 20, afterFeeY + 23);
+    doc.text(`Amount in Words: ${numberToWords(Math.round(amount))}`, 20, valY);
 
     // ─── FOOTER ───
     // Beautifully spaced below the box, guaranteed to be inside printable margins
-    const footerY = Math.min(afterFeeY + 36, pageHeight - 20);
+    const footerY = Math.min(afterFeeY + boxHeight + 8, pageHeight - 20);
 
     doc.setTextColor(148, 163, 184);
     doc.setFontSize(8);

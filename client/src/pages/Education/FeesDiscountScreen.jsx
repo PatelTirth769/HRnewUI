@@ -28,8 +28,10 @@ const FeesDiscountScreen = () => {
     const [assignments, setAssignments] = useState([]);
     const [loadingAssignments, setLoadingAssignments] = useState(false);
     const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
-    const [dropdowns, setDropdowns] = useState({ students: [], academicYears: [], programs: [], terms: [], boards: [] });
-    const [assignForm, setAssignForm] = useState({ discount_id: '', student_id: [], academic_year: '', target_type: 'specific', program: '', board: '', terms: [] });
+    const [dropdowns, setDropdowns] = useState({ students: [], academicYears: [], programs: [], terms: [], boards: [], studentGroups: [] });
+    const [assignForm, setAssignForm] = useState({ discount_id: '', academic_year: '', target_type: 'specific', program: '', board: '', terms: [] });
+    const [assignFilters, setAssignFilters] = useState({ board: '', program: '', student_group: '', search: '' });
+    const [selectedStudentKeys, setSelectedStudentKeys] = useState([]);
     const [assigning, setAssigning] = useState(false);
 
     useEffect(() => {
@@ -104,24 +106,27 @@ const FeesDiscountScreen = () => {
     // --- Assignment Logic ---
     const fetchDropdowns = async () => {
         try {
-            const [sRes, yRes, pRes, tRes, cRes] = await Promise.all([
-                API.get('/api/resource/Student?fields=["name","first_name","last_name","program","custom_board"]&limit_page_length=None').catch(() => ({ data: { data: [] } })),
+            const [sRes, yRes, pRes, tRes, cRes, sgRes] = await Promise.all([
+                API.get('/api/resource/Student', { params: { fields: JSON.stringify(["name", "student_name", "program", "custom_board"]), limit_page_length: 'None' } }).catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Academic Year?limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Program?limit_page_length=None').catch(() => ({ data: { data: [] } })),
                 API.get('/api/resource/Fee Category?limit_page_length=None').catch(() => ({ data: { data: [] } })),
-                API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } }))
+                API.get('/api/resource/Company?fields=["name"]&limit_page_length=None&order_by=name asc').catch(() => ({ data: { data: [] } })),
+                API.get('/api/resource/Student Group?fields=["name"]&limit_page_length=None').catch(() => ({ data: { data: [] } }))
             ]);
             setDropdowns({
                 students: sRes.data.data?.map(d => ({
                     id: d.name,
-                    name: `${d.first_name || ''} ${d.last_name || ''}`.trim(),
+                    name: d.student_name || d.name,
                     program: d.program || '',
-                    board: d.custom_board || ''
+                    board: d.custom_board || '',
+                    student_group: ''
                 })) || [],
                 boards: cRes.data.data?.map(c => c.name) || [...new Set((sRes.data.data || []).map(d => d.custom_board).filter(Boolean))].sort(),
                 academicYears: yRes.data.data?.map(d => d.name) || [],
                 programs: pRes.data.data?.map(d => d.name) || [],
-                terms: tRes.data.data?.map(d => d.name) || []
+                terms: tRes.data.data?.map(d => d.name) || [],
+                studentGroups: sgRes.data.data?.map(d => d.name) || []
             });
         } catch (err) {
             console.error('Dropdown fetch error:', err);
@@ -156,36 +161,14 @@ const FeesDiscountScreen = () => {
             return;
         }
 
-        let studentIds = [];
-
-        if (assignForm.target_type === 'program') {
-            if (!assignForm.program) {
-                notification.warning({ message: 'Please select a Program' });
-                return;
-            }
-            studentIds = dropdowns.students
-                .filter(s => s.program === assignForm.program && (!assignForm.board || s.board === assignForm.board))
-                .map(s => s.id);
-        } else if (assignForm.target_type === 'all') {
-            studentIds = dropdowns.students
-                .filter(s => !assignForm.board || s.board === assignForm.board)
-                .map(s => s.id);
-        } else {
-            if (!assignForm.student_id || assignForm.student_id.length === 0) {
-                notification.warning({ message: 'Please select at least one student' });
-                return;
-            }
-            studentIds = Array.isArray(assignForm.student_id) ? assignForm.student_id : [assignForm.student_id];
-        }
-
-        if (studentIds.length === 0) {
-            notification.warning({ message: 'No students found for the selected target' });
+        if (selectedStudentKeys.length === 0) {
+            notification.warning({ message: 'Please select at least one student from the table' });
             return;
         }
 
         setAssigning(true);
         try {
-            await Promise.all(studentIds.map(stId => 
+            await Promise.all(selectedStudentKeys.map(stId => 
                 axios.post('/local-api/payment/assign-discount', {
                     systemCode: currentSystemCode,
                     discount_id: assignForm.discount_id,
@@ -195,8 +178,9 @@ const FeesDiscountScreen = () => {
                 }, { withCredentials: true })
             ));
             
-            notification.success({ message: `Discount assigned to ${studentIds.length} student(s) successfully` });
+            notification.success({ message: `Discount assigned to ${selectedStudentKeys.length} student(s) successfully` });
             setIsAssignModalVisible(false);
+            setSelectedStudentKeys([]);
             fetchAssignments();
         } catch (err) {
             console.error('Assign error:', err);
@@ -261,6 +245,27 @@ const FeesDiscountScreen = () => {
             )
         }
     ];
+
+    const assignTableColumns = [
+        { title: 'ID', dataIndex: 'id', key: 'id', width: 100 },
+        { title: 'Student Name', dataIndex: 'name', key: 'name' },
+        { title: 'Program', dataIndex: 'program', key: 'program', width: 120 },
+        { title: 'Board', dataIndex: 'board', key: 'board', width: 150 },
+        { title: 'Section', dataIndex: 'student_group', key: 'student_group', width: 150 },
+    ];
+
+    const filteredStudentsForAssign = React.useMemo(() => {
+        return dropdowns.students.filter(s => {
+            if (assignFilters.board && s.board !== assignFilters.board) return false;
+            if (assignFilters.program && s.program !== assignFilters.program) return false;
+            if (assignFilters.student_group && s.student_group !== assignFilters.student_group) return false;
+            if (assignFilters.search) {
+                const q = assignFilters.search.toLowerCase();
+                if (!s.name.toLowerCase().includes(q) && !s.id.toLowerCase().includes(q)) return false;
+            }
+            return true;
+        });
+    }, [dropdowns.students, assignFilters]);
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
@@ -327,115 +332,81 @@ const FeesDiscountScreen = () => {
 
             {/* Assign Modal */}
             <Modal
-                title="Assign Discount to Student"
+                title="Assign Bulk Discount to Students"
                 visible={isAssignModalVisible}
                 onCancel={() => setIsAssignModalVisible(false)}
-                footer={[
-                    <Button key="back" onClick={() => setIsAssignModalVisible(false)}>Cancel</Button>,
-                    <Button key="submit" type="primary" loading={assigning} onClick={handleAssignDiscount}>Assign & Apply</Button>
-                ]}
+                width={1000}
+                footer={null}
             >
-                <div className="space-y-4 pt-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Academic Year *</label>
-                        <Select
-                            showSearch
-                            className="w-full"
-                            placeholder="Select Year"
-                            value={assignForm.academic_year}
-                            onChange={val => setAssignForm({ ...assignForm, academic_year: val })}
-                        >
-                            {dropdowns.academicYears.map(t => <Option key={t} value={t}>{t}</Option>)}
-                        </Select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Board (Optional)</label>
-                        <Select
-                            showSearch
-                            allowClear
-                            className="w-full"
-                            placeholder="Select Board to filter"
-                            value={assignForm.board}
-                            onChange={val => setAssignForm({ ...assignForm, board: val, student_id: [] })}
-                        >
-                            {dropdowns.boards.map(b => <Option key={b} value={b}>{b}</Option>)}
-                        </Select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Assign To Target *</label>
-                        <Radio.Group 
-                            value={assignForm.target_type} 
-                            onChange={e => setAssignForm({ ...assignForm, target_type: e.target.value, student_id: [], program: '' })}
-                            className="w-full mb-2"
-                        >
-                            <Radio.Button value="specific">Specific Students</Radio.Button>
-                            <Radio.Button value="program">Entire Program</Radio.Button>
-                            <Radio.Button value="all">All Students</Radio.Button>
-                        </Radio.Group>
-                    </div>
-
-                    {assignForm.target_type === 'program' && (
+                <div className="flex flex-col space-y-4">
+                    {/* Top Filters */}
+                    <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50 rounded border">
                         <div>
-                            <label className="block text-sm font-medium mb-1">Select Program *</label>
-                            <Select
-                                showSearch
-                                allowClear
-                                className="w-full"
-                                placeholder="Select Program"
-                                value={assignForm.program}
-                                onChange={val => setAssignForm({ ...assignForm, program: val })}
-                            >
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Filter Board</label>
+                            <Select allowClear className="w-full" placeholder="All Boards" value={assignFilters.board} onChange={v => setAssignFilters({...assignFilters, board: v})}>
+                                {dropdowns.boards.map(b => <Option key={b} value={b}>{b}</Option>)}
+                            </Select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Filter Class/Program</label>
+                            <Select allowClear className="w-full" placeholder="All Classes" value={assignFilters.program} onChange={v => setAssignFilters({...assignFilters, program: v})}>
                                 {dropdowns.programs.map(p => <Option key={p} value={p}>{p}</Option>)}
                             </Select>
                         </div>
-                    )}
-
-                    {assignForm.target_type === 'specific' && (
                         <div>
-                            <label className="block text-sm font-medium mb-1">Student(s) *</label>
-                            <Select
-                                showSearch
-                                mode="multiple"
-                                allowClear
-                                className="w-full"
-                                placeholder="Select Student(s)"
-                                optionFilterProp="children"
-                                value={assignForm.student_id}
-                                onChange={val => setAssignForm({ ...assignForm, student_id: val })}
-                            >
-                                {dropdowns.students
-                                    .filter(s => !assignForm.board || s.board === assignForm.board)
-                                    .map(s => <Option key={s.id} value={s.id}>{s.id} - {s.name}</Option>)}
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Filter Section/Group</label>
+                            <Select allowClear className="w-full" placeholder="All Sections" value={assignFilters.student_group} onChange={v => setAssignFilters({...assignFilters, student_group: v})}>
+                                {dropdowns.studentGroups.map(g => <Option key={g} value={g}>{g}</Option>)}
                             </Select>
                         </div>
-                    )}
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Search Student</label>
+                            <Input placeholder="Search name or ID..." value={assignFilters.search} onChange={e => setAssignFilters({...assignFilters, search: e.target.value})} allowClear />
+                        </div>
+                    </div>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Terms (Optional)</label>
-                        <Select
-                            mode="multiple"
-                            allowClear
-                            className="w-full"
-                            placeholder="Select specific terms (Leave empty for All Terms)"
-                            value={assignForm.terms}
-                            onChange={val => setAssignForm({ ...assignForm, terms: val })}
-                        >
-                            {dropdowns.terms.map(t => <Option key={t} value={t}>{t}</Option>)}
-                        </Select>
+                    {/* Table */}
+                    <div className="border rounded">
+                        <Table 
+                            rowSelection={{
+                                selectedRowKeys: selectedStudentKeys,
+                                onChange: (selectedRowKeys) => setSelectedStudentKeys(selectedRowKeys)
+                            }}
+                            columns={assignTableColumns} 
+                            dataSource={filteredStudentsForAssign} 
+                            rowKey="id"
+                            pagination={{ pageSize: 10 }}
+                            size="small"
+                        />
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Discount Category *</label>
-                        <Select
-                            className="w-full"
-                            placeholder="Select Discount"
-                            value={assignForm.discount_id}
-                            onChange={val => setAssignForm({ ...assignForm, discount_id: val })}
-                        >
-                            {discounts.map(d => <Option key={d.id} value={d.id}>{d.name} ({d.percentage}%)</Option>)}
-                        </Select>
-                    </div>
-                    <div className="bg-blue-50 text-blue-800 p-3 rounded text-xs mt-2 border border-blue-100">
-                        <strong>Note:</strong> Assigning a discount will locate the student's existing Fee record for the selected academic year in ERPNext and automatically add a discount component to reduce the outstanding amount.
+                    
+                    {/* Action Bar */}
+                    <div className="flex items-center space-x-4 p-4 bg-blue-50 border border-blue-100 rounded">
+                        <div className="flex-1 flex space-x-4">
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium text-blue-800 mb-1">Target Academic Year *</label>
+                                <Select className="w-full" placeholder="Select Year" value={assignForm.academic_year} onChange={val => setAssignForm({ ...assignForm, academic_year: val })}>
+                                    {dropdowns.academicYears.map(t => <Option key={t} value={t}>{t}</Option>)}
+                                </Select>
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium text-blue-800 mb-1">Discount Category *</label>
+                                <Select className="w-full" placeholder="Select Discount" value={assignForm.discount_id} onChange={val => setAssignForm({ ...assignForm, discount_id: val })}>
+                                    {discounts.map(d => <Option key={d.id} value={d.id}>{d.name} ({d.percentage}%)</Option>)}
+                                </Select>
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium text-blue-800 mb-1">Terms (Optional)</label>
+                                <Select mode="multiple" allowClear className="w-full" placeholder="All Terms" value={assignForm.terms} onChange={val => setAssignForm({ ...assignForm, terms: val })}>
+                                    {dropdowns.terms.map(t => <Option key={t} value={t}>{t}</Option>)}
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="pt-5">
+                            <Button type="primary" loading={assigning} onClick={handleAssignDiscount} disabled={selectedStudentKeys.length === 0} style={{ background: '#10b981', borderColor: '#10b981' }}>
+                                Apply Discount to {selectedStudentKeys.length} Selected
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </Modal>

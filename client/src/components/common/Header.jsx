@@ -56,7 +56,7 @@ const Header = ({ onModuleClick }) => {
         to={isAttendanceManager ? "/education/student-attendance" : (isAdmin ? "/home" : "/employee-self-service")}
         className={`no-underline text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors flex items-center ${branding.showHeaderTitle ? 'gap-2' : ''}`}
       >
-        <img src={branding.headerLogo} alt={`${branding.displayName} logo`} className="h-10 w-auto object-contain" />
+        <img src={branding.headerLogo} alt={`${branding.displayName} logo`} className="h-14 w-auto object-contain" />
         {branding.showHeaderTitle ? branding.headerTitle : null}
       </Link>
       <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs xl:text-sm text-gray-700 justify-end">
@@ -147,7 +147,7 @@ const Header = ({ onModuleClick }) => {
                   )
                 )}
                 <Link 
-                  to={isStudent ? "/student-dashboard" : (isInstructor || isCoordinator) ? "/instructor-dashboard" : isGuardian ? "/guardian-dashboard" : "/employee-self-service"} 
+                  to={isStudent ? "/student-dashboard" : isCoordinator ? "/coordinator-dashboard" : isInstructor ? "/instructor-dashboard" : isGuardian ? "/guardian-dashboard" : "/employee-self-service"} 
                   target={(isStudent || isInstructor || isCoordinator || isGuardian) ? "_self" : "_blank"} 
                   rel="noopener noreferrer" 
                   className="no-underline text-gray-800 cursor-pointer hover:text-blue-600 transition-colors truncate font-semibold"

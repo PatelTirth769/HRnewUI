@@ -1,4 +1,4 @@
-import defaultLogo from '../assets/images/SSVLOGO.png';
+import defaultLogo from '../assets/images/finalssvloginlogo-removebg-preview.png';
 
 // Change this one value to switch logo set globally.
 export const DEFAULT_BRAND_CODE = 'schooler';

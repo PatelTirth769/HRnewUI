@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Table, Card, Statistic, Row, Col, Tag, Button, Select, Space, Input, DatePicker, notification, Spin, Tooltip, Dropdown, Modal, Form, InputNumber } from 'antd';
 import { 
   SearchOutlined, SyncOutlined, CheckCircleOutlined, ClockCircleOutlined,
-  ExclamationCircleOutlined, FilterOutlined, ClearOutlined, DownloadOutlined,
+  ExclamationCircleOutlined, FilterOutlined, ClearOutlined, DownloadOutlined, DeleteOutlined,
   UserOutlined, BookOutlined, CalendarOutlined, WalletOutlined,
   FileExcelOutlined, EyeOutlined, EyeInvisibleOutlined, PlusCircleOutlined,
   CreditCardOutlined, InfoCircleOutlined
@@ -683,29 +683,67 @@ const StudentFeeCollection = () => {
         setIsMultiPayment(false);
     };
 
+    const handleDeleteReceipt = async (record) => {
+        try {
+            const paymentId = record.order_id || record.payment_id || record.receipt_no;
+            if (!paymentId) {
+                notification.error({ message: 'Error', description: 'Invalid Payment ID' });
+                return;
+            }
+
+            if (window.confirm('Are you sure you want to delete this payment?\nThis action will remove the receipt and mark the fee as unpaid if there are no other payments.')) {
+                try {
+                    await axios.delete(`/local-api/payment/receipt/${paymentId}?systemCode=schooler`);
+                    notification.success({ message: 'Success', description: 'Payment deleted successfully' });
+                    fetchData(); // Refresh table
+                } catch (err) {
+                    console.error('Delete error:', err);
+                    notification.error({ message: 'Error', description: 'Failed to delete payment' });
+                }
+            }
+        } catch (error) {
+            console.error('Error in handleDeleteReceipt:', error);
+        }
+    };
+
     const handleCollectFee = (row) => {
         setIsMultiPayment(false);
         setSelectedRow(row);
+        
+        let matchedDiscountId = null;
+        if (row.discount_name) {
+            const foundCategory = discountCategories.find(c => c.name === row.discount_name || c.id === row.discount_name);
+            if (foundCategory) matchedDiscountId = foundCategory.id;
+        }
+
+        setSelectedDiscountId(matchedDiscountId);
         setPaymentAmount(row.outstanding);
         setPaymentMode('CASH');
         setPaymentDate(dayjs());
         setManualReceiptRef('');
         setManualDiscountAmount(0);
-        setSelectedDiscountId(null);
         setPaymentModalVisible(true);
     };
 
-    const recalculatePaymentAmount = (catId, manualAmt) => {
-        const baseOutstanding = isMultiPayment 
-            ? selectedRows.reduce((sum, r) => sum + r.outstanding, 0)
-            : (selectedRow.outstanding);
+    const recalculatePaymentAmount = (catId, manualAmt, activeRow = selectedRow, multiRows = selectedRows, isMulti = isMultiPayment) => {
+        if (!activeRow && !isMulti) return;
+
+        const getUndiscountedOutstanding = (r) => {
+            const orig = r.original_fee || r.total_fee || r.outstanding || 0;
+            const paid = r.paid_amount || 0;
+            return Math.max(0, orig - paid);
+        };
+
+        const baseOutstanding = isMulti 
+            ? multiRows.reduce((sum, r) => sum + getUndiscountedOutstanding(r), 0)
+            : getUndiscountedOutstanding(activeRow);
             
         let newAmount = baseOutstanding;
 
         if (catId) {
-            const originalAmount = isMultiPayment 
-                ? selectedRows.reduce((sum, r) => sum + (r.original_fee || r.total_fee || r.outstanding), 0)
-                : (selectedRow.original_fee || selectedRow.total_fee || selectedRow.outstanding);
+            const originalAmount = isMulti 
+                ? multiRows.reduce((sum, r) => sum + (r.original_fee || r.total_fee || r.outstanding || 0), 0)
+                : (activeRow.original_fee || activeRow.total_fee || activeRow.outstanding || 0);
             const discount = discountCategories.find(d => d.id === catId);
             if (discount) {
                 const pct = parseFloat(discount.percentage) || 0;
@@ -716,6 +754,7 @@ const StudentFeeCollection = () => {
         if (manualAmt > 0) {
             newAmount -= manualAmt;
         }
+
 
         setPaymentAmount(Math.max(0, newAmount));
     };
@@ -736,6 +775,12 @@ const StudentFeeCollection = () => {
         setIsMultiPayment(true);
         setSelectedRow(selectedRows[0]);
         
+        let matchedDiscountId = null;
+        if (selectedRows[0].discount_name) {
+            const foundCategory = discountCategories.find(c => c.name === selectedRows[0].discount_name || c.id === selectedRows[0].discount_name);
+            if (foundCategory) matchedDiscountId = foundCategory.id;
+        }
+
         const totalOutstanding = selectedRows.reduce((sum, r) => sum + r.outstanding, 0);
         setPaymentAmount(totalOutstanding);
         
@@ -743,7 +788,7 @@ const StudentFeeCollection = () => {
         setPaymentDate(dayjs());
         setManualReceiptRef('');
         setManualDiscountAmount(0);
-        setSelectedDiscountId(null);
+        setSelectedDiscountId(matchedDiscountId);
         setPaymentModalVisible(true);
     };
 
@@ -1065,15 +1110,25 @@ const StudentFeeCollection = () => {
                 if (hasReceipts) {
                     if (r.receipts.length === 1) {
                         receiptAction = (
+                            <>
                             <Button 
                                 type="text" 
                                 icon={<DownloadOutlined style={{ color: '#3b82f6', fontSize: 16 }} />} 
                                 onClick={() => handleDownloadReceipt({...r, ...r.receipts[0], paid_amount: r.receipts[0].amount, receipt_no: r.receipts[0].receipt_no || r.receipts[0].payment_id, paid_date: r.receipts[0].created_at || r.receipts[0].verified_at})} 
                                 title="Download Receipt"
                             />
+                            <Button 
+                                type="text" 
+                                danger
+                                icon={<DeleteOutlined style={{ fontSize: 16 }} />} 
+                                onClick={() => handleDeleteReceipt(r.receipts[0])} 
+                                title="Delete Payment"
+                            />
+                            </>
                         );
                     } else {
                         receiptAction = (
+                            <>
                             <Dropdown
                                 menu={{
                                     items: r.receipts.map((rec, idx) => ({
@@ -1086,16 +1141,33 @@ const StudentFeeCollection = () => {
                             >
                                 <Button type="text" icon={<DownloadOutlined style={{ color: '#3b82f6', fontSize: 16 }} />} title="Download Receipts" />
                             </Dropdown>
+                            <Button 
+                                type="text" 
+                                danger
+                                icon={<DeleteOutlined style={{ fontSize: 16 }} />} 
+                                onClick={() => handleDeleteReceipt(r)} 
+                                title="Delete All Payments"
+                            />
+                            </>
                         );
                     }
                 } else if (r.status === 'PAID' && r.paid_amount > 0) {
                     receiptAction = (
+                        <>
                         <Button 
                             type="text" 
                             icon={<DownloadOutlined style={{ color: '#3b82f6', fontSize: 16 }} />} 
                             onClick={() => handleDownloadReceipt(r)} 
                             title="Download Receipt"
                         />
+                        <Button 
+                            type="text" 
+                            danger
+                            icon={<DeleteOutlined style={{ fontSize: 16 }} />} 
+                            onClick={() => handleDeleteReceipt(r)} 
+                            title="Delete Payment"
+                        />
+                        </>
                     );
                 }
 

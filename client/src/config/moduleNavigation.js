@@ -460,6 +460,7 @@ export const moduleNavigation = {
                 items: [
                     { label: 'Student Dashboard', path: '/student-dashboard', studentAccess: true, hideFromAdmin: true },
                     { label: 'Instructor Dashboard', path: '/instructor-dashboard', instructorAccess: true, hideFromAdmin: true },
+                    { label: 'Coordinator Dashboard', path: '/coordinator-dashboard', coordinatorAccess: true, hideFromAdmin: true },
                     { label: 'Guardian Dashboard', path: '/guardian-dashboard', guardianAccess: true, hideFromAdmin: true },
                 ],
             },

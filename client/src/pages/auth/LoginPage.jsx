@@ -219,7 +219,7 @@ const LoginPage = () => {
         {/* ─── LEFT: Login Form ─── */}
         <div className="login-div card-glass auth-card" style={{ flex: '1 1 auto', borderRight: 'none', borderRadius: '16px'}}>
           <Title level={3} className="auth-title">
-            Login to Schooler
+            Login To SSV Porter
           </Title>
 
           <Form layout="vertical" onFinish={onFinish} form={form}>

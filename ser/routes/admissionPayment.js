@@ -71,7 +71,7 @@ router.post('/create-order', async (req, res) => {
     try {
         const {
             student_name, registration_no, admission_no, program, academic_year,
-            fee_type, fee_name, amount, parent_name, parent_mobile, parent_email
+            fee_type, fee_name, amount, parent_name, parent_mobile, parent_email, total_fee
         } = req.body;
 
         if (!student_name || !amount || !fee_type) {
@@ -90,24 +90,7 @@ router.post('/create-order', async (req, res) => {
             });
         }
 
-        // Create Razorpay Order
-        // 1. Secure Validation: Fetch the expected registration fee from settings
-        let expectedFee = 500; // fallback
-        try {
-            const settingsRef = db.collection('schooler_system').doc('enquiry_management').collection('settings').doc('general');
-            const settingsSnap = await settingsRef.get();
-            if (settingsSnap.exists && settingsSnap.data().registrationFee) {
-                expectedFee = parseFloat(settingsSnap.data().registrationFee);
-            }
-        } catch (e) {
-            console.error('Error fetching settings for fee validation', e);
-        }
-
-        if (parseFloat(amount) < expectedFee) {
-            console.warn(`🚨 [SECURITY WARNING] Client tried to spoof admission fee! Expected: ₹${expectedFee}, Received: ₹${amount}`);
-            return res.status(400).json({ success: false, message: `Security Validation Failed: Amount must be at least ₹${expectedFee}` });
-        }
-
+        // Remove expected fee validation as we now support partial payments
         const amountInPaise = Math.round(numAmount * 100);
         const options = {
             amount: amountInPaise,
@@ -138,6 +121,7 @@ router.post('/create-order', async (req, res) => {
             amount: numAmount,
             currency: 'INR',
             status: 'created',
+            total_fee: total_fee || amount,
             payment_mode: 'ONLINE',
             parent_name: parent_name || '',
             parent_mobile: parent_mobile || '',
@@ -185,7 +169,8 @@ router.post('/verify-payment', async (req, res) => {
             amount,
             parent_name,
             parent_mobile,
-            parent_email
+            parent_email,
+            total_fee
         } = req.body;
 
         console.log(`[AdmissionPayment] Verifying: Order=${razorpay_order_id}, Payment=${razorpay_payment_id}, Student=${student_name}`);
@@ -245,12 +230,28 @@ router.post('/verify-payment', async (req, res) => {
             return res.status(500).json({ success: false, message: 'Could not securely verify payment amount with gateway' });
         }
 
-        // 4. Generate Receipt Number
+        // 4a. Calculate aggregates
+        let prevTotalPaid = 0;
+        if (registration_no) {
+            const pastReceipts = await db.collection(RECEIPTS_PATH)
+                .where('registration_no', '==', registration_no)
+                .where('status', 'in', ['verified', 'paid', 'success'])
+                .get();
+            pastReceipts.forEach(d => { prevTotalPaid += Number(d.data().amount || 0); });
+        }
+        const tFee = Number(total_fee || trueAmount);
+        const totalPaidSoFar = prevTotalPaid + trueAmount;
+        const pendingDue = Math.max(0, tFee - totalPaidSoFar);
+
+        // 4b. Generate Receipt Number
         const receiptNo = await generateReceiptNo();
 
         // 4. Build receipt record
         const receiptRecord = {
             status: 'verified',
+            total_fee: tFee,
+            total_paid_so_far: totalPaidSoFar,
+            pending_due: pendingDue,
             payment_id: razorpay_payment_id,
             order_id: razorpay_order_id,
             student_name: student_name || '',
@@ -307,7 +308,7 @@ router.post('/record-manual', requireAdminAuth, async (req, res) => {
         const {
             student_name, registration_no, admission_no, program, academic_year,
             fee_type, fee_name, amount, payment_mode, manual_receipt_no,
-            parent_name, parent_mobile, parent_email
+            parent_name, parent_mobile, parent_email, total_fee, remarks
         } = req.body;
 
         if (!student_name || !amount || !fee_type || !payment_mode) {
@@ -317,9 +318,23 @@ router.post('/record-manual', requireAdminAuth, async (req, res) => {
             });
         }
 
+        const numAmount = parseFloat(amount) || 0;
+
+        // Aggregate prior payments for this registration
+        let prevTotalPaid = 0;
+        if (registration_no) {
+            const pastReceipts = await db.collection(RECEIPTS_PATH)
+                .where('registration_no', '==', registration_no)
+                .where('status', 'in', ['verified', 'paid', 'success'])
+                .get();
+            pastReceipts.forEach(d => { prevTotalPaid += Number(d.data().amount || 0); });
+        }
+        const tFee = Number(total_fee || numAmount);
+        const totalPaidSoFar = prevTotalPaid + numAmount;
+        const pendingDue = Math.max(0, tFee - totalPaidSoFar);
+
         const receiptNo = await generateReceiptNo();
         const docId = `manual_${Date.now()}`;
-        const numAmount = parseFloat(amount) || 0;
 
         const record = {
             order_id: docId,
@@ -344,19 +359,47 @@ router.post('/record-manual', requireAdminAuth, async (req, res) => {
             school_name: 'SSV CAMPUS - CBSE',
             created_at: new Date().toISOString(),
             verified_at: new Date().toISOString(),
+            total_fee: tFee,
+            total_paid_so_far: totalPaidSoFar,
+            pending_due: pendingDue,
+            remarks: remarks || ''
         };
 
         // Store in both collections
         await db.collection(PAYMENTS_PATH).doc(docId).set(record);
         await db.collection(RECEIPTS_PATH).doc(docId).set(record);
 
-        console.log(`✅ [AdmissionPayment] Manual payment recorded: ${receiptNo} (${payment_mode})`);
+        // Update registration document
+        if (registration_no) {
+            const regQuery = await db.collection('schooler_system/enquiry_management/registrations')
+                .where('registrationNo', '==', registration_no)
+                .get();
+            if (!regQuery.empty) {
+                for (const doc of regQuery.docs) {
+                    await doc.ref.update({
+                        totalFee: tFee,
+                        totalPaid: totalPaidSoFar,
+                        pendingFee: pendingDue,
+                        isFeePaid: pendingDue <= 0,
+                        fees_status: pendingDue > 0 ? 'partial' : 'paid',
+                        receiptNo: receiptNo,
+                        paymentMode: payment_mode,
+                        paymentDate: new Date().toISOString().split('T')[0]
+                    });
+                }
+            }
+        }
+
+        console.log(`✅ [AdmissionPayment] Manual payment recorded: ${receiptNo} (${payment_mode}) | Total: ${tFee}, Paid: ${totalPaidSoFar}, Due: ${pendingDue}`);
 
         res.json({
             success: true,
             message: 'Manual payment recorded successfully',
             receipt_no: receiptNo,
-            payment_id: docId
+            payment_id: docId,
+            total_fee: tFee,
+            total_paid: totalPaidSoFar,
+            pending_due: pendingDue
         });
 
     } catch (err) {
@@ -392,13 +435,32 @@ router.get('/history-all', async (req, res) => {
         regSnapshot.forEach(doc => {
             const reg = doc.data();
             if (reg.registrationNo) {
-                regMap[reg.registrationNo] = reg.custom_board || '';
+                regMap[reg.registrationNo] = {
+                    board: reg.custom_board || '',
+                    feeAmount: parseFloat(reg.feeAmount) || 0
+                };
             }
         });
 
-        // Add all actual payments with board mapped from registrations
+        // Calculate total paid for each registration
+        const paymentTotals = {};
         payments.forEach(p => {
-            p.board = regMap[p.registration_no] || '';
+            const status = (p.status || '').toLowerCase();
+            if (['verified', 'paid', 'success'].includes(status) && p.registration_no) {
+                paymentTotals[p.registration_no] = (paymentTotals[p.registration_no] || 0) + (parseFloat(p.amount) || 0);
+            }
+        });
+
+        // Add all actual payments with board and fee calculations mapped from registrations
+        payments.forEach(p => {
+            const regData = regMap[p.registration_no] || {};
+            p.board = regData.board || '';
+            
+            // Fee calculations
+            p.total_fee = regData.feeAmount > 0 ? regData.feeAmount : (parseFloat(p.amount) || 0);
+            p.total_paid_so_far = paymentTotals[p.registration_no] || 0;
+            p.pending_due = Math.max(0, p.total_fee - p.total_paid_so_far);
+
             history.push(p);
         });
 
@@ -459,6 +521,140 @@ router.get('/receipt/:paymentId', async (req, res) => {
         res.json({ success: true, data: doc.data() });
     } catch (err) {
         console.error('[AdmissionPayment] Fetch Receipt Error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+
+/**
+ * DELETE /receipt/:paymentId
+ * Deletes an admission fee payment and receipt record by paymentId (or order_id)
+ */
+router.delete('/receipt/:paymentId', requireAdminAuth, async (req, res) => {
+    try {
+        const { paymentId } = req.params;
+        if (!paymentId) {
+            return res.status(400).json({ success: false, message: 'Payment ID is required' });
+        }
+
+        console.log(`[AdmissionPayment] Deleting payment & receipt for ID: ${paymentId}`);
+
+        let registrationNo = null;
+
+        // Need to delete from both collections
+        // Check PAYMENTS_PATH by doc id
+        const payRef = db.collection(PAYMENTS_PATH).doc(paymentId);
+        const payDoc = await payRef.get();
+
+        if (!payDoc.exists) {
+            // Also try to find by payment_id instead of order_id just in case
+            const payQuery = await db.collection(PAYMENTS_PATH).where('payment_id', '==', paymentId).get();
+            if (!payQuery.empty) {
+                for (const doc of payQuery.docs) {
+                    if (doc.data().registration_no) registrationNo = doc.data().registration_no;
+                    await doc.ref.delete();
+                }
+            }
+        } else {
+            if (payDoc.data().registration_no) registrationNo = payDoc.data().registration_no;
+            await payRef.delete();
+        }
+
+        // Check RECEIPTS_PATH by doc id
+        const recRef = db.collection(RECEIPTS_PATH).doc(paymentId);
+        const recDoc = await recRef.get();
+        
+        if (!recDoc.exists) {
+            // Also try to find by order_id just in case
+            const recQuery = await db.collection(RECEIPTS_PATH).where('order_id', '==', paymentId).get();
+            if (!recQuery.empty) {
+                for (const doc of recQuery.docs) {
+                    await doc.ref.delete();
+                }
+            }
+        } else {
+            await recRef.delete();
+        }
+
+        // RECALCULATE & UPDATE REGISTRATION DOCUMENT
+        if (registrationNo) {
+            console.log(`[AdmissionPayment] Recalculating balance for registration ${registrationNo} after deletion`);
+            
+            const remainingReceipts = await db.collection(RECEIPTS_PATH)
+                .where('registration_no', '==', registrationNo)
+                .where('status', 'in', ['verified', 'paid', 'success'])
+                .get();
+            
+            let totalPaidSoFar = 0;
+            remainingReceipts.forEach(d => { totalPaidSoFar += Number(d.data().amount || 0); });
+
+            const regQuery = await db.collection('schooler_system/enquiry_management/registrations')
+                .where('registrationNo', '==', registrationNo)
+                .get();
+            
+            if (!regQuery.empty) {
+                for (const doc of regQuery.docs) {
+                    const regData = doc.data();
+                    const tFee = Number(regData.totalFee || regData.feeAmount || 0);
+                    const pendingDue = Math.max(0, tFee - totalPaidSoFar);
+
+                    // Find latest receipt to show on reg
+                    let latestReceipt = null;
+                    if (!remainingReceipts.empty) {
+                        const sorted = remainingReceipts.docs.map(d=>d.data()).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+                        latestReceipt = sorted[0];
+                    }
+
+                    await doc.ref.update({
+                        totalPaid: totalPaidSoFar,
+                        pendingFee: pendingDue,
+                        isFeePaid: pendingDue <= 0,
+                        fees_status: totalPaidSoFar === 0 ? 'unpaid' : (pendingDue > 0 ? 'partial' : 'paid'),
+                        receiptNo: latestReceipt ? latestReceipt.receipt_no : null,
+                        paymentMode: latestReceipt ? latestReceipt.payment_mode : null,
+                        paymentDate: latestReceipt ? (latestReceipt.receipt_date || latestReceipt.created_at) : null
+                    });
+                }
+            }
+        }
+
+        console.log(`✅ [AdmissionPayment] Successfully deleted payment & receipt: ${paymentId}`);
+        res.json({ success: true, message: 'Payment record deleted successfully' });
+
+    } catch (err) {
+        console.error('[AdmissionPayment] Delete Error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+/**
+ * GET /history-by-registration/:regNo
+ * Fetches all admission fee payment receipts for a specific registration number
+ */
+router.get('/history-by-registration/:regNo', async (req, res) => {
+    try {
+        const { regNo } = req.params;
+        if (!regNo) return res.status(400).json({ success: false, message: 'Registration number required' });
+
+        const snapshot = await db.collection(RECEIPTS_PATH)
+            .where('registration_no', '==', regNo)
+            .get();
+
+        const receipts = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            // Filter out failed/pending payments just in case
+            if (data.status === 'verified' || data.status === 'paid' || data.status === 'success') {
+                receipts.push(data);
+            }
+        });
+
+        // Sort by date descending
+        receipts.sort((a, b) => new Date(b.created_at || b.receipt_date) - new Date(a.created_at || a.receipt_date));
+
+        res.json({ success: true, data: receipts });
+    } catch (err) {
+        console.error('[AdmissionPayment] Fetch History By RegNo Error:', err);
         res.status(500).json({ success: false, message: err.message });
     }
 });

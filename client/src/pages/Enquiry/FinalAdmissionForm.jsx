@@ -526,10 +526,30 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                 // Ensure a non-empty string is ALWAYS sent to avoid Error 500 in backend autoname strip()
                 const safeEmail = baseEmail ? baseEmail.trim() : `${cleanFirstName}.${Date.now().toString().slice(-5)}@ssvschool.edu.in`;
 
+                let parsedFName = formData.first_name || selectedRegistration?.first_name || '';
+                let parsedMName = selectedRegistration?.middle_name || null;
+                let parsedLName = formData.last_name || selectedRegistration?.last_name || null;
+                const full_name = formData.student_full_name || selectedRegistration?.student_full_name;
+
+                // Auto-parse full name into middle and last name if they are missing so ERPNext generates the full name correctly
+                if (full_name && !parsedMName && !parsedLName) {
+                    const parts = full_name.trim().split(/\s+/);
+                    if (parts.length >= 3) {
+                        parsedFName = parts[0];
+                        parsedMName = parts.slice(1, -1).join(' ');
+                        parsedLName = parts[parts.length - 1];
+                    } else if (parts.length === 2) {
+                        parsedFName = parts[0];
+                        parsedLName = parts[1];
+                    } else {
+                        parsedFName = full_name;
+                    }
+                }
+
                 const studentPayload = {
-                    first_name: formData.first_name || selectedRegistration?.first_name,
-                    middle_name: selectedRegistration?.middle_name || null,
-                    last_name: formData.last_name || selectedRegistration?.last_name || null,
+                    first_name: parsedFName,
+                    middle_name: parsedMName,
+                    last_name: parsedLName,
                     student_email_id: safeEmail,
                     student_mobile_number: formData.mobile || selectedRegistration?.student_mobile_number || null,
                     gender: formData.gender || selectedRegistration?.gender || null,
@@ -829,13 +849,33 @@ export default function FinalAdmissionForm({ initialView = 'list' }) {
                 }
             }
 
-            const cleanFirstName = (reg.first_name || 'student').replace(/\s+/g, '').toLowerCase();
+            let parsedFName = reg.first_name || '';
+            let parsedMName = reg.middle_name || null;
+            let parsedLName = reg.last_name || null;
+            const full_name = reg.student_full_name;
+
+            // Auto-parse full name into middle and last name if they are missing so ERPNext generates the full name correctly
+            if (full_name && !parsedMName && !parsedLName) {
+                const parts = full_name.trim().split(/\s+/);
+                if (parts.length >= 3) {
+                    parsedFName = parts[0];
+                    parsedMName = parts.slice(1, -1).join(' ');
+                    parsedLName = parts[parts.length - 1];
+                } else if (parts.length === 2) {
+                    parsedFName = parts[0];
+                    parsedLName = parts[1];
+                } else {
+                    parsedFName = full_name;
+                }
+            }
+
+            const cleanFirstName = (parsedFName || 'student').replace(/\s+/g, '').toLowerCase();
             const safeEmail = reg.student_email_id || reg.email || `${cleanFirstName}.${Date.now().toString().slice(-5)}@ssvschool.edu.in`;
 
             const studentPayload = {
-                first_name: reg.first_name,
-                middle_name: reg.middle_name || null,
-                last_name: reg.last_name || null,
+                first_name: parsedFName,
+                middle_name: parsedMName,
+                last_name: parsedLName,
                 student_email_id: safeEmail,
                 student_mobile_number: reg.student_mobile_number || reg.mobile || null,
                 gender: reg.gender || null,

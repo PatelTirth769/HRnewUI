@@ -5,6 +5,7 @@ import { collection, getDocs, updateDoc, doc, query, where } from 'firebase/fire
 import { db } from '../../config/firebase';
 import { FiArrowLeft, FiSave, FiList, FiCheckCircle, FiRefreshCw, FiUsers } from 'react-icons/fi';
 import { useUserRole } from '../../hooks/useUserRole';
+import { sortEducationalLevels } from '../../utility/sortHelper';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
 import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/instructorHelper';
 
@@ -83,6 +84,7 @@ const RollGRAssign = () => {
 
                 const studentBoards = [...new Set(groups.map(g => g.custom_board).filter(Boolean))];
                 
+                progs.sort((a, b) => sortEducationalLevels(a, b, item => item.value));
                 setPrograms(progs);
                 setAllStudentGroups(groups);
                 setFilteredGroups(groups);
@@ -141,10 +143,21 @@ const RollGRAssign = () => {
                 where('custom_board', '==', selectedBoard)
             );
             const snapshot = await getDocs(q);
-            const allAdmissions = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Ensure id is explicitly the Firestore doc ID and not overwritten by doc.data()
+            const allAdmissions = snapshot.docs.map(d => ({ ...d.data(), id: d.id, firestore_id: d.id }));
 
-            // 3. Filter only those in the current group
-            let groupAdmissions = allAdmissions.filter(a => erpStudentIds.includes(a.erp_student_id));
+            // 3. Filter only those in the current group and deduplicate by erp_student_id
+            let rawGroupAdmissions = allAdmissions.filter(a => erpStudentIds.includes(a.erp_student_id));
+            
+            // Deduplicate based on erp_student_id (in case of duplicate admission forms)
+            const seenIds = new Set();
+            let groupAdmissions = [];
+            for (const adm of rawGroupAdmissions) {
+                if (!seenIds.has(adm.erp_student_id)) {
+                    seenIds.add(adm.erp_student_id);
+                    groupAdmissions.push(adm);
+                }
+            }
 
             // Also check if some students don't have erp_student_id but have the exact same group
             // (If FinalAdmission Form didn't save student_group, we rely strictly on erp_student_id mapped from Frappe)
@@ -155,12 +168,41 @@ const RollGRAssign = () => {
                 return;
             }
 
+            // 2.5 [NEW LOGIC] Map ERP Student IDs to original full names from Registrations database
+            let studentFullNameMap = {};
+            try {
+                const registrationsRef = collection(db, 'schooler_system/enquiry_management/registrations');
+                const registrationsSnap = await getDocs(registrationsRef);
+                const registrations = registrationsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+                
+                const regMap = {};
+                for (const r of registrations) {
+                    if (r.id) regMap[r.id] = r.student_full_name;
+                }
+                
+                for (const adm of allAdmissions) {
+                    if (adm.erp_student_id && adm.registrationId) {
+                        const fullName = regMap[adm.registrationId];
+                        if (fullName) {
+                            studentFullNameMap[adm.erp_student_id] = fullName;
+                        } else if (adm.student_full_name) {
+                            studentFullNameMap[adm.erp_student_id] = adm.student_full_name;
+                        }
+                    } else if (adm.erp_student_id && adm.student_full_name) {
+                        studentFullNameMap[adm.erp_student_id] = adm.student_full_name;
+                    }
+                }
+            } catch (fbErr) {
+                console.error("Error fetching firebase data for full names:", fbErr);
+            }
+
             // Clean up missing fields for sorting and store original values for change detection
             const mapped = groupAdmissions.map(s => {
                 const fname = s.first_name || '';
                 const mname = s.middle_name || '';
                 const lname = s.last_name || '';
-                const fullName = `${fname} ${mname} ${lname}`.replace(/\s+/g, ' ').trim();
+                const fallbackName = `${fname} ${mname} ${lname}`.replace(/\s+/g, ' ').trim();
+                const fullName = studentFullNameMap[s.erp_student_id] || fallbackName;
                 return {
                     ...s,
                     first_name: fname,
@@ -175,7 +217,7 @@ const RollGRAssign = () => {
             });
 
             setStudents(mapped);
-            handleSort('full_name', mapped);
+            handleSort('roll_number', mapped, 'asc');
             showToast('success', 'Students Loaded', `Loaded ${mapped.length} students for assignment.`);
 
         } catch (err) {
@@ -187,18 +229,44 @@ const RollGRAssign = () => {
     };
 
     // ─── Sort Logic ───
-    const handleSort = (key, dataList = students) => {
+    const handleSort = (key, dataList = students, forceDirection = null) => {
         let direction = 'asc';
-        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+        if (forceDirection) {
+            direction = forceDirection;
+        } else if (sortConfig.key === key && sortConfig.direction === 'asc') {
             direction = 'desc';
         }
         
         const sorted = [...dataList].sort((a, b) => {
-            const aVal = (a[key] || '').toLowerCase();
-            const bVal = (b[key] || '').toLowerCase();
-            if (aVal < bVal) return direction === 'asc' ? -1 : 1;
-            if (aVal > bVal) return direction === 'asc' ? 1 : -1;
-            return 0;
+            if (key === 'roll_number') {
+                const aVal = a[key];
+                const bVal = b[key];
+                if (aVal === bVal) return 0;
+                if (!aVal) return direction === 'asc' ? 1 : -1;
+                if (!bVal) return direction === 'asc' ? -1 : 1;
+                
+                const aNum = parseInt(aVal, 10);
+                const bNum = parseInt(bVal, 10);
+                
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    if (aNum < bNum) return direction === 'asc' ? -1 : 1;
+                    if (aNum > bNum) return direction === 'asc' ? 1 : -1;
+                    return 0;
+                }
+                
+                // Fallback to string sort if they are not purely numeric
+                const aStr = String(aVal).toLowerCase();
+                const bStr = String(bVal).toLowerCase();
+                if (aStr < bStr) return direction === 'asc' ? -1 : 1;
+                if (aStr > bStr) return direction === 'asc' ? 1 : -1;
+                return 0;
+            } else {
+                const aVal = (a[key] || '').toLowerCase();
+                const bVal = (b[key] || '').toLowerCase();
+                if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+                if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+                return 0;
+            }
         });
 
         setStudents(sorted);
@@ -247,6 +315,7 @@ const RollGRAssign = () => {
 
         let successCount = 0;
         let failCount = 0;
+        const successfullyUpdatedIds = new Set();
 
         for (let i = 0; i < studentsToUpdate.length; i++) {
             const student = studentsToUpdate[i];
@@ -284,12 +353,8 @@ const RollGRAssign = () => {
                     }
                 }
 
-                // Update the original values so subsequent saves don't re-process them
-                setStudents(prev => prev.map(s => s.id === student.id ? { 
-                    ...s, 
-                    original_roll_number: student.roll_number, 
-                    original_gr_number: student.gr_number 
-                } : s));
+                // Track success so we can batch update state at the end
+                successfullyUpdatedIds.add(student.id);
 
                 successCount++;
             } catch (err) {
@@ -298,6 +363,15 @@ const RollGRAssign = () => {
             }
             
             setSaveProgress({ done: i + 1, total: studentsToUpdate.length });
+        }
+
+        // Batch update the students state once at the end
+        if (successfullyUpdatedIds.size > 0) {
+            setStudents(prev => prev.map(s => successfullyUpdatedIds.has(s.id) ? { 
+                ...s, 
+                original_roll_number: s.roll_number, 
+                original_gr_number: s.gr_number 
+            } : s));
         }
 
         setSaving(false);

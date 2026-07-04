@@ -5,6 +5,8 @@ import { resolveInstructorId, fetchInstructorGroupDetails } from '../../utility/
 import { sortEducationalLevels } from '../../utility/sortHelper';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 import * as XLSX from 'xlsx';
 
 const QuickAttendance = () => {
@@ -233,12 +235,72 @@ const QuickAttendance = () => {
                 console.error('Error checking existing attendance:', err);
             }
 
+            // 2.5 [NEW LOGIC] Map ERP Student IDs to original full names from Registrations database
+            let studentFullNameMap = {};
+            let studentRollNumberMap = {};
+            try {
+                const admissionsRef = collection(db, 'schooler_system/enquiry_management/final_admissions');
+                const admissionsSnap = await getDocs(admissionsRef);
+                const admissions = admissionsSnap.docs.map(d => d.data());
+
+                const registrationsRef = collection(db, 'schooler_system/enquiry_management/registrations');
+                const registrationsSnap = await getDocs(registrationsRef);
+                const registrations = registrationsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+
+                const regMap = {};
+                for (const r of registrations) {
+                    if (r.id) regMap[r.id] = r.student_full_name;
+                }
+
+                for (const adm of admissions) {
+                    if (adm.erp_student_id) {
+                        if (adm.registrationId) {
+                            const fullName = regMap[adm.registrationId];
+                            if (fullName) {
+                                studentFullNameMap[adm.erp_student_id] = fullName;
+                            } else if (adm.student_full_name) {
+                                studentFullNameMap[adm.erp_student_id] = adm.student_full_name;
+                            }
+                        } else if (adm.student_full_name) {
+                            studentFullNameMap[adm.erp_student_id] = adm.student_full_name;
+                        }
+
+                        // Map Roll Number from Final Admissions
+                        if (adm.roll_number) {
+                            studentRollNumberMap[adm.erp_student_id] = adm.roll_number;
+                        }
+                    }
+                }
+            } catch (fbErr) {
+                console.error("Error fetching firebase data for full names:", fbErr);
+            }
+
             // 3. Map final list
             const finalStudents = activeGroupStudents.map(s => ({
                 student: s.student,
-                student_name: s.student_name,
+                student_name: studentFullNameMap[s.student] || s.student_name,
                 status: statusMap[s.student] || 'Present', // Default Present
+                group_roll_number: studentRollNumberMap[s.student] || '', // Use roll_number from Roll and GR Assign screen!
             }));
+
+            // Sort by roll number numerically, fallback to name if roll is absent
+            finalStudents.sort((a, b) => {
+                const rA = parseInt(a.group_roll_number);
+                const rB = parseInt(b.group_roll_number);
+                const isAValid = !isNaN(rA);
+                const isBValid = !isNaN(rB);
+
+                if (isAValid && isBValid) return rA - rB;
+                if (isAValid && !isBValid) return -1;
+                if (!isAValid && isBValid) return 1;
+
+                // Fallback to name sort
+                const nameA = (a.student_name || '').toLowerCase();
+                const nameB = (b.student_name || '').toLowerCase();
+                if (nameA < nameB) return -1;
+                if (nameA > nameB) return 1;
+                return 0;
+            });
 
             setStudents(finalStudents);
             setExistingMap(existMap);
@@ -622,6 +684,7 @@ const QuickAttendance = () => {
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200">
                                         <th className="text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-4 py-2.5 w-[50px]">No.</th>
+                                        <th className="text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-4 py-2.5 w-[80px]">Roll No</th>
                                         <th className="text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-4 py-2.5 w-[180px]">Student ID</th>
                                         <th className="text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-4 py-2.5">Student Name</th>
                                         <th className="text-center text-[11px] font-semibold text-green-600 uppercase tracking-wider px-4 py-2.5 w-[70px]">P</th>
@@ -645,6 +708,7 @@ const QuickAttendance = () => {
                                             }`}
                                         >
                                             <td className="px-4 py-2.5 text-gray-400 font-mono text-xs">{idx + 1}</td>
+                                            <td className="px-4 py-2.5 text-gray-800 font-medium text-xs">{s.group_roll_number || '-'}</td>
                                             <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{s.student}</td>
                                             <td className="px-4 py-2.5 font-semibold text-gray-800 text-sm">{s.student_name}</td>
                                             <td className="px-4 py-2.5 text-center">

@@ -8,6 +8,7 @@ import * as XLSX from 'xlsx';
 import { DEFAULT_USER_PASSWORD } from '../../config/settings';
 import { FiPlus, FiArrowLeft, FiSave, FiUser, FiUsers, FiBriefcase, FiLink, FiEdit2, FiTrash2, FiSearch, FiDownload, FiRefreshCw, FiX, FiFileText, FiCreditCard, FiCheckCircle } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
+import { useUserRole } from '../../hooks/useUserRole';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import schoolLogo from '../../assets/images/SSVLOGO.png';
@@ -380,6 +381,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
         registrationNo: '',
         // Fee fields
         feeAmount: 0,
+        paidAmount: '',
         isFeePaid: false,
         receiptNo: '',
         paymentMode: 'Cash',
@@ -455,6 +457,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
     const [boards, setBoards] = useState([]);
     const [guardiansList, setGuardiansList] = useState([]);
     const [paymentProcessing, setPaymentProcessing] = useState(false);
+    const [pastReceipts, setPastReceipts] = useState([]);
     const [previewModal, setPreviewModal] = useState({ visible: false, url: '', name: '', type: '' });
 
     const filteredClasses = useMemo(() => {
@@ -551,7 +554,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             api.warning({ message: 'Missing Fields', description: 'Please fill Student Name and Program before payment.' });
             return;
         }
-        const payAmount = parseFloat(formData.feeAmount || regFee);
+        const payAmount = parseFloat(formData.paidAmount || formData.feeAmount || regFee);
         if (payAmount < 1) {
             api.warning({ message: 'Invalid Amount', description: 'Fee amount must be at least ₹1.' });
             return;
@@ -567,6 +570,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 fee_type: 'Registration',
                 fee_name: 'Registration Fee',
                 amount: payAmount,
+                total_fee: parseFloat(formData.feeAmount || regFee),
                 parent_name: (formData.guardians?.[0]?.guardian_name) || formData.father_name || '',
                 parent_mobile: formData.student_mobile_number || '',
                 parent_email: formData.student_email_id || '',
@@ -594,7 +598,8 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             academic_year: formData.academic_year,
                             fee_type: 'Registration',
                             fee_name: 'Registration Fee',
-                            amount: payAmount,
+                amount: payAmount,
+                total_fee: parseFloat(formData.feeAmount || regFee),
                             parent_name: (formData.guardians?.[0]?.guardian_name) || '',
                             parent_mobile: formData.student_mobile_number || '',
                             parent_email: formData.student_email_id || '',
@@ -654,7 +659,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
             api.warning({ message: 'Missing Fields', description: 'Please fill Student Name and Program.' });
             return;
         }
-        const payAmount = parseFloat(formData.feeAmount || regFee);
+        const payAmount = parseFloat(formData.paidAmount || formData.feeAmount || regFee);
         if (payAmount < 1) { api.warning({ message: 'Invalid Amount' }); return; }
         if (!formData.paymentMode || formData.paymentMode === 'Online') {
             api.warning({ message: 'Select Mode', description: 'Choose Cash or Cheque for manual payment.' }); return;
@@ -669,37 +674,54 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 fee_type: 'Registration',
                 fee_name: 'Registration Fee',
                 amount: payAmount,
+                total_fee: parseFloat(formData.feeAmount || regFee),
                 payment_mode: formData.paymentMode,
                 manual_receipt_no: formData.receiptNo || '',
                 parent_name: (formData.guardians?.[0]?.guardian_name) || '',
                 parent_mobile: formData.student_mobile_number || '',
                 parent_email: formData.student_email_id || '',
+                remarks: formData.remarks || '',
             }, { withCredentials: true });
             if (res.data.success) {
+                const isFullyPaid = (res.data.pending_due || 0) <= 0;
                 setFormData(prev => ({
                     ...prev,
-                    isFeePaid: true,
+                    isFeePaid: isFullyPaid,
+                    fees_status: isFullyPaid ? 'paid' : 'partial',
+                    totalFee: res.data.total_fee || prev.feeAmount,
+                    totalPaid: res.data.total_paid || payAmount,
+                    pendingFee: res.data.pending_due || 0,
                     receiptNo: res.data.receipt_no,
                     paymentId: res.data.payment_id,
                     paymentDate: new Date().toISOString(),
+                    paidAmount: res.data.pending_due > 0 ? res.data.pending_due : '',
                 }));
-
-                // Auto-update Firebase if it's an existing registration
+                if (formData.registrationNo) {
+                    axios.get(`/local-api/admission-payment/history-by-registration/${formData.registrationNo}`)
+                        .then(r => { if (r.data.success) setPastReceipts(r.data.data); });
+                }
                 if (editingRecord?.id) {
                     try {
                         await updateDoc(doc(db, REGISTRATIONS_PATH, editingRecord.id), {
-                            isFeePaid: true,
+                            isFeePaid: isFullyPaid,
+                            fees_status: isFullyPaid ? 'paid' : 'partial',
+                            totalFee: res.data.total_fee || payAmount,
+                            totalPaid: res.data.total_paid || payAmount,
+                            pendingFee: res.data.pending_due || 0,
                             receiptNo: res.data.receipt_no,
                             paymentId: res.data.payment_id,
                             paymentMode: formData.paymentMode || 'Cash',
                             paymentDate: new Date().toISOString(),
-                            feeAmount: payAmount,
+                            feeAmount: parseFloat(formData.feeAmount || regFee),
                             updated_at: serverTimestamp()
                         });
                     } catch (e) { console.error('Auto-update DB failed:', e); }
                 }
-
-                api.success({ message: '✅ Payment Recorded!', description: `Receipt: ${res.data.receipt_no}` });
+                if (isFullyPaid) {
+                    api.success({ message: '✅ Payment Completed!', description: `Receipt: ${res.data.receipt_no} | Fully Paid` });
+                } else {
+                    api.success({ message: '✅ Partial Payment Recorded!', description: `Receipt: ${res.data.receipt_no} | Pending Due: ₹${Number(res.data.pending_due || 0).toLocaleString()}` });
+                }
             }
         } catch (err) {
             api.error({ message: 'Recording Failed', description: err.message });
@@ -723,6 +745,8 @@ export default function RegistrationForm({ initialView = 'list' }) {
             parent_name: record.guardians?.[0]?.guardian_name || '',
             parent_mobile: record.student_mobile_number || '',
             board_name: record.custom_board || record.board || '',
+            manual_receipt_ref: record.manual_receipt_ref || '',
+            remarks: record.remarks || '',
         });
     };
 
@@ -773,6 +797,22 @@ export default function RegistrationForm({ initialView = 'list' }) {
                 });
                 setFormData({ ...editingRecord, documents: mergedDocs });
             }
+        }
+    }, [view, editingRecord]);
+
+    // Fetch past receipts when opening an existing registration
+    useEffect(() => {
+        if (view === 'form' && editingRecord && editingRecord.registrationNo) {
+            axios.get(`/local-api/admission-payment/history-by-registration/${editingRecord.registrationNo}`)
+                .then(res => {
+                    if (res.data.success) {
+                        const sorted = (res.data.data || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                        setPastReceipts(sorted);
+                    }
+                })
+                .catch(err => console.error('Failed to load past receipts:', err));
+        } else if (view !== 'form' || !editingRecord) {
+            setPastReceipts([]);
         }
     }, [view, editingRecord]);
 
@@ -2791,11 +2831,73 @@ export default function RegistrationForm({ initialView = 'list' }) {
                             <p className="text-sm font-bold text-blue-800">Applicable Registration Fee</p>
                             <p className="text-[11px] text-blue-600 italic">Auto-fetched from Form Fee Setup</p>
                         </div>
-                        <div className="text-3xl font-black text-blue-700">₹ {regFee || formData.feeAmount || 0}</div>
+                        <div className="text-3xl font-black text-blue-700">₹ {formData.paidAmount || formData.feeAmount || regFee || 0}</div>
                     </div>
 
-                    {/* Payment Status */}
-                    {formData.isFeePaid && (
+                    {/* Payment Status - Full Receipts History */}
+                    {pastReceipts.length > 0 && (
+                        <div className={`rounded-xl p-5 mb-4 border ${formData.isFeePaid ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'}`}>
+                            <h4 className={`text-sm font-black mb-4 flex items-center gap-2 ${formData.isFeePaid ? 'text-green-800' : 'text-orange-800'}`}>
+                                {formData.isFeePaid ? '✅ Payment Receipts' : '⚠️ Partial Payment — Receipts'}
+                            </h4>
+
+                            {/* Individual receipt rows */}
+                            <div className="flex flex-col gap-2 mb-4">
+                                {pastReceipts.map((r, i) => (
+                                    <div key={i} className={`flex items-center justify-between rounded-lg p-3 border ${formData.isFeePaid ? 'bg-white border-green-100' : 'bg-white border-orange-100'}`}>
+                                        <div className="flex flex-col">
+                                            <span className="font-black text-gray-800 text-sm">#{i + 1} &nbsp; {r.receipt_no}</span>
+                                            <span className="text-xs text-gray-500">{dayjs(r.created_at || r.receipt_date).format('DD MMM YYYY, hh:mm A')} &nbsp;|&nbsp; {r.payment_mode}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="font-black text-green-700 text-base">₹{Number(r.amount).toLocaleString()}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => generateAdmissionReceipt({
+                                                    receipt_no: r.receipt_no || 'N/A',
+                                                    student_name: formData.student_full_name || `${formData.first_name || ''} ${formData.last_name || ''}`.trim(),
+                                                    registration_no: formData.registrationNo || '',
+                                                    program: formData.program || '',
+                                                    academic_year: formData.academic_year || '',
+                                                    fee_type: r.fee_type || 'Registration',
+                                                    fee_name: r.fee_name || 'Registration Fee',
+                                                    amount: r.amount,
+                                                    payment_mode: r.payment_mode || 'CASH',
+                                                    payment_id: r.payment_id || r.order_id || '',
+                                                    receipt_date: r.receipt_date || r.created_at || new Date().toISOString(),
+                                                    parent_name: formData.guardians?.[0]?.guardian_name || '',
+                                                    parent_mobile: formData.student_mobile_number || '',
+                                                    board_name: formData.custom_board || '',
+                                                    total_fee: Number(formData.feeAmount || regFee),
+                                                    total_paid: Number(r.total_paid_so_far || r.amount),
+                                                    pending_due: Number(r.pending_due || 0),
+                                                    manual_receipt_ref: r.manual_receipt_ref || '',
+                                                    remarks: r.remarks || '',
+                                                })}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${formData.isFeePaid ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-orange-500 text-white hover:bg-orange-600'}`}
+                                            >
+                                                <FiDownload /> Download
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Summary row */}
+                            <div className={`rounded-lg p-3 text-sm font-black flex justify-between items-center ${formData.isFeePaid ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}`}>
+                                <span>Total Fee: ₹{Number(formData.feeAmount || formData.totalFee || regFee || 0).toLocaleString()}</span>
+                                <span>Paid: ₹{pastReceipts.reduce((s, r) => s + Number(r.amount || 0), 0).toLocaleString()}</span>
+                                <span className={formData.isFeePaid ? 'text-green-700' : 'text-red-600'}>
+                                    {formData.isFeePaid
+                                        ? '✅ Fully Paid'
+                                        : `⚠️ Due: ₹${Math.max(0, Number(formData.feeAmount || formData.totalFee || regFee) - pastReceipts.reduce((s, r) => s + Number(r.amount || 0), 0)).toLocaleString()}`
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
+                    {formData.isFeePaid && pastReceipts.length === 0 && (
                         <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-4">
                             <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center"><FiCheckCircle className="text-white w-6 h-6" /></div>
                             <div className="flex-1">
@@ -2811,8 +2913,9 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     {!formData.isFeePaid && (
                         <>
                             {/* Fee Amount */}
-                            <div className="max-w-xs">
-                                <InputField label="Fee Amount (₹)" type="number" value={formData.feeAmount} onChange={(v) => updateField('feeAmount', v)} />
+                            <div className="flex gap-4 max-w-lg">
+                                <InputField label="Total Fee (₹)" type="number" value={formData.feeAmount} onChange={(v) => updateField('feeAmount', v)} />
+                                <InputField label="Paid Amount (₹)" type="number" value={formData.paidAmount} onChange={(v) => updateField('paidAmount', v)} placeholder={formData.feeAmount || regFee} />
                             </div>
 
                             {/* Online Payment */}
@@ -2820,7 +2923,7 @@ export default function RegistrationForm({ initialView = 'list' }) {
                                 <h4 className="text-sm font-black text-gray-800 mb-3 flex items-center gap-2"><FiCreditCard className="text-blue-600" /> Pay Online (Razorpay)</h4>
                                 <p className="text-[12px] text-gray-500 mb-4">Secure payment via UPI, Debit/Credit Card, Net Banking</p>
                                 <button onClick={handleOnlinePayment} disabled={paymentProcessing} className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-black hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg flex items-center gap-2 disabled:opacity-50">
-                                    {paymentProcessing ? <Spin size="small" /> : <FiCreditCard />} Pay ₹{formData.feeAmount || regFee || 0} Online
+                                    {paymentProcessing ? <Spin size="small" /> : <FiCreditCard />} Pay ₹{formData.paidAmount || formData.feeAmount || regFee || 0} Online
                                 </button>
                             </div>
 
