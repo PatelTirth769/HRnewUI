@@ -479,43 +479,48 @@ const StudentDashboard = () => {
         }
       }
 
-      // --- Coordinator Fetching ---
+      // --- Coordinator & Principal Fetching ---
       let coordinatorName = '';
+      let principalName = '';
       if (profile.program) {
         try {
           const coordRef = collection(db, 'schooler_system', 'coordinators', 'data');
           const qCoord = query(coordRef, where('programs', 'array-contains', profile.program));
           const coordSnap = await getDocs(qCoord);
+          
           if (!coordSnap.empty) {
-            const data = coordSnap.docs[0].data();
-            let cName = data.name || data.coordinator_name;
-            const cEmail = data.email;
-            
-            if (!cName && cEmail) {
-              try {
-                // Attempt ERPNext User API first
-                const userRes = await API.get(`/api/resource/User/${encodeURIComponent(cEmail)}`);
-                if (userRes.data?.data?.full_name) {
-                  cName = userRes.data.data.full_name;
-                }
-              } catch (userErr) {
-                console.warn('[StudentDashboard] ERPNext User fetch failed, falling back to Firebase:', userErr.message);
+            for (const doc of coordSnap.docs) {
+              const data = doc.data();
+              let cName = data.name || data.coordinator_name;
+              const cEmail = data.email;
+              
+              if (!cName && cEmail) {
                 try {
-                  // Fallback to Firebase schooler_users
-                  const userSnap = await getDocs(query(collection(db, 'schooler_users'), where('email', '==', cEmail)));
-                  if (!userSnap.empty) {
-                    const userData = userSnap.docs[0].data();
-                    cName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.username;
+                  const userRes = await API.get(`/api/resource/User/${encodeURIComponent(cEmail)}`);
+                  if (userRes.data?.data?.full_name) {
+                    cName = userRes.data.data.full_name;
                   }
-                } catch (err) {
-                  console.warn('[StudentDashboard] Failed to fetch user name from schooler_users:', err.message);
+                } catch (userErr) {
+                  try {
+                    const userSnap = await getDocs(query(collection(db, 'schooler_users'), where('email', '==', cEmail)));
+                    if (!userSnap.empty) {
+                      const userData = userSnap.docs[0].data();
+                      cName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.username;
+                    }
+                  } catch (err) { }
                 }
               }
+              
+              const finalName = cName || cEmail;
+              if (data.isPrincipal) {
+                  principalName = finalName;
+              } else {
+                  if (!coordinatorName) coordinatorName = finalName;
+              }
             }
-            coordinatorName = cName || cEmail;
           }
         } catch (e) {
-          console.warn('[StudentDashboard] Failed to fetch Coordinator details:', e.message);
+          console.warn('[StudentDashboard] Failed to fetch Coordinator/Principal details:', e.message);
         }
       }
 
@@ -796,6 +801,7 @@ const StudentDashboard = () => {
         studentGroups,
         classTeacher: classTeacherName,
         coordinator: coordinatorName,
+        principal: principalName,
         permissions,
         feeStructure: linkedFeeStructure,
         feeStructureDetails,
@@ -1039,6 +1045,8 @@ const StudentDashboard = () => {
       discount_percentage: record.discount_percentage || 0,
       studentGroup: profile?.student_group || record.student_group || record.section || '',
       boardName: profile?.custom_board || '',
+      manual_receipt_ref: record.manual_receipt_ref || record.manual_receipt_no || '',
+      remark: record.remark || '',
       outstanding: outstanding,
       previous_payments: previous_payments
     };
@@ -1202,6 +1210,12 @@ const StudentDashboard = () => {
                       <Descriptions.Item label="Joining Date">{profile.joining_date}</Descriptions.Item>
                       <Descriptions.Item label="Program (Class)"><Tag color="blue">{profile.program || 'N/A'}</Tag></Descriptions.Item>
                       <Descriptions.Item label="Board"><Tag color="geekblue">{profile.custom_board || 'N/A'}</Tag></Descriptions.Item>
+                      {profile.roll_number && (
+                        <Descriptions.Item label="Roll Number"><Text strong>{profile.roll_number}</Text></Descriptions.Item>
+                      )}
+                      {profile.gr_number && (
+                        <Descriptions.Item label="GR Number"><Text strong>{profile.gr_number}</Text></Descriptions.Item>
+                      )}
                       <Descriptions.Item label="Student Group">
                         {studentData.studentGroups && studentData.studentGroups.length > 0 ? (
                           studentData.studentGroups.map(group => <Tag color="cyan" key={group}>{group}</Tag>)
@@ -1215,6 +1229,11 @@ const StudentDashboard = () => {
                       <Descriptions.Item label="Coordinator">
                         <span className="font-semibold text-purple-600 flex items-center gap-1.5">
                           <UserOutlined /> {studentData.coordinator || 'Not Assigned'}
+                        </span>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Principal">
+                        <span className="font-semibold text-rose-600 flex items-center gap-1.5">
+                          <UserOutlined /> {studentData.principal || 'Not Assigned'}
                         </span>
                       </Descriptions.Item>
                       <Descriptions.Item label="Fee Structure">

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { notification, Spin, Tabs, Modal, Select } from 'antd';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import API from '../../services/api';
 import axios from 'axios';
@@ -791,11 +791,23 @@ export default function RegistrationForm({ initialView = 'list' }) {
                     setFormData({ ...initFormData, registrationNo: `REG-${Date.now().toString().slice(-6)}` });
                 }
             } else {
-                const mergedDocs = initFormData.documents.map(defaultDoc => {
-                    const existing = (editingRecord.documents || []).find(d => d.name === defaultDoc.name);
-                    return existing ? { ...defaultDoc, ...existing } : defaultDoc;
+                // Always re-fetch the latest document from Firestore to pick up external changes (e.g. Roll/GR Assign)
+                const docRef = doc(db, REGISTRATIONS_PATH, editingRecord.id);
+                getDoc(docRef).then(snap => {
+                    const freshRecord = snap.exists() ? { id: snap.id, ...snap.data() } : editingRecord;
+                    const mergedDocs = initFormData.documents.map(defaultDoc => {
+                        const existing = (freshRecord.documents || []).find(d => d.name === defaultDoc.name);
+                        return existing ? { ...defaultDoc, ...existing } : defaultDoc;
+                    });
+                    setFormData({ ...freshRecord, documents: mergedDocs });
+                }).catch(() => {
+                    // Fallback to in-memory record if Firestore fetch fails
+                    const mergedDocs = initFormData.documents.map(defaultDoc => {
+                        const existing = (editingRecord.documents || []).find(d => d.name === defaultDoc.name);
+                        return existing ? { ...defaultDoc, ...existing } : defaultDoc;
+                    });
+                    setFormData({ ...editingRecord, documents: mergedDocs });
                 });
-                setFormData({ ...editingRecord, documents: mergedDocs });
             }
         }
     }, [view, editingRecord]);

@@ -130,6 +130,13 @@ const Sidebar = ({ isOpen, onClose, activeModule }) => {
     const [loadingFirebase, setLoadingFirebase] = useState(false);
 
     useEffect(() => {
+        // Automatically close the sidebar on mobile when route changes
+        if (window.innerWidth < 768) {
+            onClose();
+        }
+    }, [location.pathname]);
+
+    useEffect(() => {
         if (activeModule === 'transport' || activeModule === 'certificates') {
             setLoadingFirebase(true);
             const fetchFirebaseSections = async () => {

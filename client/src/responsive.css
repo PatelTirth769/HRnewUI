@@ -1,0 +1,155 @@
+/* ============================================================================
+   responsive.css — Mobile responsiveness layer
+   ----------------------------------------------------------------------------
+   Added as part of the mobile-responsiveness pass. This file is ADDITIVE and
+   intentionally scoped to small viewports only. Desktop (the design source of
+   truth) is left untouched: almost every rule lives inside a
+   `@media (max-width: 767px)` (phones) or `@media (max-width: 640px)` block.
+
+   Goals (mobile only):
+     - No horizontal overflow / broken layouts at 320–768px.
+     - Fluid images and media.
+     - Wide tables scroll instead of blowing out the viewport.
+     - Inputs render at >=16px so iOS doesn't auto-zoom on focus.
+     - Reasonable touch targets on primary navigation.
+     - Un-reflowed multi-column grids collapse gracefully on phones.
+
+   NOTE: rules are unlayered (this file is imported after Tailwind), so they win
+   over Tailwind utilities without needing !important. `!important` is used only
+   where we must override Ant Design's runtime-injected styles.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   1. Fluid media — an image/video/canvas should never force the page wider.
+   (Uses element selectors so Tailwind sizing classes like `h-14`/`w-auto`
+   still win; this only adds an upper bound.)
+   --------------------------------------------------------------------------- */
+img,
+video,
+canvas {
+  max-width: 100%;
+}
+
+/* ---------------------------------------------------------------------------
+   2. Viewport overflow guard. The content region (<main>) already scrolls
+   internally; this stops any unexpectedly-wide child from shifting the whole
+   document sideways on phones.
+   --------------------------------------------------------------------------- */
+html,
+body,
+#root {
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   3. Tables — make wide tables horizontally scrollable on phones instead of
+   overflowing the page or squishing into unreadable columns.
+   --------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  /* Raw HTML / Bootstrap tables: turn the table box into its own scroll
+     container. Browsers wrap the rows in an anonymous table box, so column
+     alignment is preserved while the block scrolls horizontally. */
+  table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Ant Design manages its own table internals — restore native table display
+     for its inner <table> so AntD layout is not disturbed. */
+  .ant-table table,
+  .ant-table-content table,
+  .ant-table-body table {
+    display: table;
+  }
+
+  /* Let Ant Design tables scroll horizontally within their card. */
+  .ant-table-content,
+  .ant-table-body {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Size AntD tables to their content so they scroll when wider than the
+     screen but stay full-width (no forced scroll) when they fit. */
+  .ant-table-content > table,
+  .ant-table-body > table {
+    min-width: max-content !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   4. Form controls — >=16px font on phones prevents iOS Safari from zooming
+   the viewport when a field gains focus. Covers native and Ant Design inputs.
+   --------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea,
+  .ant-input,
+  .ant-input-number-input,
+  .ant-select-selection-search-input,
+  .ant-select-selection-item,
+  .ant-picker-input > input {
+    font-size: 16px !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   5. Touch targets — give the app's primary navigation comfortable, >=44px
+   tap areas on phones. (Kept scoped to nav elements to avoid altering dense
+   in-table/toolbar controls, per the "no redesign" constraint.)
+   --------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .nav-dropdown-item,
+  .nav-dropdown-trigger {
+    min-height: 44px;
+  }
+
+  .nav-dropdown-item {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   6. Grid reflow — Tailwind grids written WITHOUT a responsive prefix (e.g.
+   `grid-cols-6`) keep all columns on phones and get cramped. Collapse those
+   un-prefixed multi-column grids to 2 columns at <=640px. Responsive-prefixed
+   grids (`md:grid-cols-*`, etc.) are separate classes and are untouched, so
+   the desktop layout does not change.
+   --------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .grid-cols-3,
+  .grid-cols-4,
+  .grid-cols-5,
+  .grid-cols-6,
+  .grid-cols-7,
+  .grid-cols-8,
+  .grid-cols-9,
+  .grid-cols-10,
+  .grid-cols-11,
+  .grid-cols-12 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   7. Overlays — Ant Design modals default to a fixed 520px width and overflow
+   small screens. Cap them to the viewport on phones.
+   --------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .ant-modal {
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+    top: 8px !important;
+  }
+}

@@ -4,6 +4,7 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import Header from './components/common/Header';
 import { useUserRole } from './hooks/useUserRole';
 import Sidebar from './components/common/Sidebar';
+import InstallPrompt from './components/common/InstallPrompt';
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const EmployeeSelfService = React.lazy(() => import('./pages/ESS/EmployeeSelfService'));
 const Approver = React.lazy(() => import('./pages/ESS/Approver'));
@@ -508,6 +509,7 @@ function App() {
 
   return (
     <div className="App flex flex-col h-screen overflow-hidden">
+      <InstallPrompt />
       {showHeader && <Header onModuleClick={handleModuleClick} />}
 
       <div className="flex flex-1 overflow-hidden relative">

@@ -50,6 +50,7 @@ import API from '../../services/api';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useInstructorGroups } from '../../hooks/useInstructorGroups';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
+import { triggerNotification } from '../../services/notificationService';
 
 const WEEKLY_PLAN_PATH = 'schooler_system/weekly_plan_management/weekly_plans';
 
@@ -172,7 +173,16 @@ export default function WeeklyPlan() {
                 await addDoc(collection(db, WEEKLY_PLAN_PATH), payload);
                 notification.success({
                     message: 'Success',
-                    description: 'Weekly Plan assigned successfully.'
+                    description: 'Weekly plan assigned successfully.'
+                });
+
+                triggerNotification({
+                    type: 'weekly_plan',
+                    title: `📅 Weekly Plan: ${payload.title}`,
+                    message: payload.description || 'New weekly plan published',
+                    targetType: payload.assignedToType,
+                    targetValue: payload.assignedTo,
+                    clickUrl: '/education/student-dashboard'
                 });
             }
             
@@ -550,7 +560,7 @@ export default function WeeklyPlan() {
     return (
         <div className="p-6 max-w-7xl mx-auto pb-40">
             {/* Header */}
-            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-gray-100 pb-4">
                 <div>
                     <h2 className="text-[22px] font-bold text-gray-900 tracking-tight flex items-center gap-2">
                         <FileTextOutlined className="text-blue-600" />
@@ -560,7 +570,7 @@ export default function WeeklyPlan() {
                         Assign, track, and manage student classwork & activities. Configured in Firebase.
                     </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3 w-full md:w-auto">
                     <Button 
                         icon={<DownloadOutlined />} 
                         onClick={handleDownloadWeeklyPlan}
@@ -705,6 +715,7 @@ export default function WeeklyPlan() {
                     dataSource={filteredAssignments}
                     loading={loading || loadingMasters || (isCoordinator ? coordinatorScope.loading : false) || (isInstructor ? instructorData.loading : false)}
                     rowKey="id"
+                    scroll={{ x: 'max-content' }}
                     pagination={{ 
                         pageSize: 10,
                         showSizeChanger: true,

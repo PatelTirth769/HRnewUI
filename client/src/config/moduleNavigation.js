@@ -849,8 +849,7 @@ export const moduleNavigation = {
                 title: 'Registration',
                 icon: 'user-add',
                 items: [
-                    { label: 'Registration Form', path: '/enquiry/registration/add' },
-                    { label: 'Manage Registration', path: '/enquiry/registration/manage' },
+                    { label: 'Registration Form', path: '/enquiry/registration/manage' },
                 ],
             },
             {

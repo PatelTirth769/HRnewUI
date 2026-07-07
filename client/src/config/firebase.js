@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getMessaging } from 'firebase/messaging';
 
 const firebaseConfig = {
     apiKey: "AIzaSyDaWAOPDZeATTSL7kQ-CDkbFstyvpTMkNM",
@@ -13,3 +14,11 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
+let messaging;
+if (typeof window !== 'undefined') {
+    messaging = getMessaging(app);
+}
+
+export { messaging };
+export const VAPID_KEY = "BM_RIcyUEubdIlDVza3KKpBzvpjPjuLlzuLAwsG1LaITUFKz0rR6QrRKSvsyOWeYqrrGKGfBQ1ojSSKfszm0n_g";

@@ -540,7 +540,8 @@ router.post('/record-offline-payment', requireAdminAuth, async (req, res) => {
             original_fee,
             discount_amount,
             discount_name,
-            discount_percentage
+            discount_percentage,
+            remark
         } = req.body;
 
         if (!student_id || !amount || !fees_category || !systemCode) {
@@ -674,7 +675,8 @@ router.post('/record-offline-payment', requireAdminAuth, async (req, res) => {
             original_fee: parseFloat(original_fee) || 0,
             discount_amount: parseFloat(discount_amount) || 0,
             discount_name: discount_name || '',
-            discount_percentage: parseFloat(discount_percentage) || 0
+            discount_percentage: parseFloat(discount_percentage) || 0,
+            remark: remark || ''
         };
 
         // Write to fee_payments

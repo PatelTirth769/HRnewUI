@@ -459,41 +459,48 @@ const GuardianDashboard = () => {
                 }
             }
 
-            // --- Coordinator Fetching ---
+            // --- Coordinator & Principal Fetching ---
             let coordinatorName = '';
+            let principalName = '';
             if (wardProf?.program) {
                 try {
                     const coordRef = collection(db, 'schooler_system', 'coordinators', 'data');
                     const qCoord = query(coordRef, where('programs', 'array-contains', wardProf.program));
                     const coordSnap = await getDocs(qCoord);
+                    
                     if (!coordSnap.empty) {
-                        const data = coordSnap.docs[0].data();
-                        let cName = data.name || data.coordinator_name;
-                        const cEmail = data.email;
-                        
-                        if (!cName && cEmail) {
-                            try {
-                                const userRes = await API.get(`/api/resource/User/${encodeURIComponent(cEmail)}`);
-                                if (userRes.data?.data?.full_name) {
-                                    cName = userRes.data.data.full_name;
-                                }
-                            } catch (userErr) {
-                                console.warn('[GuardianDashboard] ERPNext User fetch failed, falling back to Firebase:', userErr.message);
+                        for (const doc of coordSnap.docs) {
+                            const data = doc.data();
+                            let cName = data.name || data.coordinator_name;
+                            const cEmail = data.email;
+                            
+                            if (!cName && cEmail) {
                                 try {
-                                    const userSnap = await getDocs(query(collection(db, 'schooler_users'), where('email', '==', cEmail)));
-                                    if (!userSnap.empty) {
-                                        const userData = userSnap.docs[0].data();
-                                        cName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.username;
+                                    const userRes = await API.get(`/api/resource/User/${encodeURIComponent(cEmail)}`);
+                                    if (userRes.data?.data?.full_name) {
+                                        cName = userRes.data.data.full_name;
                                     }
-                                } catch (err) {
-                                    console.warn('[GuardianDashboard] Failed to fetch user name from schooler_users:', err.message);
+                                } catch (userErr) {
+                                    try {
+                                        const userSnap = await getDocs(query(collection(db, 'schooler_users'), where('email', '==', cEmail)));
+                                        if (!userSnap.empty) {
+                                            const userData = userSnap.docs[0].data();
+                                            cName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.username;
+                                        }
+                                    } catch (err) { }
                                 }
                             }
+                            
+                            const finalName = cName || cEmail;
+                            if (data.isPrincipal) {
+                                principalName = finalName;
+                            } else {
+                                if (!coordinatorName) coordinatorName = finalName;
+                            }
                         }
-                        coordinatorName = cName || cEmail;
                     }
                 } catch (e) {
-                    console.warn('[GuardianDashboard] Failed to fetch Coordinator details:', e.message);
+                    console.warn('[GuardianDashboard] Failed to fetch Coordinator/Principal details:', e.message);
                 }
             }
 
@@ -678,6 +685,7 @@ const GuardianDashboard = () => {
                 studentGroups,
                 classTeacher: classTeacherName,
                 coordinator: coordinatorName,
+                principal: principalName,
                 homework,
                 classwork,
                 weeklyPlans,
@@ -987,6 +995,8 @@ const GuardianDashboard = () => {
       discount_percentage: record.discount_percentage || 0,
       studentGroup: wardProfile?.student_group || record.student_group || record.section || '',
       boardName: wardProfile?.custom_board || '',
+      manual_receipt_ref: record.manual_receipt_ref || record.manual_receipt_no || '',
+      remark: record.remark || '',
       outstanding: outstanding,
       previous_payments: previous_payments
     };
@@ -1275,6 +1285,18 @@ const GuardianDashboard = () => {
                                 {wardProfile.custom_board || 'N/A'}
                             </span>
                         </div>
+                        {wardProfile.roll_number && (
+                            <div className="flex justify-between border-b border-gray-50 pb-3">
+                                <span className="text-gray-400 font-medium">Roll Number</span>
+                                <span className="font-bold text-gray-800">{wardProfile.roll_number}</span>
+                            </div>
+                        )}
+                        {wardProfile.gr_number && (
+                            <div className="flex justify-between border-b border-gray-50 pb-3">
+                                <span className="text-gray-400 font-medium">GR Number</span>
+                                <span className="font-bold text-gray-800">{wardProfile.gr_number}</span>
+                            </div>
+                        )}
                         <div className="flex justify-between border-b border-gray-50 pb-3">
                             <span className="text-gray-400 font-medium">Gender</span>
                             <span className="font-bold text-gray-800">{wardProfile.gender || 'N/A'}</span>
@@ -1305,6 +1327,12 @@ const GuardianDashboard = () => {
                             <span className="text-gray-400 font-medium">Coordinator</span>
                             <span className="font-bold text-purple-600 flex items-center gap-1">
                                 <UserOutlined /> {wardDetails.coordinator || 'Not Assigned'}
+                            </span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-50 pb-3">
+                            <span className="text-gray-400 font-medium">Principal</span>
+                            <span className="font-bold text-rose-600 flex items-center gap-1">
+                                <UserOutlined /> {wardDetails.principal || 'Not Assigned'}
                             </span>
                         </div>
                         <div className="flex justify-between">

@@ -299,7 +299,7 @@ export default function StudentMonthlyAttendanceSheet() {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', padding: '24px', background: '#f9fafb', overflow: 'hidden', fontFamily: 'sans-serif' }}>
             {/* Header */}
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-4">
                 <h1 className="text-2xl font-bold text-gray-900 m-0">Student Monthly Attendance Sheet</h1>
                 <div className="flex items-center space-x-2">
                     <Dropdown menu={{ items: actionMenuItems, onClick: handleActionClick }} trigger={['click']}>
@@ -391,7 +391,7 @@ export default function StudentMonthlyAttendanceSheet() {
                 </div>
 
                 {/* Footer */}
-                <div className="px-3 py-2 border-t border-gray-100 text-[#8D99A6] text-[11px] flex justify-between items-center bg-white" style={{ flexShrink: 0 }}>
+                <div className="px-3 py-2 border-t border-gray-100 text-[#8D99A6] text-[11px] flex flex-col md:flex-row md:justify-between items-center bg-white gap-2" style={{ flexShrink: 0 }}>
                     <span>Report shows attendance status (P=Present, A=Absent, L=Leave, H=Half Day) for the selected group and month.</span>
                     <span>Execution Time: {executionTime} sec</span>
                 </div>

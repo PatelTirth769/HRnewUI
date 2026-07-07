@@ -256,9 +256,9 @@ const Program = () => {
 
         return (
             <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
                     <h1 className="text-2xl font-semibold text-gray-800">Program (Class)</h1>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 flex items-center gap-2 transition" onClick={fetchPrograms} disabled={loadingList}>
                             {loadingList ? '⟳ Loading...' : '⟳ Refresh'}
                         </button>
@@ -280,7 +280,7 @@ const Program = () => {
                         <option value="All">All Boards</option>
                         {companies.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
-                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-64 outline-none focus:border-blue-400" placeholder="Search Name, Abbr or Dept..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-full md:w-64 outline-none focus:border-blue-400" placeholder="Search Name, Abbr or Dept..." value={search} onChange={(e) => setSearch(e.target.value)} />
                     {(search || filterBoard !== 'All') && (
                         <button className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1" onClick={clearFilters}>
                             ✕ Clear Filters
@@ -290,8 +290,8 @@ const Program = () => {
                 </div>
 
                 {/* Data Table */}
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <table className="w-full text-sm text-left">
+                <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto w-full">
+                    <table className="w-full text-sm text-left whitespace-nowrap min-w-[800px]">
                         <thead className="bg-gray-50 border-b">
                             <tr>
                                 <th className="px-4 py-3 font-medium text-gray-600">Program Name</th>

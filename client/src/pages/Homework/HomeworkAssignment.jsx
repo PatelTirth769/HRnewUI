@@ -50,6 +50,7 @@ import API from '../../services/api';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useInstructorGroups } from '../../hooks/useInstructorGroups';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
+import { triggerNotification } from '../../services/notificationService';
 
 const HOMEWORK_PATH = 'schooler_system/homework_management/assignments';
 
@@ -173,6 +174,15 @@ export default function HomeworkAssignment() {
                 notification.success({
                     message: 'Success',
                     description: 'Homework assigned successfully.'
+                });
+
+                triggerNotification({
+                    type: 'homework',
+                    title: `📚 New Homework: ${payload.subject}`,
+                    message: payload.description || 'New homework assigned',
+                    targetType: payload.assignedToType,
+                    targetValue: payload.assignedTo,
+                    clickUrl: '/education/student-dashboard'
                 });
             }
             
@@ -554,7 +564,7 @@ export default function HomeworkAssignment() {
     return (
         <div className="p-6 max-w-7xl mx-auto pb-40">
             {/* Header */}
-            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-gray-100 pb-4">
                 <div>
                     <h2 className="text-[22px] font-bold text-gray-900 tracking-tight flex items-center gap-2">
                         <FileTextOutlined className="text-blue-600" />
@@ -564,7 +574,7 @@ export default function HomeworkAssignment() {
                         Assign, track, and manage student homework assignments. Configured in Firebase.
                     </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3 w-full md:w-auto">
                     <Button 
                         icon={<DownloadOutlined />} 
                         onClick={handleDownloadHomework}
@@ -709,6 +719,7 @@ export default function HomeworkAssignment() {
                     dataSource={filteredAssignments}
                     loading={loading || loadingMasters || (isCoordinator ? coordinatorScope.loading : false)}
                     rowKey="id"
+                    scroll={{ x: 'max-content' }}
                     pagination={{ 
                         pageSize: 10,
                         showSizeChanger: true,

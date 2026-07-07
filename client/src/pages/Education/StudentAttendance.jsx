@@ -1298,8 +1298,8 @@ const StudentAttendance = () => {
 
                 {importView === 'list' ? (
                     <>
-                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                            <table className="w-full text-sm text-left">
+                        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm w-full">
+                            <table className="w-full text-sm text-left whitespace-nowrap min-w-[700px]">
                                 <thead className="bg-gray-50 border-b">
                                     <tr>
                                         <th className="px-4 py-3 font-semibold text-gray-600">ID</th>
@@ -1409,7 +1409,7 @@ const StudentAttendance = () => {
                                     )}
                                 </div>
                                 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Document Type</label>
                                         <input 
@@ -1639,7 +1639,7 @@ const StudentAttendance = () => {
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs max-h-[140px] overflow-y-auto border border-gray-200 rounded p-2.5 bg-gray-50 font-semibold">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-xs max-h-[140px] overflow-y-auto border border-gray-200 rounded p-2.5 bg-gray-50 font-semibold">
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input 
                                                 type="checkbox" 
@@ -1822,9 +1822,9 @@ const StudentAttendance = () => {
 
         return (
             <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
                     <h1 className="text-2xl font-bold text-gray-800">Student Attendance</h1>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 transition" onClick={fetchAttendanceList}>Refresh</button>
                         <button 
                             className="px-4 py-2 bg-white text-gray-700 text-sm rounded border border-gray-300 hover:bg-gray-50 flex items-center gap-1.5 transition font-semibold" 
@@ -1849,7 +1849,7 @@ const StudentAttendance = () => {
                 </div>
 
                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-5 shadow-sm">
-                    <div className="flex justify-between items-center mb-3">
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-3">
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Filter By</span>
                         {Object.values(filters).some(v => v !== '') && (
                             <button className="text-xs text-red-500 hover:text-red-700 font-semibold flex items-center gap-1" onClick={() => setFilters({ name: '', student: '', student_name: '', program: '', student_group: '', status: '', start_date: '', end_date: '', board: 'All' })}>
@@ -1857,7 +1857,7 @@ const StudentAttendance = () => {
                             </button>
                         )}
                     </div>
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <div>
                             <input type="text" className="w-full border border-gray-300 rounded px-3 py-2 text-xs focus:outline-none focus:border-blue-500 bg-white" placeholder="ID" value={filters.name} onChange={e => setFilters(prev => ({ ...prev, name: e.target.value }))} />
                         </div>
@@ -1931,8 +1931,8 @@ const StudentAttendance = () => {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-                    <table className="w-full text-sm text-left">
+                <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto shadow-sm w-full">
+                    <table className="w-full text-sm text-left whitespace-nowrap min-w-[700px]">
                         <thead className="bg-gray-50 border-b">
                             <tr>
                                 <th className="px-4 py-3 font-semibold text-gray-600">ID</th>
@@ -2119,7 +2119,7 @@ const StudentAttendance = () => {
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 space-y-8">
-                <div className="grid grid-cols-2 gap-x-12 gap-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                     <div>
                         <label className={labelStyle}>Series</label>
                         <select className={inputStyle} value={form.naming_series} onChange={e => setForm({ ...form, naming_series: e.target.value })} disabled={isDocDisabled}>

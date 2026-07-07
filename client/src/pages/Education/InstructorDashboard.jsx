@@ -356,16 +356,16 @@ const InstructorDashboard = () => {
         <div className="p-6 lg:p-10 max-w-[1600px] mx-auto animate-in fade-in duration-700">
             {/* Header Section */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
-                <div className="flex items-center gap-5">
-                    <div className="relative">
+                <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-5 w-full md:w-auto">
+                    <div className="relative shrink-0">
                         <Avatar size={72} icon={<UserOutlined />} className="bg-blue-600 shadow-xl" />
                         <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 border-4 border-white rounded-full"></div>
                     </div>
                     <div>
-                        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight leading-tight">
+                        <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight leading-tight">
                             Hello, {instructorData.instructor_name || 'Instructor'}!
                         </h1>
-                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                        <div className="flex items-center justify-center sm:justify-start gap-3 mt-2 flex-wrap">
                             <span className="text-blue-600 font-semibold text-sm flex items-center gap-1.5 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
                                 <BookOutlined className="text-xs" /> {instructorData.department || 'Academic Faculty'}
                             </span>
@@ -386,7 +386,7 @@ const InstructorDashboard = () => {
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-gray-100">
+                <div className="flex items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-gray-100 self-center md:self-auto">
                     <div className="px-4 py-2 text-right">
                         <div className="text-[10px] uppercase font-bold text-gray-400 tracking-widest">Current Term</div>
                         <div className="text-sm font-bold text-gray-800">Fall Semester 2026</div>
@@ -481,6 +481,7 @@ const InstructorDashboard = () => {
                                 columns={columns} 
                                 pagination={false} 
                                 className="custom-table"
+                                scroll={{ x: 'max-content' }}
                                 rowKey="name"
                                 locale={{ emptyText: <div className="py-10 text-gray-400">No classes scheduled for today.</div> }}
                             />
@@ -502,6 +503,7 @@ const InstructorDashboard = () => {
                                 dataSource={instructorData.instructor_log || []} 
                                 pagination={{ pageSize: 5 }}
                                 className="custom-table"
+                                scroll={{ x: 'max-content' }}
                                 rowKey={(record, idx) => idx}
                                 columns={[
                                     { title: 'Academic Year', dataIndex: 'academic_year', key: 'ay' },

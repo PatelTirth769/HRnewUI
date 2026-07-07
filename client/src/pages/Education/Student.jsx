@@ -2299,14 +2299,14 @@ const Student = () => {
         return (
             <div className="p-6 max-w-[1400px] mx-auto pb-24 text-gray-800 font-inter">
                 {contextHolder}
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
                     <div>
                         <h1 className="text-2xl font-black text-gray-900 tracking-tight">Students</h1>
                         <div className="flex items-center gap-2 text-[12px] text-gray-500 mt-1 font-medium">
                             <span>Home</span> / <span>Education</span> / <span className="text-blue-600 font-bold">Students</span>
                         </div>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-2 md:gap-3">
                         {userRole !== 'Instructor' && (
                             <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95 cursor-pointer" onClick={() => setView('import')}>
                                 Data Import
@@ -2330,9 +2330,9 @@ const Student = () => {
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-5 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
-                        <div className="flex items-center gap-3 w-full max-w-xl">
-                            <div className="relative flex-1">
+                    <div className="p-5 border-b border-gray-50 flex flex-col md:flex-row items-center justify-between bg-gray-50/30 gap-4">
+                        <div className="flex flex-col md:flex-row items-center gap-3 w-full max-w-xl">
+                            <div className="relative flex-1 w-full">
                                 <FiSearch className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                                 <input 
                                     type="text" 
@@ -2342,7 +2342,7 @@ const Student = () => {
                                     onChange={(e) => setSearch(e.target.value)} 
                                 />
                             </div>
-                            <div className="relative">
+                            <div className="relative w-full md:w-auto">
                                 <select 
                                     className="bg-white border border-gray-200 rounded-xl pl-4 pr-8 py-2 text-sm focus:border-blue-400 focus:outline-none transition-all font-semibold text-gray-700 appearance-none cursor-pointer"
                                     value={selectedProgram} 
@@ -2422,8 +2422,8 @@ const Student = () => {
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-[12px]">
+                    <div className="overflow-x-auto w-full">
+                        <table className="w-full text-left text-[12px] whitespace-nowrap min-w-[1000px]">
                             <thead>
                                 <tr className="bg-gray-50/50">
                                     <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">ID</th>
@@ -2876,8 +2876,8 @@ const Student = () => {
 
                         <div className="pt-8 border-t border-gray-100">
                             <h3 className={sectionTitleStyle}>Sibling Details</h3>
-                            <div className="border border-gray-200 rounded-lg overflow-hidden">
-                                <table className="w-full text-sm">
+                            <div className="border border-gray-200 rounded-lg overflow-x-auto w-full">
+                                <table className="w-full text-sm whitespace-nowrap min-w-[800px]">
                                     <thead className="bg-gray-50 text-gray-600 border-b text-[13px]">
                                         <tr>
                                             <th className="px-3 py-2.5 text-left w-12">No.</th>

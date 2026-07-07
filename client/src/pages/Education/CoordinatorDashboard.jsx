@@ -59,6 +59,13 @@ export default function CoordinatorDashboard() {
                     const data = snap.docs[0].data();
                     assignedPrograms = data.programs || [];
                     assignedBoards = data.boards || [];
+                    
+                    if (data.isPrincipal) {
+                        setCoordinatorData(prev => ({
+                            ...prev,
+                            designation: 'Principal'
+                        }));
+                    }
                 }
                 
                 // Save globally so other pages can filter if needed
@@ -115,7 +122,7 @@ export default function CoordinatorDashboard() {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '80vh', gap: '20px' }}>
                 <Spin indicator={<LoadingOutlined style={{ fontSize: 48 }} spin />} />
-                <Text type="secondary">Loading Coordinator Dashboard...</Text>
+                <Text type="secondary">Loading {coordinatorData.designation} Dashboard...</Text>
             </div>
         );
     }
@@ -140,9 +147,9 @@ export default function CoordinatorDashboard() {
             `}} />
 
             {/* ── Welcome Banner ── */}
-            <div style={{
+            <div className="flex flex-col md:flex-row items-center md:items-center text-center md:text-left gap-4 md:gap-6 p-6 md:p-8 mb-6" style={{
                 background: 'linear-gradient(135deg, #f97316 0%, #ea580c 50%, #c2410c 100%)',
-                borderRadius: 16, padding: '28px 32px', color: '#fff', display: 'flex', alignItems: 'center', gap: 24, marginBottom: 24,
+                borderRadius: 16, color: '#fff', 
                 boxShadow: '0 8px 32px rgba(249,115,22,0.25)'
             }}>
                 <div style={{
@@ -151,15 +158,15 @@ export default function CoordinatorDashboard() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 24, fontWeight: 700, flexShrink: 0
                 }}>{initials}</div>
-                <div style={{ flex:1 }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>
+                <div style={{ flex:1, minWidth: 0 }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4, wordBreak: 'break-word' }}>
                         Welcome back, {coordinatorData.name}
                     </div>
                     <div style={{ fontSize: 13, opacity: .85 }}>
                         {coordinatorData.designation} · {coordinatorData.department}
                     </div>
                 </div>
-                <div style={{ textAlign:'right', flexShrink:0 }}>
+                <div className="md:text-right flex-shrink-0 mt-2 md:mt-0">
                     <div style={{ fontSize: 12, opacity: .7, marginBottom: 2 }}>Today</div>
                     <div style={{ fontSize: 20, fontWeight: 700 }}>{dayjs().format('DD MMM')}</div>
                     <div style={{ fontSize: 11, opacity: .7 }}>{dayjs().format('dddd')}</div>

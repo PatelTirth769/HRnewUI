@@ -50,6 +50,7 @@ import API from '../../services/api';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useInstructorGroups } from '../../hooks/useInstructorGroups';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
+import { triggerNotification } from '../../services/notificationService';
 
 const CLASSWORK_PATH = 'schooler_system/classwork_management/assignments';
 
@@ -172,6 +173,15 @@ export default function ClassworkAssignment() {
                 notification.success({
                     message: 'Success',
                     description: 'Classwork assigned successfully.'
+                });
+
+                triggerNotification({
+                    type: 'classwork',
+                    title: `📝 New Classwork: ${payload.subject}`,
+                    message: payload.description || 'New classwork assigned',
+                    targetType: payload.assignedToType,
+                    targetValue: payload.assignedTo,
+                    clickUrl: '/education/student-dashboard'
                 });
             }
             
@@ -548,7 +558,7 @@ export default function ClassworkAssignment() {
     return (
         <div className="p-6 max-w-7xl mx-auto pb-40">
             {/* Header */}
-            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-gray-100 pb-4">
                 <div>
                     <h2 className="text-[22px] font-bold text-gray-900 tracking-tight flex items-center gap-2">
                         <FileTextOutlined className="text-blue-600" />
@@ -558,7 +568,7 @@ export default function ClassworkAssignment() {
                         Assign, track, and manage student classwork & activities. Configured in Firebase.
                     </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3 w-full md:w-auto">
                     <Button 
                         icon={<DownloadOutlined />} 
                         onClick={handleDownloadClasswork}
@@ -703,6 +713,7 @@ export default function ClassworkAssignment() {
                     dataSource={filteredAssignments}
                     loading={loading || loadingMasters || (isCoordinator ? coordinatorScope.loading : false) || (isInstructor ? instructorData.loading : false)}
                     rowKey="id"
+                    scroll={{ x: 'max-content' }}
                     pagination={{ 
                         pageSize: 10,
                         showSizeChanger: true,

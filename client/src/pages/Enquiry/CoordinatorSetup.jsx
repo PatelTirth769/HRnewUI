@@ -40,6 +40,7 @@ const CoordinatorSetup = () => {
     email: '',
     selectedBoards: [],
     selectedPrograms: [],
+    isPrincipal: false,
   });
   
   const [submitting, setSubmitting] = useState(false);
@@ -166,6 +167,7 @@ const CoordinatorSetup = () => {
         email: form.email,
         boards: form.selectedBoards,
         programs: form.selectedPrograms,
+        isPrincipal: form.isPrincipal,
         updatedAt: serverTimestamp(),
       };
       
@@ -187,7 +189,7 @@ const CoordinatorSetup = () => {
         setSuccess('Coordinator added successfully.');
       }
       
-      setForm({ id: null, email: '', selectedBoards: [], selectedPrograms: [] });
+      setForm({ id: null, email: '', selectedBoards: [], selectedPrograms: [], isPrincipal: false });
       fetchCoordinators();
     } catch (err) {
       console.error('Submit error:', err);
@@ -203,6 +205,7 @@ const CoordinatorSetup = () => {
       email: coord.email,
       selectedBoards: coord.boards || [],
       selectedPrograms: coord.programs || [],
+      isPrincipal: !!coord.isPrincipal,
     });
     setError('');
     setSuccess('');
@@ -228,6 +231,7 @@ const CoordinatorSetup = () => {
 
     const exportData = coordinators.map(c => ({
       Email: c.email || '-',
+      Role: c.isPrincipal ? 'Principal' : 'Coordinator',
       Boards: c.boards?.length ? c.boards.join(', ') : 'None',
       Programs: c.programs?.length ? c.programs.join(', ') : 'None'
     }));
@@ -338,6 +342,18 @@ const CoordinatorSetup = () => {
                 )}
               </div>
 
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.isPrincipal}
+                    onChange={(e) => setForm({ ...form, isPrincipal: e.target.checked })}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                  Assign as Principal (Changes dashboard text from Coordinator to Principal)
+                </label>
+              </div>
+
               <div style={{ display: 'flex', gap: 12 }}>
                 <button
                   type="submit"
@@ -349,7 +365,7 @@ const CoordinatorSetup = () => {
                 {form.id && (
                   <button
                     type="button"
-                    onClick={() => setForm({ id: null, email: '', selectedBoards: [], selectedPrograms: [] })}
+                    onClick={() => setForm({ id: null, email: '', selectedBoards: [], selectedPrograms: [], isPrincipal: false })}
                     style={{ padding: '12px 20px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}
                   >
                     Cancel
@@ -384,7 +400,14 @@ const CoordinatorSetup = () => {
                 {coordinators.map(c => (
                   <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: 16, border: '1px solid #f1f5f9', borderRadius: 12, background: '#fafaf9' }}>
                     <div>
-                      <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>{c.email}</div>
+                      <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {c.email}
+                        {c.isPrincipal && (
+                          <span style={{ fontSize: 11, padding: '2px 8px', background: '#e0e7ff', color: '#4f46e5', borderRadius: 12, fontWeight: 700 }}>
+                            Principal
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 13, color: '#64748b', marginBottom: 2 }}>
                         <strong>Boards:</strong> {c.boards?.length ? c.boards.join(', ') : 'None'}
                       </div>

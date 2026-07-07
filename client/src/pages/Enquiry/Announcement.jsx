@@ -7,6 +7,7 @@ import API from '../../services/api';
 import { useUserRole } from '../../hooks/useUserRole';
 import { useInstructorGroups } from '../../hooks/useInstructorGroups';
 import { useCoordinatorScope } from '../../hooks/useCoordinatorScope';
+import { triggerNotification } from '../../services/notificationService';
 
 // ─── Icons (inline SVG) ──────────────────────────────────────────────────────
 const BellIcon = () => (
@@ -209,6 +210,16 @@ const Announcement = () => {
         createdBy:   localStorage.getItem('user') || 'admin',
       });
       setSuccess('Announcement published successfully!');
+      
+      triggerNotification({
+          type: 'announcement',
+          title: `📢 ${form.title.trim()}`,
+          message: form.message.trim(),
+          targetType: form.targetType,
+          targetValue: targetVal,
+          clickUrl: '/education/student-dashboard' // defaults, can be handled dynamically in receiver
+      });
+
       setForm({ title: '', message: '', targetType: 'All', targetValue: '' });
       setSelectedBoard('');
       setSelectedProgram('');
@@ -395,7 +406,7 @@ const Announcement = () => {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 28, alignItems: 'start' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-7 items-start">
 
           {/* ── Create Form ────────────────────────────────────────────────── */}
           <div style={{
@@ -494,7 +505,7 @@ const Announcement = () => {
               {form.targetType === 'Student' && (
                 <>
                   {/* Cascading selectors */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                     <div>
                       <label style={labelStyle}>Select Board *</label>
                       <select

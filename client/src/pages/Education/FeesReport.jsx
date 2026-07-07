@@ -717,7 +717,7 @@ const FeesReport = () => {
     }, [allData, filters.program, filters.board]);
 
     return (
-        <div style={{ padding: '32px', maxWidth: 1700, margin: '0 auto' }}>
+        <div style={{ padding: '16px', maxWidth: 1700, margin: '0 auto' }}>
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
                 <div>
@@ -785,7 +785,7 @@ const FeesReport = () => {
                                 }
                             >
                                 {dataStudents.map(([id, name]) => (
-                                    <Option key={id} value={name}>{name} ({id})</Option>
+                                    <Option key={id} value={id}>{name} ({id})</Option>
                                 ))}
                             </Select>
                         </Col>
@@ -870,14 +870,13 @@ const FeesReport = () => {
                     loading={loading}
                     rowKey={(r) => r.key || `${r.student_id}_${r.academic_term}`}
                     pagination={{ pageSize: 25, showSizeChanger: true, pageSizeOptions: ['10', '25', '50', '100'], showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}` }}
-
+                    scroll={{ x: 'max-content' }}
                     className="fees-report-table"
                     size="middle"
                 />
             </div>
 
             <style dangerouslySetInnerHTML={{ __html: `
-                .fees-report-table .ant-table { table-layout: fixed !important; }
                 .fees-report-table .ant-table-thead > tr > th { 
                     background: #f8fafc !important; font-size: 10px; color: #94a3b8;
                     text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800;
@@ -889,7 +888,7 @@ const FeesReport = () => {
                 .fees-report-table .ant-table-row:hover .ant-table-cell { background: #f8fafc !important; }
                 .fees-report-table .ant-table-row:nth-child(even) .ant-table-cell { background: #fafbfc; }
                 .fees-report-table .ant-table-row:nth-child(even):hover .ant-table-cell { background: #f1f5f9 !important; }
-                .fees-report-table .ant-table-content { overflow: hidden !important; }
+                .fees-report-table .ant-table-content { overflow-x: auto !important; }
             `}} />
         </div>
     );

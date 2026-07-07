@@ -32,6 +32,8 @@ const Guardian = () => {
     const [guardians, setGuardians] = useState([]);
     const [loadingList, setLoadingList] = useState(true);
     const [search, setSearch] = useState('');
+    const [pageSize, setPageSize] = useState(20);
+    const [visibleCount, setVisibleCount] = useState(20);
 
     // Form states
     const [form, setForm] = useState(emptyForm());
@@ -50,6 +52,10 @@ const Guardian = () => {
             }
         }
     }, [view, editingRecord, isCoordinator, coordinatorScope.loading]);
+
+    useEffect(() => {
+        setVisibleCount(pageSize);
+    }, [search, pageSize]);
 
     const fetchGuardians = async () => {
         try {
@@ -249,9 +255,9 @@ const Guardian = () => {
 
         return (
             <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
                     <h1 className="text-2xl font-semibold text-gray-800">Guardians</h1>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded border hover:bg-gray-200 flex items-center gap-2 transition" onClick={fetchGuardians} disabled={loadingList}>
                             {loadingList ? '⟳ Loading...' : '⟳ Refresh'}
                         </button>
@@ -264,7 +270,7 @@ const Guardian = () => {
                 </div>
 
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-80" placeholder="Search ID, Name, Occupation or Email..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-full md:w-80" placeholder="Search ID, Name, Occupation or Email..." value={search} onChange={(e) => setSearch(e.target.value)} />
                     {search && (
                         <button className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1" onClick={() => setSearch('')}>
                             ✕ Clear Filters
@@ -273,8 +279,8 @@ const Guardian = () => {
                     <div className="ml-auto text-xs text-gray-400">{filtered.length} of {guardians.length}</div>
                 </div>
 
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <table className="w-full text-sm text-left">
+                <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto w-full">
+                    <table className="w-full text-sm text-left whitespace-nowrap min-w-[700px]">
                         <thead className="bg-gray-50 border-b">
                             <tr>
                                 <th className="px-4 py-3 font-medium text-gray-600">ID</th>
@@ -295,7 +301,7 @@ const Guardian = () => {
                                     </td>
                                 </tr>
                             ) : (
-                                filtered.map((row) => (
+                                filtered.slice(0, visibleCount).map((row) => (
                                     <tr key={row.name} className="border-b hover:bg-gray-50 transition-colors">
                                         <td className="px-4 py-3">
                                             <button className="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-left text-base" onClick={() => { setEditingRecord(row.name); setView('form'); }}>
@@ -311,6 +317,33 @@ const Guardian = () => {
                             )}
                         </tbody>
                     </table>
+                    
+                    {/* Pagination Controls */}
+                    {!loadingList && filtered.length > 0 && (
+                        <div className="flex justify-between items-center p-4 bg-gray-50/30 border-t border-gray-100">
+                            <div className="flex items-center border border-gray-200 rounded-xl bg-white overflow-hidden shadow-xs">
+                                {[20, 100, 500, 2500].map(size => (
+                                    <button
+                                        key={size}
+                                        className={`px-4 py-1.5 text-xs font-bold border-r border-gray-200 last:border-r-0 hover:bg-gray-50 transition cursor-pointer ${
+                                            pageSize === size ? 'bg-gray-100 text-gray-800' : 'text-gray-500'
+                                        }`}
+                                        onClick={() => setPageSize(size)}
+                                    >
+                                        {size}
+                                    </button>
+                                ))}
+                            </div>
+                            {visibleCount < filtered.length && (
+                                <button
+                                    className="px-5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl shadow-xs hover:bg-gray-50 transition active:scale-95 cursor-pointer"
+                                    onClick={() => setVisibleCount(prev => prev + pageSize)}
+                                >
+                                    Load More
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -387,8 +420,8 @@ const Guardian = () => {
 
                 <div className="mt-10">
                     <h3 className="font-semibold text-gray-800 text-sm mb-4 uppercase tracking-wider">Guardian Of</h3>
-                    <div className="border border-gray-200 rounded-lg overflow-hidden max-w-2xl">
-                        <table className="w-full text-sm">
+                    <div className="border border-gray-200 rounded-lg overflow-x-auto max-w-2xl w-full">
+                        <table className="w-full text-sm whitespace-nowrap min-w-[500px]">
                             <thead className="bg-gray-50 text-gray-600 border-b text-[13px]">
                                 <tr>
                                     <th className="px-3 py-2.5 text-left w-12">No.</th>
@@ -415,8 +448,8 @@ const Guardian = () => {
 
                 <div className="mt-10 pt-8 border-t border-gray-100">
                     <h3 className="font-semibold text-gray-800 text-sm mb-4 uppercase tracking-wider">Guardian Interests</h3>
-                    <div className="border border-gray-200 rounded-lg overflow-hidden max-w-2xl">
-                        <table className="w-full text-sm">
+                    <div className="border border-gray-200 rounded-lg overflow-x-auto max-w-2xl w-full">
+                        <table className="w-full text-sm whitespace-nowrap min-w-[500px]">
                             <thead className="bg-gray-50 text-gray-600 border-b text-[13px]">
                                 <tr>
                                     <th className="px-3 py-2.5 text-left w-12">No.</th>

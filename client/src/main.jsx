@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/auth.jsx'
 import ErrorBoundary from './components/common/ErrorBoundary.jsx'
+import { registerServiceWorker } from './pwa/registerSW.js'
 
 createRoot(document.getElementById('root')).render(
   <BrowserRouter>
@@ -14,3 +15,6 @@ createRoot(document.getElementById('root')).render(
     </ErrorBoundary>
   </BrowserRouter>
 )
+
+// Register the PWA service worker (production + secure context only).
+registerServiceWorker()

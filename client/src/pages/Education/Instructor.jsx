@@ -322,9 +322,9 @@ const Instructor = () => {
 
         return (
             <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
                     <h1 className="text-2xl font-semibold text-gray-800">Instructors</h1>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95 cursor-pointer" onClick={() => handleExport('csv')} disabled={loadingList}>
                             <FiDownload className="w-4 h-4 text-blue-600" /> CSV
                         </button>
@@ -343,7 +343,7 @@ const Instructor = () => {
                 </div>
 
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-80" placeholder="Search ID, Name, Employee or Dept..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <input type="text" className="border border-gray-300 rounded px-3 py-2 text-sm w-full md:w-80" placeholder="Search ID, Name, Employee or Dept..." value={search} onChange={(e) => setSearch(e.target.value)} />
                     {search && (
                         <button className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1" onClick={() => setSearch('')}>
                             ✕ Clear Filters
@@ -352,8 +352,8 @@ const Instructor = () => {
                     <div className="ml-auto text-xs text-gray-400">{filtered.length} of {instructors.length}</div>
                 </div>
 
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <table className="w-full text-sm text-left">
+                <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto w-full">
+                    <table className="w-full text-sm text-left whitespace-nowrap min-w-[700px]">
                         <thead className="bg-gray-50 border-b">
                             <tr>
                                 <th className="px-4 py-3 font-medium text-gray-600">ID</th>
@@ -518,8 +518,8 @@ const Instructor = () => {
 
                 <div className="mt-10 pt-8 border-t border-gray-100">
                     <h3 className="font-semibold text-gray-800 text-sm mb-4 uppercase tracking-wider">Instructor Log</h3>
-                    <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <table className="w-full text-sm">
+                    <div className="border border-gray-200 rounded-lg overflow-x-auto w-full">
+                        <table className="w-full text-sm whitespace-nowrap min-w-[500px]">
                             <thead className="bg-gray-50 text-gray-600 border-b text-[13px]">
                                 <tr>
                                     <th className="px-3 py-2.5 text-left w-12">No.</th>

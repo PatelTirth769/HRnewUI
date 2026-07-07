@@ -489,7 +489,7 @@ const QuickAttendance = () => {
             <style>{`@keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
 
             {/* Header */}
-            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6 border-b border-gray-100 pb-4">
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => navigate(-1)}
@@ -543,7 +543,7 @@ const QuickAttendance = () => {
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
 
                 {/* Filter Fields */}
-                <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-5 border-b border-gray-100">
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-5 border-b border-gray-100">
                     {/* Date */}
                     <div>
                         <label className={`${labelStyle} flex gap-1 items-center`}>
@@ -618,9 +618,9 @@ const QuickAttendance = () => {
                 </div>
 
                 {/* Get Students Button */}
-                <div className="px-6 py-4 bg-white border-b border-gray-100 flex items-center gap-3">
+                <div className="px-6 py-4 bg-white border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-3">
                     <button
-                        className="h-9 px-5 text-[13px] font-semibold bg-gray-100 border border-gray-200 text-gray-700 hover:bg-gray-200 hover:border-gray-300 rounded transition-colors disabled:opacity-40"
+                        className="h-9 px-5 text-[13px] font-semibold bg-gray-100 border border-gray-200 text-gray-700 hover:bg-gray-200 hover:border-gray-300 rounded transition-colors disabled:opacity-40 whitespace-nowrap"
                         onClick={handleGetStudents}
                         disabled={fetchingStudents || !selectedGroup}
                     >
@@ -645,7 +645,7 @@ const QuickAttendance = () => {
                 {students.length > 0 && (
                     <div className="px-6 py-4">
                         {/* Bulk Actions & Search */}
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-4">
                             <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-3">
                                 Student List ({students.length})
                             </label>
@@ -679,8 +679,8 @@ const QuickAttendance = () => {
                         </div>
 
                         {/* Table */}
-                        <div className="border border-gray-200 rounded-lg overflow-hidden">
-                            <table className="w-full">
+                        <div className="border border-gray-200 rounded-lg overflow-x-auto w-full">
+                            <table className="w-full whitespace-nowrap min-w-[700px]">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200">
                                         <th className="text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-4 py-2.5 w-[50px]">No.</th>

@@ -50,7 +50,9 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
         discount_name = '',
         discount_percentage = 0,
         studentGroup = '',
-        boardName = ''
+        boardName = '',
+        manual_receipt_ref = '',
+        remark = ''
     } = receiptData;
 
     const {
@@ -181,6 +183,8 @@ const FeeReceiptTemplate = forwardRef(({ receiptData, schoolData }, ref) => {
             <div style={{ marginBottom: '40px', padding: '15px', backgroundColor: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
                 <p style={{ margin: '0 0 8px 0', fontSize: '13px' }}><span style={{ fontWeight: 'bold', color: '#475569' }}>Payment Mode:</span> {paymentMode}</p>
                 <p style={{ margin: '0 0 8px 0', fontSize: '13px' }}><span style={{ fontWeight: 'bold', color: '#475569' }}>Transaction ID:</span> {transactionNo}</p>
+                {manual_receipt_ref && <p style={{ margin: '0 0 8px 0', fontSize: '13px' }}><span style={{ fontWeight: 'bold', color: '#475569' }}>Manual Receipt Ref:</span> {manual_receipt_ref}</p>}
+                {remark && <p style={{ margin: '0 0 8px 0', fontSize: '13px' }}><span style={{ fontWeight: 'bold', color: '#475569' }}>Remark:</span> {remark}</p>}
                 <p style={{ margin: '0', fontSize: '14px', fontWeight: 'bold', color: '#1e3a8a', fontStyle: 'italic' }}>
                     Amount in Words: {numberToWords(amount)}
                 </p>

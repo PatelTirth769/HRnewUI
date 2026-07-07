@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Mobile responsiveness layer (additive, scoped to small viewports). */
+@import "./responsive.css";
 
 a {
   text-decoration: none;
@@ -133,6 +135,17 @@ a:hover {
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) translateY(0);
+}
+
+@media (max-width: 768px) {
+  .nav-dropdown-content {
+    left: auto !important;
+    right: 0 !important;
+    transform: translateY(10px) !important;
+  }
+  .nav-dropdown-group:hover .nav-dropdown-content {
+    transform: translateY(0) !important;
+  }
 }
 
 .nav-dropdown-item {

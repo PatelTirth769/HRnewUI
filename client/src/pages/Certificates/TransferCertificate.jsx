@@ -443,8 +443,8 @@ export default function TransferCertificate() {
             subjects: 'COMPUTER, ENGLISH, EVS, GENERAL KNOWLEDGE, GUJARATI, HEALTH AND PHYSICAL EDUCATION, HINDI, MATHEMATICS',
             promotedClass: `YES, GRADE - ${std}`,
             schoolDuesPaid: `MARCH-${dayjs().year()}`,
-            workingDays: '220',
-            presentDays: '200',
+            workingDays: '',
+            presentDays: '',
             gamesCoCurricular: 'NA',
             conduct: 'VERY GOOD',
             applDate: dayjs(),
@@ -501,6 +501,32 @@ export default function TransferCertificate() {
             }
         } catch (err) {
             console.error("Failed to fetch detailed student profile:", err);
+        }
+
+        // Fetch Attendance for working days
+        try {
+            const attRes = await API.get(`/api/resource/Student Attendance?filters=[["student","=","${encodeURIComponent(studentId)}"]]&fields=["status"]&limit_page_length=9999`);
+            const attendanceRecords = attRes.data?.data || [];
+            let totalWorking = '0';
+            let totalPresent = '0';
+            
+            if (attendanceRecords.length > 0) {
+                totalWorking = attendanceRecords.length.toString();
+                totalPresent = attendanceRecords.filter(r => r.status === 'Present').length.toString();
+            }
+
+            const attendanceFields = {
+                workingDays: totalWorking,
+                presentDays: totalPresent
+            };
+
+            form.setFieldsValue(attendanceFields);
+            setPreviewData(prev => ({
+                ...prev,
+                ...attendanceFields
+            }));
+        } catch (err) {
+            console.error('Failed to fetch attendance for transfer certificate:', err);
         }
     };
 

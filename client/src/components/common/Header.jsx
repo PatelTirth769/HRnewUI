@@ -5,6 +5,7 @@ import { getBranding } from '../../config/branding';
 import { useAuth } from '../../context/auth';
 import { FiLogOut } from 'react-icons/fi';
 import { getSystemQueryParam } from '../../services/api';
+import NotificationBell from './NotificationBell';
 
 
 const employeeHiddenModules = new Set(['master', 'elcLetters', 'approvers']);
@@ -186,6 +187,10 @@ const Header = ({ onModuleClick }) => {
           </>
         )}
 
+        {/* Notification Bell */}
+        <NotificationBell />
+
+        {/* Theme Dropdown */}
         <div className="relative">
           <button
             className="flex items-center gap-1 border rounded px-2 py-1 shadow-sm"

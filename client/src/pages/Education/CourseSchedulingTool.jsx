@@ -366,7 +366,7 @@ const CourseSchedulingTool = () => {
     return (
         <div className="p-6 max-w-7xl mx-auto pb-20">
             {/* Header */}
-            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6 border-b border-gray-100 pb-4">
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => navigate(-1)}

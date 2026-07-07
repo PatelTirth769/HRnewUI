@@ -50,6 +50,7 @@ const StudentFeeCollection = () => {
     const [paymentMode, setPaymentMode] = useState('CASH');
     const [paymentDate, setPaymentDate] = useState(dayjs());
     const [manualReceiptRef, setManualReceiptRef] = useState('');
+    const [remark, setRemark] = useState('');
     const [processingPayment, setProcessingPayment] = useState(false);
     const [discountCategories, setDiscountCategories] = useState([]);
     const [selectedDiscountId, setSelectedDiscountId] = useState(null);
@@ -98,6 +99,8 @@ const StudentFeeCollection = () => {
             discount_percentage: record.discount_percentage || 0,
             studentGroup: record.student_group || record.section || '',
             boardName: record.board || '',
+            manual_receipt_ref: record.manual_receipt_ref || record.manual_receipt_no || '',
+            remark: record.remark || '',
             outstanding: dynamicOutstanding,
             previous_payments: previous_payments
         };
@@ -679,6 +682,7 @@ const StudentFeeCollection = () => {
         setPaymentDate(dayjs());
         setSelectedDiscountId(null);
         setManualReceiptRef('');
+        setRemark('');
         setManualDiscountAmount(0);
         setIsMultiPayment(false);
     };
@@ -721,6 +725,7 @@ const StudentFeeCollection = () => {
         setPaymentMode('CASH');
         setPaymentDate(dayjs());
         setManualReceiptRef('');
+        setRemark('');
         setManualDiscountAmount(0);
         setPaymentModalVisible(true);
     };
@@ -787,6 +792,7 @@ const StudentFeeCollection = () => {
         setPaymentMode('CASH');
         setPaymentDate(dayjs());
         setManualReceiptRef('');
+        setRemark('');
         setManualDiscountAmount(0);
         setSelectedDiscountId(matchedDiscountId);
         setPaymentModalVisible(true);
@@ -853,6 +859,7 @@ const StudentFeeCollection = () => {
                             payment_mode: paymentMode,
                             receipt_date: finalReceiptDate,
                             manual_receipt_no: manualReceiptRef,
+                            remark: remark,
                             fee_id: row.fee_id,
                             systemCode: 'schooler_system',
                             original_fee: finalOriginalFee,
@@ -883,8 +890,10 @@ const StudentFeeCollection = () => {
                                 paid_date: finalReceiptDate,
                                 original_fee: finalOriginalFee,
                                 discount_amount: finalDiscountAmount,
-                                discount_name: finalDiscountName,
+                                discount_name: discountToApply ? discountToApply.name : row.discount_name,
                                 discount_percentage: rowDiscountPct,
+                                manual_receipt_ref: manualReceiptRef,
+                                remark: remark,
                                 receipts: row.receipts
                             };
                             handleDownloadReceipt(mockRecord);
@@ -949,6 +958,7 @@ const StudentFeeCollection = () => {
                     payment_mode: paymentMode,
                     receipt_date: finalReceiptDate,
                     manual_receipt_no: manualReceiptRef,
+                    remark: remark,
                     fee_id: selectedRow.fee_id,
                     systemCode: 'schooler_system',
                     original_fee: finalOriginalFee,
@@ -979,8 +989,10 @@ const StudentFeeCollection = () => {
                         paid_date: finalReceiptDate,
                         original_fee: finalOriginalFee,
                         discount_amount: finalDiscountAmount,
-                        discount_name: finalDiscountName,
+                        discount_name: discountToApply ? discountToApply.name : selectedRow.discount_name,
                         discount_percentage: finalDiscountPct,
+                        manual_receipt_ref: manualReceiptRef,
+                        remark: remark,
                         receipts: selectedRow.receipts
                     };
                     handleDownloadReceipt(mockRecord);
@@ -1305,7 +1317,7 @@ const StudentFeeCollection = () => {
                                 }
                             >
                                 {dataStudents.map(([id, name]) => (
-                                    <Option key={id} value={name}>{name} ({id})</Option>
+                                    <Option key={id} value={id}>{name} ({id})</Option>
                                 ))}
                             </Select>
                         </Col>
@@ -1562,6 +1574,17 @@ const StudentFeeCollection = () => {
                                             min={0}
                                             precision={2}
                                             placeholder="Enter flat amount..."
+                                        />
+                                    </Col>
+                                </Row>
+                                <Row style={{ marginTop: '16px' }} gutter={16}>
+                                    <Col span={24}>
+                                        <label style={modalInputLabelStyle}>Remark (Optional)</label>
+                                        <Input.TextArea 
+                                            placeholder="Enter any notes or remarks..."
+                                            value={remark}
+                                            onChange={e => setRemark(e.target.value)}
+                                            rows={2}
                                         />
                                     </Col>
                                 </Row>

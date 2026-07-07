@@ -317,7 +317,7 @@ const StoredDocuments = () => {
                             displayedStudents.map(student => (
                                 <div key={student.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
                                     <div 
-                                        className="p-5 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+                                        className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-gray-50 transition-colors"
                                         onClick={() => toggleStudent(student.id)}
                                     >
                                         <div className="flex items-center gap-4">
@@ -345,8 +345,8 @@ const StoredDocuments = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="hidden md:flex flex-col items-end mr-4">
+                                        <div className="flex items-center justify-between w-full sm:w-auto gap-4">
+                                            <div className="flex flex-col items-end mr-0 sm:mr-4">
                                                 <span className="text-sm font-semibold text-gray-700">
                                                     {student.uploadedDocs.length} Documents
                                                 </span>

@@ -36,6 +36,12 @@ const FeeStructure = () => {
     const [search, setSearch] = useState('');
     const [boardFilter, setBoardFilter] = useState('');
     const [programFilter, setProgramFilter] = useState('');
+    const [pageSize, setPageSize] = useState(20);
+    const [visibleCount, setVisibleCount] = useState(20);
+
+    useEffect(() => {
+        setVisibleCount(pageSize);
+    }, [search, boardFilter, programFilter, pageSize]);
 
     // Form states
     const [form, setForm] = useState(emptyForm());
@@ -363,7 +369,7 @@ const FeeStructure = () => {
                                 ) : filtered.length === 0 ? (
                                     <tr><td colSpan="8" className="text-center py-10 text-gray-400 italic font-medium">No structures found.</td></tr>
                                 ) : (
-                                    filtered.map((row) => (
+                                    filtered.slice(0, visibleCount).map((row) => (
                                         <tr key={row.name} className="border-b hover:bg-gray-50 transition-colors">
                                             <td className="px-4 py-3">
                                                 <button className="text-blue-600 hover:underline font-semibold" onClick={() => { setEditingRecord(row.name); setView('form'); }}>{row.name}</button>
@@ -414,6 +420,35 @@ const FeeStructure = () => {
                                 )}
                             </tbody>
                         </table>
+                        
+                        {/* Pagination Controls */}
+                        {!loadingList && filtered.length > 0 && (
+                            <div className="flex justify-between items-center p-4 bg-gray-50/30 border-t border-gray-100">
+                                <div className="flex items-center border border-gray-200 rounded-xl bg-white overflow-hidden shadow-xs">
+                                    {[20, 100, 500, 2500].map((size) => (
+                                        <button
+                                            key={size}
+                                            className={`px-4 py-1.5 text-xs font-bold border-r border-gray-200 last:border-r-0 hover:bg-gray-50 transition cursor-pointer ${
+                                                pageSize === size ? 'bg-gray-100 text-gray-800' : 'text-gray-500'
+                                            }`}
+                                            onClick={() => setPageSize(size)}
+                                        >
+                                            {size}
+                                        </button>
+                                    ))}
+                                </div>
+                                
+                                {visibleCount < filtered.length && (
+                                    <button
+                                        className="px-5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-xl shadow-xs hover:bg-gray-50 transition active:scale-95 cursor-pointer"
+                                        onClick={() => setVisibleCount(prev => prev + pageSize)}
+                                    >
+                                        Load More
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                        
                     </div>
                 </div>
             </>
